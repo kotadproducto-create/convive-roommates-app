@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-linen-100 text-charcoal-900 font-body antialiased;
+}
+
+.dark body {
+  @apply bg-charcoal-900 text-linen-100;
+}
+
+* {
+  scrollbar-width: thin;
+}
+
+:focus-visible {
+  outline: 2px solid theme('colors.plum.500');
+  outline-offset: 2px;
+}
+
+.card {
+  @apply bg-white dark:bg-charcoal-800 border border-linen-200 dark:border-charcoal-700 rounded-xl2 shadow-sm;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 bg-plum-500 hover:bg-plum-600 text-white font-medium px-4 py-2 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 bg-linen-200 hover:bg-linen-200/70 dark:bg-charcoal-700 dark:hover:bg-charcoal-700/70 text-charcoal-900 dark:text-linen-100 font-medium px-4 py-2 rounded-xl transition-colors;
+}
+
+.btn-danger {
+  @apply inline-flex items-center justify-center gap-2 bg-clay-500 hover:opacity-90 text-white font-medium px-4 py-2 rounded-xl transition-colors;
+}
+
+.input {
+  @apply w-full bg-linen-50 dark:bg-charcoal-700 border border-linen-200 dark:border-charcoal-700 rounded-xl px-3 py-2 text-sm placeholder:text-charcoal-900/40 dark:placeholder:text-linen-100/40;
+}
+
+/* Chore-wheel signature element: subtle continuous rotation, respects reduced motion */
+.chore-wheel {
+  animation: spin-slow 40s linear infinite;
+  transform-origin: 50% 50%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chore-wheel { animation: none; }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
