@@ -10,6 +10,8 @@ export default function FloorSettings() {
   const isAdmin = membership?.role === 'admin'
   const [threshold, setThreshold] = useState(floor?.potThreshold ?? 30)
   const [perPerson, setPerPerson] = useState(floor?.potPerPerson ?? 10)
+  const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState(false)
 
   const order = floor?.rotationOrder || []
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]))
@@ -40,6 +42,47 @@ export default function FloorSettings() {
     setMemberRole(member.membershipId, 'admin')
   }
 
+  function copyWithFallback(text) {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return ok
+  }
+
+  async function handleShareInvite() {
+    const code = floor?.inviteCode || ''
+    const text = `Únete a ${floor?.name} en Convive con el código: ${code}`
+    setCopyError(false)
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Invitación a Convive', text })
+      } catch {
+        // El usuario cerró el diálogo de compartir: no hacer nada.
+      }
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      if (copyWithFallback(code)) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } else {
+        setCopyError(true)
+        setTimeout(() => setCopyError(false), 2500)
+      }
+    }
+  }
+
   return (
     <AppLayout title="Tu piso">
       <div className="grid md:grid-cols-2 gap-5">
@@ -48,9 +91,22 @@ export default function FloorSettings() {
           <p className="text-sm text-charcoal-900/60 dark:text-linen-100/60 mb-3">
             Comparte este código para que se unan a <strong>{floor?.name}</strong>.
           </p>
-          <div className="bg-linen-100 dark:bg-charcoal-700 rounded-xl px-4 py-3 text-center text-2xl font-display tracking-widest font-semibold">
-            {floor?.inviteCode}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-linen-100 dark:bg-charcoal-700 rounded-xl px-4 py-3 text-center text-2xl font-display tracking-widest font-semibold">
+              {floor?.inviteCode}
+            </div>
+            <button
+              onClick={handleShareInvite}
+              title="Copiar o compartir código"
+              className="btn-secondary text-sm shrink-0 px-3"
+            >
+              {copied ? '✓' : '🔗'}
+            </button>
           </div>
+          {copied && <p className="text-xs text-sage-500 mt-2 text-center">Código copiado</p>}
+          {copyError && (
+            <p className="text-xs text-clay-500 mt-2 text-center">No se pudo copiar, selecciónalo manualmente.</p>
+          )}
         </section>
 
         <section className="card p-5">
