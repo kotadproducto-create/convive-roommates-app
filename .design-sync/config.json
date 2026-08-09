@@ -1,0 +1,10 @@
+{
+  "projectId": "882c44b4-fa11-4a6c-924e-cc1a85fa57a7",
+  "pkg": "roomie-tasks",
+  "globalName": "Convive",
+  "shape": "package",
+  "cssEntry": ".design-sync/dist.css",
+  "runtimeFontPrefixes": ["Fredoka", "Inter"],
+  "readmeHeader": ".design-sync/conventions.md",
+  "buildCmd": "npx tailwindcss -c .design-sync/tw-scratch.config.js -i src/index.css -o .design-sync/dist.css --minify"
+}
