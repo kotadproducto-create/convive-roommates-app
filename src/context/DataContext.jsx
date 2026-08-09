@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
-import { getAll, create, update, remove, subscribeTable } from '../lib/db'
+import { getAll, create, update, remove, subscribeTable, subscribeFloorMembers } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks } from '../lib/rotation'
 import { useAuth } from './AuthContext'
 
@@ -42,7 +42,7 @@ export function DataProvider({ children }) {
       setMembers([])
       return
     }
-    return subscribeTable('profiles', { floorId }, setMembers)
+    return subscribeFloorMembers(floorId, setMembers)
   }, [floorId])
 
   useEffect(() => {
@@ -175,19 +175,20 @@ export function DataProvider({ children }) {
   )
 
   const removeMember = useCallback(
-    async (memberId) => {
+    async (membershipId, profileId) => {
       if (!currentFloor) return
-      const newOrder = (currentFloor.rotationOrder || []).filter((id) => id !== memberId)
-      await reassignPendingTasks(currentFloor.id, memberId, newOrder)
+      const newOrder = (currentFloor.rotationOrder || []).filter((id) => id !== profileId)
+      await reassignPendingTasks(currentFloor.id, profileId, newOrder)
       await update('floors', currentFloor.id, { rotationOrder: newOrder })
-      await remove('profiles', memberId)
-      // Nota: esto borra el perfil, pero no la cuenta de autenticación en
-      // Supabase Auth (eso requiere la Service Role Key desde un backend,
-      // no se puede hacer con seguridad desde el navegador). El usuario
-      // eliminado deja de ver el piso porque su perfil ya no existe.
+      // Cerrar la membresía, no borrar el perfil: el usuario queda en
+      // historial y podrá reactivarla más adelante con aprobación de un
+      // admin de ese piso.
+      await update('floor_memberships', membershipId, { status: 'left', leftAt: new Date().toISOString() })
     },
     [currentFloor]
   )
+
+  const setMemberRole = useCallback((membershipId, role) => update('floor_memberships', membershipId, { role }), [])
 
   const addIncident = useCallback(
     async (incident) => {
@@ -279,6 +280,7 @@ export function DataProvider({ children }) {
     uncompleteTask,
     reorderRotation,
     removeMember,
+    setMemberRole,
     addIncident,
     removeIncident,
     markAllNotificationsRead,

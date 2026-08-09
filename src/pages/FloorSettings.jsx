@@ -5,9 +5,9 @@ import { useData } from '../context/DataContext'
 import { update } from '../lib/db'
 
 export default function FloorSettings() {
-  const { user } = useAuth()
-  const { floor, members, reorderRotation, removeMember } = useData()
-  const isAdmin = user?.role === 'admin'
+  const { user, membership } = useAuth()
+  const { floor, members, reorderRotation, removeMember, setMemberRole } = useData()
+  const isAdmin = membership?.role === 'admin'
   const [threshold, setThreshold] = useState(floor?.potThreshold ?? 30)
   const [perPerson, setPerPerson] = useState(floor?.potPerPerson ?? 10)
 
@@ -22,13 +22,13 @@ export default function FloorSettings() {
     reorderRotation(newOrder)
   }
 
-  function handleRemove(memberId) {
-    if (memberId === user.id) {
+  function handleRemove(member) {
+    if (member.id === user.id) {
       alert('No puedes eliminarte a ti mismo. Pide a otro admin que lo haga.')
       return
     }
     if (confirm('¿Eliminar a este roommate? Sus tareas pendientes se reasignarán automáticamente.')) {
-      removeMember(memberId)
+      removeMember(member.membershipId, member.id)
     }
   }
 
@@ -36,8 +36,8 @@ export default function FloorSettings() {
     update('floors', floor.id, { potThreshold: Number(threshold), potPerPerson: Number(perPerson) })
   }
 
-  function makeAdmin(memberId) {
-    update('users', memberId, { role: 'admin' })
+  function makeAdmin(member) {
+    setMemberRole(member.membershipId, 'admin')
   }
 
   return (
@@ -93,11 +93,11 @@ export default function FloorSettings() {
                 {isAdmin && m.id !== user.id && (
                   <div className="flex gap-2">
                     {m.role !== 'admin' && (
-                      <button onClick={() => makeAdmin(m.id)} className="text-xs text-plum-500 hover:underline">
+                      <button onClick={() => makeAdmin(m)} className="text-xs text-plum-500 hover:underline">
                         Hacer admin
                       </button>
                     )}
-                    <button onClick={() => handleRemove(m.id)} className="text-xs text-clay-500 hover:underline">
+                    <button onClick={() => handleRemove(m)} className="text-xs text-clay-500 hover:underline">
                       Quitar
                     </button>
                   </div>

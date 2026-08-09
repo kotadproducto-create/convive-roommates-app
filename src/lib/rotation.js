@@ -1,4 +1,4 @@
-import { getAll, create, update } from './db'
+import { getAll, update, upsertIgnoreDuplicates } from './db'
 
 /**
  * Las 3 tareas fijas del piso. El "offset" determina que, dentro de la
@@ -52,23 +52,23 @@ export function whoIsAssigned(rotationOrder, weekKey, taskOffset) {
  * generada no se re-escribe automáticamente (evita "mover" tareas que
  * la gente ya está gestionando); los cambios de orden aplican desde
  * la semana en la que se guardan en adelante.
+ *
+ * Usa upsert con "ignore duplicates" (constraint UNIQUE en BD sobre
+ * floor_id+week_key+type) en vez de "leer lo que existe y crear lo que
+ * falta": así es seguro aunque el efecto que llama a esto se dispare
+ * dos veces a la vez (p.ej. React.StrictMode en desarrollo, o dos
+ * pestañas del mismo piso reaccionando a la vez a un cambio en vivo).
  */
 export async function ensureWeekTasks(floorId, weekKey, rotationOrder) {
-  const existing = (await getAll('tasks', { floorId })).filter((t) => t.weekKey === weekKey)
-  const existingTypes = new Set(existing.map((t) => t.type))
-
-  for (const type of TASK_TYPES) {
-    if (existingTypes.has(type.key)) continue
-    const assignedUserId = whoIsAssigned(rotationOrder, weekKey, type.offset)
-    await create('tasks', {
-      floorId,
-      weekKey,
-      type: type.key,
-      assignedUserId,
-      completed: false,
-      completedAt: null
-    })
-  }
+  const rows = TASK_TYPES.map((type) => ({
+    floorId,
+    weekKey,
+    type: type.key,
+    assignedUserId: whoIsAssigned(rotationOrder, weekKey, type.offset),
+    completed: false,
+    completedAt: null
+  }))
+  await upsertIgnoreDuplicates('tasks', rows, ['floorId', 'weekKey', 'type'])
 }
 
 /**

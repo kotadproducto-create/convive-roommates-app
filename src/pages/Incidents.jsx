@@ -13,7 +13,7 @@ const EXAMPLES = [
 ]
 
 export default function Incidents() {
-  const { user } = useAuth()
+  const { user, membership } = useAuth()
   const { floor, incidents, addIncident, removeIncident } = useData()
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
@@ -123,7 +123,7 @@ export default function Incidents() {
             <IncidentCard
               key={incident.id}
               incident={incident}
-              canDelete={incident.userId === user.id || user.role === 'admin'}
+              canDelete={incident.userId === user.id || membership?.role === 'admin'}
               onDelete={removeIncident}
             />
           ))}

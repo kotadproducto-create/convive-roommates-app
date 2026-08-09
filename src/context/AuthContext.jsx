@@ -8,18 +8,25 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [user, setUser] = useState(null) // fila de "profiles", camelCase
   const [floor, setFloor] = useState(null)
+  const [membership, setMembership] = useState(null) // fila activa de "floor_memberships" (trae el role)
   const [loading, setLoading] = useState(true)
 
   const loadProfileAndFloor = useCallback(async (authUserId) => {
     if (!authUserId) {
       setUser(null)
       setFloor(null)
+      setMembership(null)
       return
     }
     const profile = await getById('profiles', authUserId)
     setUser(profile)
-    if (profile?.floorId) {
-      const f = await getById('floors', profile.floorId)
+
+    const activeMemberships = await getAll('floor_memberships', { userId: authUserId, status: 'active' })
+    const activeMembership = activeMemberships[0] || null
+    setMembership(activeMembership)
+
+    if (activeMembership?.floorId) {
+      const f = await getById('floors', activeMembership.floorId)
       setFloor(f)
     } else {
       setFloor(null)
@@ -76,9 +83,14 @@ export function AuthProvider({ children }) {
     await create('profiles', {
       id: signUpData.user.id,
       name,
+      points: 0
+    })
+
+    await create('floor_memberships', {
+      userId: signUpData.user.id,
       floorId: newFloor.id,
       role: 'admin',
-      points: 0
+      status: 'active'
     })
 
     await update('floors', newFloor.id, { rotationOrder: [signUpData.user.id] })
@@ -101,9 +113,14 @@ export function AuthProvider({ children }) {
     await create('profiles', {
       id: signUpData.user.id,
       name,
+      points: 0
+    })
+
+    await create('floor_memberships', {
+      userId: signUpData.user.id,
       floorId: targetFloor.id,
       role: 'member',
-      points: 0
+      status: 'active'
     })
 
     await update('floors', targetFloor.id, {
@@ -119,7 +136,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, floor, loading, login, registerAndCreateFloor, registerAndJoinFloor, logout, refresh }}
+      value={{ user, floor, membership, loading, login, registerAndCreateFloor, registerAndJoinFloor, logout, refresh }}
     >
       {children}
     </AuthContext.Provider>

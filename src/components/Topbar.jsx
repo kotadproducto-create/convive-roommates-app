@@ -6,7 +6,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export default function Topbar({ title }) {
-  const { user, floor, logout } = useAuth()
+  const { user, floor, membership, logout } = useAuth()
   const { notifications, unreadCount, markAllNotificationsRead } = useData()
   const { theme, toggleTheme } = useTheme()
   const [open, setOpen] = useState(false)
@@ -69,7 +69,7 @@ export default function Topbar({ title }) {
           </div>
           <div className="leading-tight">
             <p className="text-sm font-medium">{user?.name}</p>
-            <p className="text-xs text-charcoal-900/50 dark:text-linen-100/50">{user?.role === 'admin' ? 'Admin' : 'Miembro'}</p>
+            <p className="text-xs text-charcoal-900/50 dark:text-linen-100/50">{membership?.role === 'admin' ? 'Admin' : 'Miembro'}</p>
           </div>
           <button onClick={logout} className="ml-2 text-xs text-plum-500 hover:underline">
             Salir
