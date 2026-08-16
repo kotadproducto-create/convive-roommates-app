@@ -11,6 +11,8 @@ import Dashboard from './pages/Dashboard'
 import Incidents from './pages/Incidents'
 import Rewards from './pages/Rewards'
 import Wallet from './pages/Wallet'
+import Convives from './pages/Convives'
+import Shopping from './pages/Shopping'
 import FloorSettings from './pages/FloorSettings'
 
 function AuthedData({ children }) {
@@ -64,6 +66,26 @@ export default function App() {
                 <ProtectedRoute>
                   <AuthedData>
                     <Rewards />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/convives"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Convives />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/compras"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Shopping />
                   </AuthedData>
                 </ProtectedRoute>
               }

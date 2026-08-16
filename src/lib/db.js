@@ -145,7 +145,7 @@ export async function getFloorMembers(floorId) {
   if (!floorId) return []
   const { data, error } = await supabase
     .from('floor_memberships')
-    .select('id, role, joined_at, pot_active, profile:profiles(*)')
+    .select('id, role, joined_at, pot_active, active_status, profile:profiles!floor_memberships_user_id_fkey(*)')
     .eq('floor_id', floorId)
     .eq('status', 'active')
   if (error) throw error
@@ -156,7 +156,8 @@ export async function getFloorMembers(floorId) {
       membershipId: row.id,
       role: row.role,
       joinedAt: row.joined_at,
-      potActive: row.pot_active
+      potActive: row.pot_active,
+      activeStatus: row.active_status
     }))
 }
 
@@ -199,6 +200,94 @@ export function subscribeFloorMembers(floorId, onChange) {
   }
 }
 
+/**
+ * Reclama las solicitudes de admisión ('pending') de un piso para este
+ * usuario: primero devuelve las que ya le pertenecían (para que sigan
+ * apareciéndole aunque haya cerrado sesión y vuelto más tarde), y de paso
+ * intenta "ganar" con un UPDATE atómico (WHERE first_seen_by IS NULL) las
+ * que todavía nadie ha reclamado. Si dos personas abren la app a la vez,
+ * el UPDATE de la BD resuelve la carrera: solo una de las dos consultas
+ * afecta esa fila.
+ */
+export async function claimPendingJoinRequests(floorId, userId) {
+  const { data: mine, error: mineError } = await supabase
+    .from('floor_memberships')
+    .select('id, joined_at, first_seen_by, requester:profiles!floor_memberships_user_id_fkey(id, name)')
+    .eq('floor_id', floorId)
+    .eq('status', 'pending')
+    .eq('first_seen_by', userId)
+  if (mineError) throw mineError
+
+  const { data: claimed, error: claimError } = await supabase
+    .from('floor_memberships')
+    .update({ first_seen_by: userId })
+    .eq('floor_id', floorId)
+    .eq('status', 'pending')
+    .is('first_seen_by', null)
+    .select('id, joined_at, first_seen_by, requester:profiles!floor_memberships_user_id_fkey(id, name)')
+  if (claimError) throw claimError
+
+  const rows = [...(mine || []), ...(claimed || [])]
+  return rows.map((row) => ({
+    membershipId: row.id,
+    joinedAt: row.joined_at,
+    requesterId: row.requester?.id,
+    requesterName: row.requester?.name || 'Alguien'
+  }))
+}
+
+/**
+ * Todas las solicitudes 'pending' de un piso (sin filtrar por quién las
+ * reclamó), para la lista de respaldo en Piso → Solicitudes pendientes:
+ * cualquier miembro activo puede verlas y decidirlas ahí, no solo quien
+ * "ganó" el pop-up.
+ */
+export async function getPendingJoinRequests(floorId) {
+  const { data, error } = await supabase
+    .from('floor_memberships')
+    .select('id, joined_at, requester:profiles!floor_memberships_user_id_fkey(id, name)')
+    .eq('floor_id', floorId)
+    .eq('status', 'pending')
+    .order('joined_at', { ascending: true })
+  if (error) throw error
+  return (data || []).map((row) => ({
+    membershipId: row.id,
+    joinedAt: row.joined_at,
+    requesterId: row.requester?.id,
+    requesterName: row.requester?.name || 'Alguien'
+  }))
+}
+
+/** Se suscribe en tiempo real a las solicitudes pendientes de un piso. */
+export function subscribePendingRequests(floorId, onChange) {
+  let active = true
+
+  async function refetch() {
+    if (!floorId) {
+      if (active) onChange([])
+      return
+    }
+    const rows = await getPendingJoinRequests(floorId)
+    if (active) onChange(rows)
+  }
+
+  refetch()
+
+  const channel = supabase
+    .channel(`pending-requests-${floorId || 'none'}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'floor_memberships', ...(floorId ? { filter: `floor_id=eq.${floorId}` } : {}) },
+      () => refetch()
+    )
+    .subscribe()
+
+  return () => {
+    active = false
+    supabase.removeChannel(channel)
+  }
+}
+
 export function generateInviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''
@@ -210,6 +299,30 @@ export function generateInviteCode() {
 export async function uploadIncidentPhoto(file, floorId) {
   const ext = file.name.split('.').pop()
   const path = `${floorId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from('incident-photos').upload(path, file)
+  if (error) throw error
+  const { data } = supabase.storage.from('incident-photos').getPublicUrl(path)
+  return data.publicUrl
+}
+
+/**
+ * Sube una foto de factura de un gasto del pote. Reutiliza el mismo bucket
+ * de Storage que las fotos de incidencias (mismas políticas, sin tener que
+ * crear ni configurar un bucket nuevo), solo con un prefijo distinto.
+ */
+export async function uploadPotReceipt(file, floorId) {
+  const ext = file.name.split('.').pop()
+  const path = `${floorId}/pote-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from('incident-photos').upload(path, file)
+  if (error) throw error
+  const { data } = supabase.storage.from('incident-photos').getPublicUrl(path)
+  return data.publicUrl
+}
+
+/** Sube la foto opcional de un producto de la lista de compras (mismo bucket compartido). */
+export async function uploadShoppingItemImage(file, floorId) {
+  const ext = file.name.split('.').pop()
+  const path = `${floorId}/compras-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
   const { error } = await supabase.storage.from('incident-photos').upload(path, file)
   if (error) throw error
   const { data } = supabase.storage.from('incident-photos').getPublicUrl(path)

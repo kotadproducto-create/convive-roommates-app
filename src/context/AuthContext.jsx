@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null) // fila de "profiles", camelCase
   const [floor, setFloor] = useState(null)
   const [membership, setMembership] = useState(null) // fila activa de "floor_memberships" (trae el role)
+  const [pendingRequest, setPendingRequest] = useState(null) // solicitud 'pending' o 'rejected' más reciente, si no hay piso activo
   const [loading, setLoading] = useState(true)
 
   const loadProfileAndFloor = useCallback(async (authUserId) => {
@@ -16,6 +17,7 @@ export function AuthProvider({ children }) {
       setUser(null)
       setFloor(null)
       setMembership(null)
+      setPendingRequest(null)
       return
     }
     const profile = await getById('profiles', authUserId)
@@ -28,8 +30,27 @@ export function AuthProvider({ children }) {
     if (activeMembership?.floorId) {
       const f = await getById('floors', activeMembership.floorId)
       setFloor(f)
+      setPendingRequest(null)
+      return
+    }
+
+    setFloor(null)
+
+    const pending = await getAll('floor_memberships', { userId: authUserId, status: 'pending' })
+    const latestPending = pending[pending.length - 1] || null
+    if (latestPending) {
+      const f = await getById('floors', latestPending.floorId)
+      setPendingRequest({ ...latestPending, floorName: f?.name })
+      return
+    }
+
+    const rejected = await getAll('floor_memberships', { userId: authUserId, status: 'rejected' })
+    const latestRejected = rejected[rejected.length - 1] || null
+    if (latestRejected) {
+      const f = await getById('floors', latestRejected.floorId)
+      setPendingRequest({ ...latestRejected, floorName: f?.name })
     } else {
-      setFloor(null)
+      setPendingRequest(null)
     }
   }, [])
 
@@ -52,6 +73,24 @@ export function AuthProvider({ children }) {
       listener.subscription.unsubscribe()
     }
   }, [loadProfileAndFloor])
+
+  // Mientras no hay piso activo (esperando aprobación, o rechazado), se
+  // escucha en vivo la propia fila de floor_memberships para que la
+  // pantalla de espera se actualice sola en cuanto alguien decida, sin
+  // que el usuario tenga que refrescar.
+  useEffect(() => {
+    const authUserId = session?.user?.id
+    if (!authUserId || floor) return
+    const channel = supabase
+      .channel(`my-memberships-${authUserId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'floor_memberships', filter: `user_id=eq.${authUserId}` },
+        () => loadProfileAndFloor(authUserId)
+      )
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [session?.user?.id, floor, loadProfileAndFloor])
 
   const refresh = useCallback(() => loadProfileAndFloor(session?.user?.id), [session, loadProfileAndFloor])
 
@@ -97,7 +136,11 @@ export function AuthProvider({ children }) {
     await loadProfileAndFloor(signUpData.user.id)
   }
 
-  async function registerAndJoinFloor({ name, email, password, inviteCode }) {
+  // Ya no da acceso inmediato: crea una solicitud 'pending' que debe ser
+  // aceptada por algún miembro activo del piso (ver JoinRequestPopup /
+  // FloorSettings). El nuevo usuario ve la pantalla de espera de NoFloor
+  // hasta que alguien decida.
+  async function registerAndRequestJoin({ name, email, password, inviteCode }) {
     const floors = await getAll('floors', { inviteCode: inviteCode.trim().toUpperCase() })
     const targetFloor = floors[0]
     if (!targetFloor) throw new Error('Código de invitación no válido.')
@@ -120,14 +163,33 @@ export function AuthProvider({ children }) {
       userId: signUpData.user.id,
       floorId: targetFloor.id,
       role: 'member',
-      status: 'active'
-    })
-
-    await update('floors', targetFloor.id, {
-      rotationOrder: [...(targetFloor.rotationOrder || []), signUpData.user.id]
+      status: 'pending'
     })
 
     await loadProfileAndFloor(signUpData.user.id)
+  }
+
+  // Para un usuario ya logueado sin piso activo (rechazado, o expulsado)
+  // que quiere solicitar unirse a otro piso desde la pantalla de NoFloor.
+  async function requestJoinFloor(inviteCode) {
+    if (!session?.user?.id) return
+    const floors = await getAll('floors', { inviteCode: inviteCode.trim().toUpperCase() })
+    const targetFloor = floors[0]
+    if (!targetFloor) throw new Error('Código de invitación no válido.')
+
+    await create('floor_memberships', {
+      userId: session.user.id,
+      floorId: targetFloor.id,
+      role: 'member',
+      status: 'pending'
+    })
+
+    await loadProfileAndFloor(session.user.id)
+  }
+
+  async function withdrawRequest(membershipId) {
+    await update('floor_memberships', membershipId, { status: 'left' })
+    if (session?.user?.id) await loadProfileAndFloor(session.user.id)
   }
 
   async function logout() {
@@ -136,7 +198,20 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, floor, membership, loading, login, registerAndCreateFloor, registerAndJoinFloor, logout, refresh }}
+      value={{
+        user,
+        floor,
+        membership,
+        pendingRequest,
+        loading,
+        login,
+        registerAndCreateFloor,
+        registerAndRequestJoin,
+        requestJoinFloor,
+        withdrawRequest,
+        logout,
+        refresh
+      }}
     >
       {children}
     </AuthContext.Provider>

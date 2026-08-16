@@ -8,7 +8,7 @@ import Reveal from '../components/Reveal'
 
 export default function FloorSettings() {
   const { user, membership } = useAuth()
-  const { floor, members, reorderRotation, removeMember, setMemberRole } = useData()
+  const { floor, members, reorderRotation, removeMember, setMemberRole, pendingJoinRequests, approveJoinRequest, rejectJoinRequest } = useData()
   const isAdmin = membership?.role === 'admin'
   const [threshold, setThreshold] = useState(floor?.potThreshold ?? 30)
   const [perPerson, setPerPerson] = useState(floor?.potPerPerson ?? 10)
@@ -138,6 +138,36 @@ export default function FloorSettings() {
             })}
           </ol>
         </Reveal>
+
+        {pendingJoinRequests.length > 0 && (
+          <Reveal as="section" delay={120} className="card p-5 md:col-span-2">
+            <h2 className="font-display font-semibold mb-1">Solicitudes pendientes</h2>
+            <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
+              Cualquier miembro del piso puede aceptar o rechazar. Si nadie responde el pop-up al entrar, siempre puedes decidirlas aquí.
+            </p>
+            <ul className="flex flex-col gap-2">
+              {pendingJoinRequests.map((r) => (
+                <li key={r.membershipId} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+                  <span className="text-sm font-medium">{r.requesterName}</span>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => rejectJoinRequest(r.membershipId)}
+                      className="btn-danger text-xs px-3 py-1.5"
+                    >
+                      Rechazar
+                    </button>
+                    <button
+                      onClick={() => approveJoinRequest(r.membershipId, r.requesterId, r.requesterName)}
+                      className="btn-primary text-xs px-3 py-1.5"
+                    >
+                      Aceptar
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        )}
 
         <Reveal as="section" delay={160} className="card p-5">
           <h2 className="font-display font-semibold mb-3">Roommates</h2>

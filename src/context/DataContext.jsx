@@ -1,5 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
-import { getAll, create, update, remove, subscribeTable, subscribeFloorMembers } from '../lib/db'
+import {
+  getAll,
+  create,
+  update,
+  remove,
+  subscribeTable,
+  subscribeFloorMembers,
+  uploadPotReceipt,
+  uploadShoppingItemImage,
+  claimPendingJoinRequests,
+  subscribePendingRequests
+} from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks } from '../lib/rotation'
 import { useAuth } from './AuthContext'
 
@@ -22,6 +33,9 @@ export function DataProvider({ children }) {
   const [notifications, setNotifications] = useState([])
   const [redemptions, setRedemptions] = useState([])
   const [potContributions, setPotContributions] = useState([])
+  const [pendingJoinRequests, setPendingJoinRequests] = useState([])
+  const [shoppingItems, setShoppingItems] = useState([])
+  const [shoppingPurchases, setShoppingPurchases] = useState([])
 
   const weekKey = getWeekKey()
 
@@ -84,6 +98,30 @@ export function DataProvider({ children }) {
       return
     }
     return subscribeTable('pot_contributions', { floorId }, setPotContributions)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setPendingJoinRequests([])
+      return
+    }
+    return subscribePendingRequests(floorId, setPendingJoinRequests)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setShoppingItems([])
+      return
+    }
+    return subscribeTable('shopping_items', { floorId }, setShoppingItems)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setShoppingPurchases([])
+      return
+    }
+    return subscribeTable('shopping_purchases', { floorId }, setShoppingPurchases)
   }, [floorId])
 
   // Genera (una sola vez, de forma idempotente) las tareas de la semana
@@ -249,12 +287,162 @@ export function DataProvider({ children }) {
     []
   )
 
-  const spendFromPot = useCallback(
-    (amount) => {
+  const setMemberActiveStatus = useCallback(
+    (membershipId, active) => update('floor_memberships', membershipId, { activeStatus: active }),
+    []
+  )
+
+  const updateProfile = useCallback((profileId, patch) => update('profiles', profileId, patch), [])
+
+  const adjustMemberPoints = useCallback(
+    async (profileId, delta, reason) => {
       if (!currentFloor) return
-      update('floors', currentFloor.id, { potAmount: Math.max(0, (currentFloor.potAmount || 0) - Number(amount)) })
+      const member = members.find((m) => m.id === profileId)
+      if (!member) return
+      await update('profiles', profileId, { points: Math.max(0, (member.points || 0) + Number(delta)) })
+      await create('coin_transactions', {
+        floorId: currentFloor.id,
+        userId: profileId,
+        amount: Number(delta),
+        reason: reason || null
+      })
+    },
+    [currentFloor, members]
+  )
+
+  const addPotExpense = useCallback(
+    async (amount, { note, receiptFile } = {}) => {
+      if (!currentFloor || !user) return
+      let receiptUrl = null
+      if (receiptFile) {
+        receiptUrl = await uploadPotReceipt(receiptFile, currentFloor.id)
+      }
+      const created = await create('pot_contributions', {
+        floorId: currentFloor.id,
+        userId: user.id,
+        amount: -Math.abs(Number(amount)),
+        note: note || null,
+        receiptUrl
+      })
+      await update('floors', currentFloor.id, { potAmount: Math.max(0, (currentFloor.potAmount || 0) - Number(amount)) })
+      return created
+    },
+    [currentFloor, user]
+  )
+
+  const claimJoinRequests = useCallback(async () => {
+    if (!currentFloor || !user) return []
+    return claimPendingJoinRequests(currentFloor.id, user.id)
+  }, [currentFloor, user])
+
+  const approveJoinRequest = useCallback(
+    async (membershipId, requesterId, requesterName) => {
+      if (!currentFloor) return
+      await update('floor_memberships', membershipId, { status: 'active' })
+      await update('floors', currentFloor.id, {
+        rotationOrder: [...(currentFloor.rotationOrder || []), requesterId]
+      })
+      await create('notifications', {
+        floorId: currentFloor.id,
+        userId: null,
+        type: 'member_joined',
+        message: `${requesterName} se ha unido al piso`
+      })
     },
     [currentFloor]
+  )
+
+  const rejectJoinRequest = useCallback(
+    (membershipId) => update('floor_memberships', membershipId, { status: 'rejected' }),
+    []
+  )
+
+  const addShoppingItem = useCallback(
+    async (item) => {
+      if (!currentFloor || !user) return
+      let imageUrl = null
+      if (item.imageFile) {
+        imageUrl = await uploadShoppingItemImage(item.imageFile, currentFloor.id)
+      }
+      await create('shopping_items', {
+        floorId: currentFloor.id,
+        name: item.name,
+        store: item.store || null,
+        storeLocation: item.storeLocation || null,
+        usualQuantity: item.usualQuantity || null,
+        stockLevel: item.stockLevel || 'ok',
+        recurring: item.recurring !== false,
+        estimatedPrice: item.estimatedPrice ? Number(item.estimatedPrice) : null,
+        imageUrl,
+        createdBy: user.id
+      })
+    },
+    [currentFloor, user]
+  )
+
+  // "patch" puede traer un File en imageFile (foto nueva a subir); el
+  // resto de campos se guarda tal cual, como un patch parcial normal.
+  const updateShoppingItem = useCallback(
+    async (itemId, patch) => {
+      const { imageFile, ...rest } = patch
+      if (imageFile && currentFloor) {
+        rest.imageUrl = await uploadShoppingItemImage(imageFile, currentFloor.id)
+      }
+      return update('shopping_items', itemId, rest)
+    },
+    [currentFloor]
+  )
+
+  const removeShoppingItem = useCallback((itemId) => remove('shopping_items', itemId), [])
+
+  // Solo notifica a todo el piso cuando el stock RECIÉN llega a 0 (no en
+  // cada guardado): compara contra el nivel anterior para no repetir la
+  // alerta si alguien vuelve a marcar "agotado" un producto que ya lo estaba.
+  const setItemStock = useCallback(
+    async (itemId, level) => {
+      const item = shoppingItems.find((i) => i.id === itemId)
+      if (!item || !currentFloor) return
+      await update('shopping_items', itemId, { stockLevel: level })
+      if (level === 'out' && item.stockLevel !== 'out') {
+        await create('notifications', {
+          floorId: currentFloor.id,
+          userId: null,
+          type: 'stock_out',
+          message: `¡Alerta! ${item.name} se ha agotado. Es necesario reponerlo.`
+        })
+      }
+    },
+    [shoppingItems, currentFloor]
+  )
+
+  // Marca un producto como comprado: repone el stock a 'ok' (lo que
+  // automáticamente resuelve la alerta de "agotado"), deja constancia en
+  // el historial de compras y, si se pide, registra el gasto en el pote
+  // de dinero reutilizando addPotExpense — el enlace se guarda para que
+  // el historial de compras pueda mostrar "ver en el pote".
+  const markItemPurchased = useCallback(
+    async (itemId, { price, addToPot } = {}) => {
+      if (!currentFloor || !user) return
+      const item = shoppingItems.find((i) => i.id === itemId)
+      if (!item) return
+
+      let potContributionId = null
+      if (addToPot && price) {
+        const contribution = await addPotExpense(price, { note: `Compra: ${item.name}` })
+        potContributionId = contribution?.id || null
+      }
+
+      await update('shopping_items', itemId, { stockLevel: 'ok' })
+      await create('shopping_purchases', {
+        floorId: currentFloor.id,
+        itemId,
+        itemName: item.name,
+        userId: user.id,
+        price: price ? Number(price) : null,
+        potContributionId
+      })
+    },
+    [currentFloor, user, shoppingItems, addPotExpense]
   )
 
   const redeemReward = useCallback(
@@ -292,18 +480,32 @@ export function DataProvider({ children }) {
     leaderboard,
     redemptions,
     potContributions,
+    pendingJoinRequests,
+    claimJoinRequests,
+    approveJoinRequest,
+    rejectJoinRequest,
+    shoppingItems,
+    shoppingPurchases,
+    addShoppingItem,
+    updateShoppingItem,
+    removeShoppingItem,
+    setItemStock,
+    markItemPurchased,
     completeTask,
     uncompleteTask,
     reorderRotation,
     removeMember,
     setMemberRole,
     setMemberPotActive,
+    setMemberActiveStatus,
+    updateProfile,
+    adjustMemberPoints,
     addIncident,
     removeIncident,
     markAllNotificationsRead,
     requestWasher,
     addPotContribution,
-    spendFromPot,
+    addPotExpense,
     redeemReward
   }
 

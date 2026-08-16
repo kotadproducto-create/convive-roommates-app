@@ -1,36 +1,43 @@
 import { useMemo, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
+import PotCalendar from '../components/PotCalendar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { JarIcon } from '../components/icons'
+import { potAmountColorClass } from '../lib/pot'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export default function Wallet() {
   const { user, membership } = useAuth()
-  const { floor, members, potContributions, addPotContribution, setMemberPotActive } = useData()
+  const { floor, members, potContributions, addPotContribution, addPotExpense, setMemberPotActive } = useData()
   const { showToast } = useToast()
   const isAdmin = membership?.role === 'admin'
   const [amount, setAmount] = useState(floor?.potPerPerson || 10)
 
-  const potLow = floor && floor.potAmount < floor.potThreshold
+  const [showExpenseForm, setShowExpenseForm] = useState(false)
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseNote, setExpenseNote] = useState('')
+  const [receiptFile, setReceiptFile] = useState(null)
+  const [receiptPreview, setReceiptPreview] = useState(null)
+  const [submittingExpense, setSubmittingExpense] = useState(false)
 
   const activeMembers = useMemo(() => members.filter((m) => m.potActive !== false), [members])
   const inactiveMembers = useMemo(() => members.filter((m) => m.potActive === false), [members])
 
-  // Saldo estilo Splitwise: se reparte en partes iguales SOLO lo aportado
-  // por quienes están activos en el pote ahora mismo, entre esos mismos
-  // activos. Quien está de baja no cuenta ni aporta ni debe nada mientras
-  // dure la baja.
+  // Solo los aportes (montos positivos) cuentan para el saldo personal de
+  // cada quien. Los gastos son del grupo, no una deuda de quien los registra.
+  const aportes = useMemo(() => potContributions.filter((c) => Number(c.amount) > 0), [potContributions])
+
   const balances = useMemo(() => {
     const totalsByUser = {}
-    for (const c of potContributions) {
+    for (const c of aportes) {
       totalsByUser[c.userId] = (totalsByUser[c.userId] || 0) + Number(c.amount)
     }
     const activeIds = new Set(activeMembers.map((m) => m.id))
-    const totalAmongActive = potContributions
+    const totalAmongActive = aportes
       .filter((c) => activeIds.has(c.userId))
       .reduce((sum, c) => sum + Number(c.amount), 0)
     const fairShare = activeMembers.length ? totalAmongActive / activeMembers.length : 0
@@ -39,11 +46,39 @@ export default function Wallet() {
       byId[m.id] = { contributed: totalsByUser[m.id] || 0, fairShare, balance: (totalsByUser[m.id] || 0) - fairShare }
     }
     return byId
-  }, [potContributions, activeMembers])
+  }, [aportes, activeMembers])
 
   async function handleContribute() {
     await addPotContribution(amount)
     showToast(`¡Aportaste ${amount}€ al pote!`, 'success')
+  }
+
+  function handleReceiptChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setReceiptFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setReceiptPreview(reader.result)
+    reader.readAsDataURL(file)
+  }
+
+  async function handleSubmitExpense(e) {
+    e.preventDefault()
+    if (!expenseAmount || Number(expenseAmount) <= 0) return
+    setSubmittingExpense(true)
+    try {
+      await addPotExpense(expenseAmount, { note: expenseNote.trim() || null, receiptFile })
+      showToast(`Registraste un gasto de ${expenseAmount}€`, 'default')
+      setExpenseAmount('')
+      setExpenseNote('')
+      setReceiptFile(null)
+      setReceiptPreview(null)
+      setShowExpenseForm(false)
+    } catch (err) {
+      showToast('No se pudo registrar el gasto: ' + err.message, 'default')
+    } finally {
+      setSubmittingExpense(false)
+    }
   }
 
   function toggleActive(member) {
@@ -61,31 +96,73 @@ export default function Wallet() {
   return (
     <AppLayout title="Pote de dinero">
       <Reveal>
-        <div className="card p-5 mb-5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gold-100 dark:bg-gold-400/20 text-gold-500 flex items-center justify-center shrink-0">
-              <JarIcon className="w-6 h-6" />
+        <div className="mb-5">
+          <PotCalendar contributions={potContributions} memberById={memberById} />
+        </div>
+      </Reveal>
+
+      <Reveal delay={40}>
+        <div className="card p-5 mb-5 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gold-100 dark:bg-gold-400/20 text-gold-500 flex items-center justify-center shrink-0">
+                <JarIcon className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">Total del pote</p>
+                <p className={`text-2xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{floor?.potAmount ?? 0}€</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">Total del pote</p>
-              <p className={`text-2xl font-display font-bold ${potLow ? 'text-clay-500' : 'text-sage-500'}`}>{floor?.potAmount ?? 0}€</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input type="number" className="input w-24" value={amount} min={1} onChange={(e) => setAmount(e.target.value)} />
+              <button className="btn-primary text-sm" onClick={handleContribute}>
+                Aportar
+              </button>
+              <button className="btn-secondary text-sm" onClick={() => setShowExpenseForm((s) => !s)}>
+                {showExpenseForm ? 'Cancelar' : 'Gastos'}
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <input type="number" className="input w-24" value={amount} min={1} onChange={(e) => setAmount(e.target.value)} />
-            <button className="btn-primary text-sm" onClick={handleContribute}>
-              Aportar
-            </button>
-          </div>
+
+          {showExpenseForm && (
+            <form onSubmit={handleSubmitExpense} className="flex flex-col gap-3 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="input"
+                  placeholder="Monto gastado (€)"
+                  value={expenseAmount}
+                  onChange={(e) => setExpenseAmount(e.target.value)}
+                  required
+                />
+                <label className="btn-secondary text-sm cursor-pointer justify-self-start">
+                  📷 {receiptFile ? 'Cambiar factura' : 'Añadir factura (opcional)'}
+                  <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleReceiptChange} />
+                </label>
+              </div>
+              {receiptPreview && <img src={receiptPreview} alt="Factura" className="w-20 h-20 object-cover rounded-lg" />}
+              <textarea
+                className="input min-h-16"
+                placeholder="Nota (opcional): ej. 2x Leche 1.50€, Pan 1.20€ — o solo el total"
+                value={expenseNote}
+                onChange={(e) => setExpenseNote(e.target.value)}
+              />
+              <button className="btn-danger text-sm self-start" type="submit" disabled={submittingExpense}>
+                {submittingExpense ? 'Guardando…' : 'Registrar gasto'}
+              </button>
+            </form>
+          )}
         </div>
       </Reveal>
 
       <div className="grid md:grid-cols-2 gap-5 mb-5">
-        <Reveal delay={60}>
+        <Reveal delay={80}>
           <section className="card p-5">
             <h2 className="font-display font-semibold mb-1">Saldo por persona</h2>
             <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">
-              Verde: aportó de más. Rojo: le falta para llegar a su parte equitativa.
+              Verde: aportó de más. Rojo: le falta para llegar a su parte equitativa. Los gastos son del grupo y no afectan este saldo.
             </p>
             <ul className="flex flex-col gap-2">
               {activeMembers.map((m) => {
@@ -138,26 +215,43 @@ export default function Wallet() {
           </section>
         </Reveal>
 
-        <Reveal delay={120}>
+        <Reveal delay={140}>
           <section className="card p-5">
-            <h2 className="font-display font-semibold mb-3">Historial de aportes</h2>
+            <h2 className="font-display font-semibold mb-3">Historial de movimientos</h2>
             {history.length === 0 ? (
-              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Todavía no se ha registrado ningún aporte.</p>
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Todavía no se ha registrado ningún movimiento.</p>
             ) : (
-              <ul className="flex flex-col gap-1 text-sm max-h-80 overflow-y-auto">
-                {history.map((c) => (
-                  <li key={c.id} className="flex justify-between py-1.5 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
-                    <span>
-                      <strong>{memberById[c.userId]?.name || 'Alguien'}</strong> aportó
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="text-ink-900/40 dark:text-cream-100/40 text-xs">
-                        {format(new Date(c.createdAt), "d MMM, HH:mm", { locale: es })}
-                      </span>
-                      <span className="font-semibold text-sage-500">+{Number(c.amount).toFixed(2)}€</span>
-                    </span>
-                  </li>
-                ))}
+              <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto">
+                {history.map((c) => {
+                  const isExpense = Number(c.amount) < 0
+                  return (
+                    <li key={c.id} className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
+                      <div className="flex justify-between text-sm">
+                        <span>
+                          <strong>{memberById[c.userId]?.name || 'Alguien'}</strong> {isExpense ? 'gastó' : 'aportó'}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-ink-900/40 dark:text-cream-100/40 text-xs">
+                            {format(new Date(c.createdAt), "d MMM, HH:mm", { locale: es })}
+                          </span>
+                          <span className={`font-semibold ${isExpense ? 'text-clay-500' : 'text-sage-500'}`}>
+                            {isExpense ? '-' : '+'}{Math.abs(Number(c.amount)).toFixed(2)}€
+                          </span>
+                        </span>
+                      </div>
+                      {(c.note || c.receiptUrl) && (
+                        <div className="mt-1 flex items-center gap-2 text-xs text-ink-900/50 dark:text-cream-100/50">
+                          {c.note && <span className="truncate">{c.note}</span>}
+                          {c.receiptUrl && (
+                            <a href={c.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-violet-500 hover:underline shrink-0">
+                              Ver factura
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </section>

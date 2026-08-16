@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import TaskCard from '../components/TaskCard'
 import CalendarView from '../components/CalendarView'
@@ -6,12 +7,14 @@ import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { TASK_TYPES, getMondayOfWeek } from '../lib/rotation'
+import { potAmountColorClass } from '../lib/pot'
+import { AlertIcon } from '../components/icons'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const { floor, members, tasks, completeTask, uncompleteTask, requestWasher, addPotContribution, weekKey } = useData()
+  const { floor, members, tasks, shoppingItems, completeTask, uncompleteTask, requestWasher, addPotContribution, weekKey } = useData()
   const [contribution, setContribution] = useState(floor?.potPerPerson || 10)
   const [washerMsg, setWasherMsg] = useState(false)
 
@@ -27,8 +30,6 @@ export default function Dashboard() {
     setTimeout(() => setWasherMsg(false), 3000)
   }
 
-  const potLow = floor && floor.potAmount < floor.potThreshold
-
   const weekTasks = useMemo(
     () =>
       tasks
@@ -37,9 +38,21 @@ export default function Dashboard() {
     [tasks]
   )
   const doneCount = weekTasks.filter((t) => t.completed).length
+  const outOfStockItems = shoppingItems.filter((i) => i.stockLevel === 'out')
 
   return (
     <AppLayout title="Calendario semanal">
+      {outOfStockItems.length > 0 && (
+        <Reveal>
+          <Link to="/compras" className="card p-3 mb-5 flex items-center gap-2 border-clay-500/50 hover:-translate-y-0.5 transition-transform">
+            <AlertIcon className="w-5 h-5 text-clay-500 shrink-0" />
+            <p className="text-sm font-medium text-clay-500">
+              Reponer: {outOfStockItems.map((i) => i.name).join(', ')}
+            </p>
+          </Link>
+        </Reveal>
+      )}
+
       {/* Encabezado: dónde estamos */}
       <div className="mb-6">
         <h2 className="font-display text-2xl font-bold tracking-tight">Hola, {user?.name?.split(' ')[0]}</h2>
@@ -77,7 +90,7 @@ export default function Dashboard() {
           <Reveal delay={80}>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">Pote de compras</p>
-            <p className={`text-2xl font-display font-bold mb-3 ${potLow ? 'text-clay-500' : 'text-sage-500'}`}>
+            <p className={`text-2xl font-display font-bold mb-3 ${potAmountColorClass(floor?.potAmount ?? 0)}`}>
               {floor?.potAmount ?? 0}€
             </p>
             <div className="flex items-center gap-2">

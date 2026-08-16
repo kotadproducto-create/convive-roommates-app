@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { TASK_TYPES, TASK_DAY_OFFSET, getMondayOfWeek } from '../lib/rotation'
 import { StampIcon, DropletIcon, JarIcon, SparkleIcon, CartIcon } from '../components/icons'
+import { potAmountColorClass } from '../lib/pot'
 import { useToast } from '../context/ToastContext'
 import Reveal from '../components/Reveal'
 import { format, formatDistanceToNow, isSameDay } from 'date-fns'
@@ -12,7 +13,7 @@ import { es } from 'date-fns/locale'
 
 export default function Timeline() {
   const { user } = useAuth()
-  const { floor, members, tasks, notifications, completeTask, uncompleteTask, weekKey, markAllNotificationsRead } = useData()
+  const { floor, members, tasks, notifications, shoppingItems, completeTask, uncompleteTask, weekKey, markAllNotificationsRead } = useData()
   const { showToast } = useToast()
 
   const monday = getMondayOfWeek(weekKey)
@@ -40,8 +41,7 @@ export default function Timeline() {
 
   const hygieneTasks = tasks.filter((t) => t.type === 'basura' || t.type === 'lavadora')
   const hygieneDone = hygieneTasks.filter((t) => t.completed).length
-  const comprasTask = tasks.find((t) => t.type === 'compras')
-  const potLow = floor && floor.potAmount < floor.potThreshold
+  const outOfStockCount = shoppingItems.filter((i) => i.stockLevel === 'out').length
 
   return (
     <AppLayout title="Inicio">
@@ -119,7 +119,7 @@ export default function Timeline() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">Pote de dinero</p>
-                <p className={`text-xl font-display font-bold ${potLow ? 'text-clay-500' : 'text-sage-500'}`}>{floor?.potAmount ?? 0}€ disponibles</p>
+                <p className={`text-xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{floor?.potAmount ?? 0}€ disponibles</p>
               </div>
             </div>
             <Link to="/pote" className="btn-secondary text-sm w-full">
@@ -160,8 +160,17 @@ export default function Timeline() {
         <h3 className="font-display text-lg font-bold mb-3">Temas</h3>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Reveal delay={0}><ThemeCard to="/calendario" icon={DropletIcon} tone="violet" label="Higiene" stat={`${hygieneDone}/${hygieneTasks.length} hecho`} /></Reveal>
-          <Reveal delay={60}><ThemeCard to="/calendario" icon={CartIcon} tone="coral" label="Compras" stat={comprasTask ? (comprasTask.completed ? 'Hecho' : 'Pendiente') : '—'} /></Reveal>
-          <Reveal delay={120}><ThemeCard to="/pote" icon={JarIcon} tone="gold" label="Pote de dinero" stat={`${floor?.potAmount ?? 0}€`} warn={potLow} /></Reveal>
+          <Reveal delay={60}>
+            <ThemeCard
+              to="/compras"
+              icon={CartIcon}
+              tone="coral"
+              label="Compras"
+              stat={outOfStockCount > 0 ? `${outOfStockCount} agotado${outOfStockCount > 1 ? 's' : ''}` : `${shoppingItems.length} en la lista`}
+              statColorClass={outOfStockCount > 0 ? 'text-clay-500' : undefined}
+            />
+          </Reveal>
+          <Reveal delay={120}><ThemeCard to="/pote" icon={JarIcon} tone="gold" label="Pote de dinero" stat={`${floor?.potAmount ?? 0}€`} statColorClass={potAmountColorClass(floor?.potAmount ?? 0)} /></Reveal>
           <Reveal delay={180}><ThemeCard icon={SparkleIcon} tone="sky" label="Actividades" stat="Próximamente" soon /></Reveal>
         </div>
       </section>
@@ -176,14 +185,14 @@ const TONE_CLASSES = {
   sky: 'bg-sky-100 dark:bg-sky-500/20 text-sky-500'
 }
 
-function ThemeCard({ icon: Icon, label, stat, tone, warn, soon, to }) {
+function ThemeCard({ icon: Icon, label, stat, tone, warn, soon, to, statColorClass }) {
   const content = (
     <>
       <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${TONE_CLASSES[tone]}`}>
         <Icon className="w-5 h-5" />
       </div>
       <p className="font-display font-semibold text-sm">{label}</p>
-      <p className={`text-xs font-semibold ${warn ? 'text-clay-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>{stat}</p>
+      <p className={`text-xs font-semibold ${statColorClass || (warn ? 'text-clay-500' : 'text-ink-900/50 dark:text-cream-100/50')}`}>{stat}</p>
     </>
   )
   if (to && !soon) {

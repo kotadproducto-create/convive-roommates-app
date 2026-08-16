@@ -1,10 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon } from './icons'
+import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon, UsersIcon, CartIcon } from './icons'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Inicio', Icon: StampIcon, end: true },
   { to: '/calendario', label: 'Calendario', Icon: CalendarIcon },
+  { to: '/compras', label: 'Compras', Icon: CartIcon },
   { to: '/incidencias', label: 'Muro', Icon: PinIcon },
+  { to: '/convives', label: 'Convives', Icon: UsersIcon },
   { to: '/recompensas', label: 'Convis', Icon: CoinIcon },
   { to: '/pote', label: 'Pote', Icon: JarIcon },
   { to: '/piso', label: 'Piso', Icon: HomeIcon }

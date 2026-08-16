@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { AuthShell } from './Login'
 
 export default function Register() {
-  const { registerAndCreateFloor, registerAndJoinFloor } = useAuth()
+  const { registerAndCreateFloor, registerAndRequestJoin } = useAuth()
   const navigate = useNavigate()
   const [mode, setMode] = useState('create') // 'create' | 'join'
   const [name, setName] = useState('')
@@ -23,7 +23,7 @@ export default function Register() {
       if (mode === 'create') {
         await registerAndCreateFloor({ name, email, password, floorName })
       } else {
-        await registerAndJoinFloor({ name, email, password, inviteCode })
+        await registerAndRequestJoin({ name, email, password, inviteCode })
       }
       navigate('/')
     } catch (err) {
@@ -86,9 +86,14 @@ export default function Register() {
             required
           />
         )}
+        {mode === 'join' && (
+          <p className="text-xs text-ink-900/50 dark:text-cream-100/50 -mt-1">
+            Un miembro del piso deberá aprobar tu solicitud antes de que tengas acceso.
+          </p>
+        )}
         {error && <p className="text-sm font-medium text-clay-500">{error}</p>}
         <button className="btn-primary mt-2" type="submit" disabled={submitting}>
-          {submitting ? 'Creando…' : mode === 'create' ? 'Crear piso y cuenta' : 'Unirme'}
+          {submitting ? 'Creando…' : mode === 'create' ? 'Crear piso y cuenta' : 'Solicitar unión'}
         </button>
       </form>
 

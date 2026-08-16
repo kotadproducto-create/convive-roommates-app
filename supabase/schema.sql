@@ -30,9 +30,12 @@ drop function if exists is_floor_admin(uuid);
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null,
+  nickname text,
+  age integer check (age is null or (age > 0 and age < 130)),
+  phone text,
   points integer not null default 0,
   reputation_score numeric not null default 0, -- automática, no transferible, calculada desde el historial de tareas en todos los pisos (sin lógica todavía, Fase 1+)
-  presentation_message text check (char_length(presentation_message) <= 240), -- único de perfil, se reutiliza al unirse a cualquier piso (sin UI todavía, Fase 1+)
+  presentation_message text check (char_length(presentation_message) <= 240), -- Bio de la tarjeta de "Convives"; único de perfil, se reutiliza al unirse a cualquier piso
   created_at timestamptz not null default now()
 );
 
@@ -49,19 +52,22 @@ create table if not exists floors (
 
 -- Membresías: historial de pertenencia de un usuario a pisos.
 -- Como mucho una fila 'active' por usuario (constraint de BD más
--- abajo). Reactivar una membresía 'left' pasa por dejarla en
--- 'pending' hasta que un admin del piso la apruebe a 'active'
--- (la UI de ese flujo es de una fase posterior; aquí solo se deja
--- preparado el estado).
+-- abajo). 'pending' se usa tanto para reactivar una membresía 'left'
+-- como para la solicitud de un usuario nuevo que se une con un código
+-- de invitación (flujo de admisión: cualquier miembro activo del piso
+-- puede aceptarla a 'active' o denegarla a 'rejected', que queda en
+-- el historial para auditoría).
 create table if not exists floor_memberships (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
   floor_id uuid not null references floors(id) on delete cascade,
   role text not null default 'member' check (role in ('admin', 'member')),
-  status text not null default 'active' check (status in ('active', 'left', 'pending')),
+  status text not null default 'active' check (status in ('active', 'left', 'pending', 'rejected')),
   joined_at timestamptz not null default now(),
   left_at timestamptz,
-  pot_active boolean not null default true -- baja temporal del reparto del pote (viaje, etc.); no afecta la membresía real del piso
+  pot_active boolean not null default true, -- baja temporal del reparto del pote (viaje, etc.); no afecta la membresía real del piso. Se muestra como "de vacaciones" en la tarjeta de Convives (invertido: vacaciones = pot_active false)
+  active_status boolean not null default true, -- indicador informativo de presencia en el piso ("Convives"); no afecta rotación de tareas ni el pote, solo visual
+  first_seen_by uuid references profiles(id) -- quién de los miembros activos "reclamó" primero el pop-up de esta solicitud pendiente (para no mostrarla a todos a la vez)
 );
 
 create unique index if not exists floor_memberships_one_active_per_user
@@ -138,16 +144,57 @@ create table if not exists coin_transactions (
   created_at timestamptz not null default now()
 );
 
--- Ledger inmutable de aportes reales (EUR) al pote de compras compartido.
+-- Ledger inmutable de movimientos (EUR) del pote de compras compartido.
 -- floors.pot_amount sigue siendo el total rápido de mostrar; esta tabla es
--- el historial que permite calcular cuánto aportó cada quién.
+-- el historial: positivo = aporte, negativo = gasto. Los gastos llevan
+-- nota/foto de factura opcionales y NO cuentan en el saldo personal de
+-- nadie (son gasto del grupo, no una deuda de quien lo registra).
 create table if not exists pot_contributions (
   id uuid primary key default gen_random_uuid(),
   floor_id uuid not null references floors(id) on delete cascade,
   user_id uuid not null references profiles(id) on delete cascade,
-  amount numeric not null,
+  amount numeric not null, -- positivo = aporte, negativo = gasto
+  note text,
+  receipt_url text,
   created_at timestamptz not null default now()
 );
+
+-- Lista de compras del piso: productos recurrentes/puntuales con control
+-- de stock (semáforo ok/low/out).
+create table if not exists shopping_items (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  name text not null,
+  store text,
+  store_location text,
+  usual_quantity text,
+  stock_level text not null default 'ok' check (stock_level in ('ok', 'low', 'out')),
+  recurring boolean not null default true,
+  estimated_price numeric,
+  image_url text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists shopping_items_floor_idx on shopping_items (floor_id);
+
+-- Ledger inmutable de compras realizadas. item_name copia el nombre al
+-- momento de comprar (el historial sigue legible aunque el producto se
+-- edite o borre luego); pot_contribution_id enlaza opcionalmente con un
+-- gasto ya registrado en el pote de dinero.
+create table if not exists shopping_purchases (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  item_id uuid references shopping_items(id) on delete set null,
+  item_name text not null,
+  user_id uuid not null references profiles(id) on delete cascade,
+  price numeric,
+  pot_contribution_id uuid references pot_contributions(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists shopping_purchases_floor_idx on shopping_purchases (floor_id);
 
 -- =========================================================
 -- Funciones auxiliares para RLS (security definer: pueden leer
@@ -206,13 +253,15 @@ alter table pot_contributions enable row level security;
 -- contigo un piso activo; solo puedes crear/editar el tuyo; nunca
 -- se borra un perfil (quitar a alguien de un piso es cerrar su
 -- membresía, no borrar su perfil).
+-- incluye 'pending' además de 'active' para poder mostrar el nombre de
+-- quien solicita unirse en el pop-up de admisión, antes de ser aceptado.
 create policy "select own or shared-floor profiles" on profiles
   for select using (
     id = auth.uid()
     or exists (
       select 1 from floor_memberships fm
       where fm.user_id = profiles.id
-        and fm.status = 'active'
+        and fm.status in ('active', 'pending')
         and is_active_member(fm.floor_id)
     )
   );
@@ -220,6 +269,19 @@ create policy "insert own profile" on profiles
   for insert with check (id = auth.uid());
 create policy "update own profile" on profiles
   for update using (id = auth.uid());
+-- Permite a un admin del piso otorgar/restar Convis (profiles.points) a
+-- cualquier miembro activo de su piso, sin depender de que sea su propio
+-- perfil. Se combina con "update own profile" (RLS junta políticas
+-- permisivas con OR).
+create policy "floor admin update member points" on profiles
+  for update using (
+    exists (
+      select 1 from floor_memberships fm
+      where fm.user_id = profiles.id
+        and fm.status = 'active'
+        and is_floor_admin(fm.floor_id)
+    )
+  );
 
 -- floors: cualquiera autenticado puede crear un piso nuevo
 -- (todavía no tiene membresía asignada en ese momento);
@@ -245,6 +307,14 @@ create policy "update own membership" on floor_memberships
   for update using (user_id = auth.uid());
 create policy "admin update floor memberships" on floor_memberships
   for update using (is_floor_admin(floor_id));
+-- Cualquier miembro activo (no solo un admin) puede aceptar o rechazar una
+-- solicitud 'pending' dirigida a su propio piso. El "with check" es más
+-- laxo a propósito: tras decidir, la fila deja de tener status='pending',
+-- así que esa condición no puede repetirse para la fila resultante.
+create policy "floor member decide pending membership" on floor_memberships
+  for update
+  using (status = 'pending' and is_active_member(floor_id))
+  with check (is_active_member(floor_id));
 
 -- tasks / incidents / notifications / redemptions: acotado al piso
 create policy "select floor tasks" on tasks for select using (is_active_member(floor_id));
@@ -273,6 +343,17 @@ create policy "insert floor coin transactions" on coin_transactions for insert w
 create policy "select floor pot contributions" on pot_contributions for select using (is_active_member(floor_id));
 create policy "insert own pot contributions" on pot_contributions for insert with check (is_active_member(floor_id) and user_id = auth.uid());
 
+-- shopping_items: cualquier miembro activo ve, crea, edita y borra (mismo
+-- modelo de confianza que el resto de la app).
+create policy "select floor shopping items" on shopping_items for select using (is_active_member(floor_id));
+create policy "insert floor shopping items" on shopping_items for insert with check (is_active_member(floor_id));
+create policy "update floor shopping items" on shopping_items for update using (is_active_member(floor_id));
+create policy "delete floor shopping items" on shopping_items for delete using (is_active_member(floor_id));
+
+-- shopping_purchases: ledger inmutable — solo select/insert.
+create policy "select floor shopping purchases" on shopping_purchases for select using (is_active_member(floor_id));
+create policy "insert floor shopping purchases" on shopping_purchases for insert with check (is_active_member(floor_id));
+
 -- =========================================================
 -- Realtime: para que la app reciba cambios en vivo
 -- =========================================================
@@ -284,3 +365,27 @@ alter publication supabase_realtime add table profiles;
 alter publication supabase_realtime add table redemptions;
 alter publication supabase_realtime add table floor_memberships;
 alter publication supabase_realtime add table pot_contributions;
+alter publication supabase_realtime add table shopping_items;
+alter publication supabase_realtime add table shopping_purchases;
+
+-- =========================================================
+-- Storage: fotos de incidencias y facturas del pote comparten un único
+-- bucket público (lectura libre por URL, escritura solo para miembros
+-- activos del piso al que pertenece la carpeta).
+-- =========================================================
+insert into storage.buckets (id, name, public)
+values ('incident-photos', 'incident-photos', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "floor members upload photos" on storage.objects;
+create policy "floor members upload photos" on storage.objects
+  for insert
+  with check (
+    bucket_id = 'incident-photos'
+    and is_active_member((storage.foldername(name))[1]::uuid)
+  );
+
+drop policy if exists "anyone can view photos" on storage.objects;
+create policy "anyone can view photos" on storage.objects
+  for select
+  using (bucket_id = 'incident-photos');

@@ -183,6 +183,79 @@ export function SparkleIcon(props) {
   )
 }
 
+export function PhoneIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M5.3 3.6h2.1l1 3.3-1.6 1.4a9.4 9.4 0 0 0 4 4l1.4-1.6 3.3 1v2.1a1.4 1.4 0 0 1-1.5 1.4A13 13 0 0 1 4 4.1a1.4 1.4 0 0 1 1.3-1.5Z" />
+    </IconBase>
+  )
+}
+
+export function EditIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M12.6 3.4a1.6 1.6 0 0 1 2.3 2.3L6.4 14.2l-3 .7.7-3Z" />
+      <path d="M11 5l3 3" />
+    </IconBase>
+  )
+}
+
+export function CloseIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 5l10 10M15 5 5 15" />
+    </IconBase>
+  )
+}
+
+export function PlusIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M10 4.5v11M4.5 10h11" />
+    </IconBase>
+  )
+}
+
+export function MinusIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M4.5 10h11" />
+    </IconBase>
+  )
+}
+
+export function UsersIcon(props) {
+  return (
+    <IconBase {...props}>
+      <circle cx="7.3" cy="6.8" r="2.6" />
+      <path d="M2.4 16.2a5 5 0 0 1 9.8 0" />
+      <path d="M12.6 4.3a2.6 2.6 0 0 1 0 5" />
+      <path d="M14.3 11.6a5 4.4 0 0 1 3.3 4.6" />
+    </IconBase>
+  )
+}
+
+export function AlertIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M10 2.8 17.5 16H2.5L10 2.8Z" />
+      <path d="M10 8.2v3.4" />
+      <circle cx="10" cy="14.1" r="0.9" fill="currentColor" stroke="none" />
+    </IconBase>
+  )
+}
+
+export function StoreIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M3.2 7.4 4.4 3.6h11.2l1.2 3.8" />
+      <path d="M3.2 7.4a2 2 0 0 0 4 .3 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4-.3" />
+      <path d="M4.4 8.6V16h11.2V8.6" />
+      <path d="M8.2 16v-3.6h3.6V16" />
+    </IconBase>
+  )
+}
+
 export const TASK_ICONS = {
   cart: CartIcon,
   trash: TrashIcon,
