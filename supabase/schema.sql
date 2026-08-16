@@ -144,11 +144,13 @@ create table if not exists coin_transactions (
   created_at timestamptz not null default now()
 );
 
--- Ledger inmutable de movimientos (EUR) del pote de compras compartido.
--- floors.pot_amount sigue siendo el total rápido de mostrar; esta tabla es
--- el historial: positivo = aporte, negativo = gasto. Los gastos llevan
--- nota/foto de factura opcionales y NO cuentan en el saldo personal de
--- nadie (son gasto del grupo, no una deuda de quien lo registra).
+-- Ledger de movimientos (EUR) del pote de compras compartido. Inmutable
+-- para los aportes; los gastos son editables/borrables por su autor
+-- durante 24h (ver política RLS más abajo). floors.pot_amount sigue
+-- siendo el total rápido de mostrar; esta tabla es el historial:
+-- positivo = aporte, negativo = gasto. Los gastos llevan nota/foto de
+-- factura opcionales y NO cuentan en el saldo personal de nadie (son
+-- gasto del grupo, no una deuda de quien lo registra).
 create table if not exists pot_contributions (
   id uuid primary key default gen_random_uuid(),
   floor_id uuid not null references floors(id) on delete cascade,
@@ -338,10 +340,20 @@ create policy "write floor redemptions" on redemptions for insert with check (is
 create policy "select floor coin transactions" on coin_transactions for select using (is_active_member(floor_id));
 create policy "insert floor coin transactions" on coin_transactions for insert with check (is_active_member(floor_id));
 
--- pot_contributions: ledger inmutable — cada quien registra su propio
--- aporte, nadie edita ni borra una fila ya escrita.
+-- pot_contributions: ledger inmutable para los APORTES (montos positivos):
+-- cada quien registra el suyo, nadie los edita ni borra. Los GASTOS
+-- (montos negativos) son la única excepción: quien los registró puede
+-- editarlos o borrarlos, pero solo durante las 24h siguientes a haberlos
+-- publicado (el "using" deja de matchear la fila pasado ese plazo).
 create policy "select floor pot contributions" on pot_contributions for select using (is_active_member(floor_id));
 create policy "insert own pot contributions" on pot_contributions for insert with check (is_active_member(floor_id) and user_id = auth.uid());
+create policy "author edit own recent expense" on pot_contributions
+  for update
+  using (user_id = auth.uid() and amount < 0 and created_at > now() - interval '24 hours')
+  with check (user_id = auth.uid() and amount < 0);
+create policy "author delete own recent expense" on pot_contributions
+  for delete
+  using (user_id = auth.uid() and amount < 0 and created_at > now() - interval '24 hours');
 
 -- shopping_items: cualquier miembro activo ve, crea, edita y borra (mismo
 -- modelo de confianza que el resto de la app).

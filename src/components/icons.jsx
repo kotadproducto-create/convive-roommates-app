@@ -256,6 +256,16 @@ export function StoreIcon(props) {
   )
 }
 
+export function MoreIcon(props) {
+  return (
+    <IconBase {...props}>
+      <circle cx="4.5" cy="10" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="10" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="10" r="1.2" fill="currentColor" stroke="none" />
+    </IconBase>
+  )
+}
+
 export const TASK_ICONS = {
   cart: CartIcon,
   trash: TrashIcon,

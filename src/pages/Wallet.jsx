@@ -5,14 +5,15 @@ import PotCalendar from '../components/PotCalendar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
-import { JarIcon } from '../components/icons'
+import { JarIcon, EditIcon, TrashIcon } from '../components/icons'
 import { potAmountColorClass } from '../lib/pot'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export default function Wallet() {
   const { user, membership } = useAuth()
-  const { floor, members, potContributions, addPotContribution, addPotExpense, setMemberPotActive } = useData()
+  const { floor, members, potContributions, addPotContribution, addPotExpense, updatePotExpense, deletePotExpense, setMemberPotActive } =
+    useData()
   const { showToast } = useToast()
   const isAdmin = membership?.role === 'admin'
   const [amount, setAmount] = useState(floor?.potPerPerson || 10)
@@ -222,41 +223,125 @@ export default function Wallet() {
               <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Todavía no se ha registrado ningún movimiento.</p>
             ) : (
               <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto">
-                {history.map((c) => {
-                  const isExpense = Number(c.amount) < 0
-                  return (
-                    <li key={c.id} className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
-                      <div className="flex justify-between text-sm">
-                        <span>
-                          <strong>{memberById[c.userId]?.name || 'Alguien'}</strong> {isExpense ? 'gastó' : 'aportó'}
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <span className="text-ink-900/40 dark:text-cream-100/40 text-xs">
-                            {format(new Date(c.createdAt), "d MMM, HH:mm", { locale: es })}
-                          </span>
-                          <span className={`font-semibold ${isExpense ? 'text-clay-500' : 'text-sage-500'}`}>
-                            {isExpense ? '-' : '+'}{Math.abs(Number(c.amount)).toFixed(2)}€
-                          </span>
-                        </span>
-                      </div>
-                      {(c.note || c.receiptUrl) && (
-                        <div className="mt-1 flex items-center gap-2 text-xs text-ink-900/50 dark:text-cream-100/50">
-                          {c.note && <span className="truncate">{c.note}</span>}
-                          {c.receiptUrl && (
-                            <a href={c.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-violet-500 hover:underline shrink-0">
-                              Ver factura
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  )
-                })}
+                {history.map((c) => (
+                  <HistoryRow
+                    key={c.id}
+                    contribution={c}
+                    authorName={memberById[c.userId]?.name || 'Alguien'}
+                    canManage={c.userId === user.id && Number(c.amount) < 0 && Date.now() - new Date(c.createdAt).getTime() < 24 * 60 * 60 * 1000}
+                    onUpdate={updatePotExpense}
+                    onDelete={deletePotExpense}
+                  />
+                ))}
               </ul>
             )}
           </section>
         </Reveal>
       </div>
     </AppLayout>
+  )
+}
+
+function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete }) {
+  const isExpense = Number(c.amount) < 0
+  const [editing, setEditing] = useState(false)
+  const [amount, setAmount] = useState(Math.abs(Number(c.amount)))
+  const [note, setNote] = useState(c.note || '')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!amount || Number(amount) <= 0) return
+    setSaving(true)
+    try {
+      await onUpdate(c.id, { amount, note: note.trim() || null })
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleDelete() {
+    if (confirm('¿Eliminar este gasto? El total del pote se ajustará.')) {
+      onDelete(c.id)
+    }
+  }
+
+  if (editing) {
+    return (
+      <li className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
+        <form onSubmit={handleSave} className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              className="input text-sm flex-1"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+            />
+          </div>
+          <input className="input text-sm" placeholder="Nota (opcional)" value={note} onChange={(e) => setNote(e.target.value)} />
+          <div className="flex gap-2">
+            <button type="button" className="btn-secondary text-xs flex-1" onClick={() => setEditing(false)}>
+              Cancelar
+            </button>
+            <button type="submit" className="btn-primary text-xs flex-1" disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </li>
+    )
+  }
+
+  return (
+    <li className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
+      <div className="flex justify-between text-sm gap-2">
+        <span className="min-w-0">
+          <strong>{authorName}</strong> {isExpense ? 'gastó' : 'aportó'}
+        </span>
+        <span className="flex items-center gap-2 shrink-0">
+          <span className="text-ink-900/40 dark:text-cream-100/40 text-xs">
+            {format(new Date(c.createdAt), "d MMM, HH:mm", { locale: es })}
+          </span>
+          <span className={`font-semibold ${isExpense ? 'text-clay-500' : 'text-sage-500'}`}>
+            {isExpense ? '-' : '+'}
+            {Math.abs(Number(c.amount)).toFixed(2)}€
+          </span>
+        </span>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs text-ink-900/50 dark:text-cream-100/50 min-w-0">
+          {c.note && <span className="truncate">{c.note}</span>}
+          {c.receiptUrl && (
+            <a href={c.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-violet-500 hover:underline shrink-0">
+              Ver factura
+            </a>
+          )}
+        </div>
+        {canManage && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              title="Editar (disponible 24h)"
+              className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+            >
+              <EditIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              title="Eliminar (disponible 24h)"
+              className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 text-clay-500"
+            >
+              <TrashIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    </li>
   )
 }

@@ -330,6 +330,34 @@ export function DataProvider({ children }) {
     [currentFloor, user]
   )
 
+  // Solo el autor de un gasto puede editarlo/borrarlo, y solo durante las
+  // 24h siguientes a haberlo publicado (lo hace cumplir la política RLS;
+  // esto además ajusta floors.pot_amount por la diferencia para que el
+  // total del pote quede correcto tras el cambio).
+  const updatePotExpense = useCallback(
+    async (contributionId, { amount, note }) => {
+      if (!currentFloor) return
+      const existing = potContributions.find((c) => c.id === contributionId)
+      if (!existing) return
+      const newAmount = -Math.abs(Number(amount))
+      const delta = newAmount - Number(existing.amount)
+      await update('pot_contributions', contributionId, { amount: newAmount, note: note || null })
+      await update('floors', currentFloor.id, { potAmount: Math.max(0, (currentFloor.potAmount || 0) + delta) })
+    },
+    [currentFloor, potContributions]
+  )
+
+  const deletePotExpense = useCallback(
+    async (contributionId) => {
+      if (!currentFloor) return
+      const existing = potContributions.find((c) => c.id === contributionId)
+      if (!existing) return
+      await remove('pot_contributions', contributionId)
+      await update('floors', currentFloor.id, { potAmount: Math.max(0, (currentFloor.potAmount || 0) - Number(existing.amount)) })
+    },
+    [currentFloor, potContributions]
+  )
+
   const claimJoinRequests = useCallback(async () => {
     if (!currentFloor || !user) return []
     return claimPendingJoinRequests(currentFloor.id, user.id)
@@ -506,6 +534,8 @@ export function DataProvider({ children }) {
     requestWasher,
     addPotContribution,
     addPotExpense,
+    updatePotExpense,
+    deletePotExpense,
     redeemReward
   }
 

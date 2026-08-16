@@ -1,5 +1,6 @@
-import { NavLink } from 'react-router-dom'
-import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon, UsersIcon, CartIcon } from './icons'
+import { useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon, UsersIcon, CartIcon, MoreIcon, CloseIcon } from './icons'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Inicio', Icon: StampIcon, end: true },
@@ -12,7 +13,18 @@ const NAV_ITEMS = [
   { to: '/piso', label: 'Piso', Icon: HomeIcon }
 ]
 
+// En móvil solo hay sitio cómodo para 4 pestañas + el botón "Más"; el
+// resto vive en una hoja inferior. El escritorio sigue mostrando todas.
+const MOBILE_PRIMARY_PATHS = ['/', '/calendario', '/compras', '/pote']
+
 export default function Sidebar() {
+  const [showMore, setShowMore] = useState(false)
+  const location = useLocation()
+
+  const primaryItems = NAV_ITEMS.filter((item) => MOBILE_PRIMARY_PATHS.includes(item.to))
+  const moreItems = NAV_ITEMS.filter((item) => !MOBILE_PRIMARY_PATHS.includes(item.to))
+  const isMoreActive = moreItems.some((item) => item.to === location.pathname)
+
   return (
     <>
       {/* Escritorio: barra lateral fija */}
@@ -25,9 +37,9 @@ export default function Sidebar() {
         </nav>
       </aside>
 
-      {/* Móvil: barra inferior */}
+      {/* Móvil: barra inferior con 4 fijas + "Más" */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-ink-800/95 backdrop-blur border-t border-ink-900/10 dark:border-cream-100/15 flex justify-around py-2">
-        {NAV_ITEMS.map(({ to, label, Icon, end }) => (
+        {primaryItems.map(({ to, label, Icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -42,7 +54,57 @@ export default function Sidebar() {
             {label}
           </NavLink>
         ))}
+        <button
+          type="button"
+          onClick={() => setShowMore(true)}
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
+            isMoreActive ? 'text-violet-500' : 'text-ink-900/60 dark:text-cream-100/60'
+          }`}
+        >
+          <MoreIcon className="w-5 h-5" />
+          Más
+        </button>
       </nav>
+
+      {showMore && (
+        <div className="md:hidden fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end" onClick={() => setShowMore(false)}>
+          <div
+            className="w-full bg-cream-100 dark:bg-ink-800 rounded-t-2xl p-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-display font-bold text-lg">Más</p>
+              <button
+                type="button"
+                onClick={() => setShowMore(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+              >
+                <CloseIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              {moreItems.map(({ to, label, Icon, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  onClick={() => setShowMore(false)}
+                  className={({ isActive }) =>
+                    `flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold ${
+                      isActive
+                        ? 'bg-violet-50 text-violet-600 dark:bg-violet-700/25 dark:text-violet-100'
+                        : 'text-ink-900/70 dark:text-cream-100/70 hover:bg-cream-200 dark:hover:bg-ink-700'
+                    }`
+                  }
+                >
+                  <Icon className="w-5 h-5" />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
