@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   format,
   addMonths,
@@ -15,7 +16,7 @@ import {
 } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { TASK_TYPES, TASK_DAY_OFFSET, getWeekKey, whoIsAssigned } from '../lib/rotation'
-import { TASK_ICONS } from './icons'
+import { TASK_ICONS, JarIcon, CartIcon, StoreIcon, WasherIcon } from './icons'
 import { useToast } from '../context/ToastContext'
 
 const VIEW_MODES = [
@@ -32,7 +33,18 @@ const VIEW_MODES = [
  * ahí se puede marcar/deshacer; el resto del calendario es el horario
  * previsto (quién le toca), no un historial de si se cumplió o no.
  */
-export default function CalendarView({ floor, memberById, currentWeekKey, tasks, completeTask, uncompleteTask }) {
+export default function CalendarView({
+  floor,
+  memberById,
+  currentWeekKey,
+  tasks,
+  completeTask,
+  uncompleteTask,
+  potContributions = [],
+  shoppingPurchases = [],
+  shoppingItems = [],
+  notifications = []
+}) {
   const [view, setView] = useState('month')
   const [cursor, setCursor] = useState(() => new Date())
 
@@ -106,7 +118,19 @@ export default function CalendarView({ floor, memberById, currentWeekKey, tasks,
 
       {view === 'month' && <MonthGrid cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} />}
       {view === 'week' && <WeekStrip cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} />}
-      {view === 'day' && <DayDetail cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} />}
+      {view === 'day' && (
+        <DayDetail
+          cursor={cursor}
+          dayInfo={dayInfo}
+          completeTask={completeTask}
+          uncompleteTask={uncompleteTask}
+          memberById={memberById}
+          potContributions={potContributions}
+          shoppingPurchases={shoppingPurchases}
+          shoppingItems={shoppingItems}
+          notifications={notifications}
+        />
+      )}
     </div>
   )
 }
@@ -201,10 +225,90 @@ function WeekStrip({ cursor, dayInfo }) {
   )
 }
 
-function DayDetail({ cursor, dayInfo, completeTask, uncompleteTask }) {
+const EVENT_TONE_CLASSES = {
+  sage: 'bg-sage-500/15 text-sage-500',
+  clay: 'bg-clay-500/15 text-clay-500',
+  coral: 'bg-coral-100 dark:bg-coral-500/20 text-coral-500',
+  violet: 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200',
+  sky: 'bg-sky-100 dark:bg-sky-500/20 text-sky-500'
+}
+
+/** Junta, para un día concreto, todo lo que pasó en el piso ese día:
+ * aportes/gastos del pote, compras realizadas, productos agregados a la
+ * lista, y avisos de lavadora — ordenado cronológicamente, como un
+ * historial resumen del día. */
+function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications) {
+  return useMemo(() => {
+    const events = []
+
+    for (const c of potContributions) {
+      if (!isSameDay(new Date(c.createdAt), cursor)) continue
+      const isExpense = Number(c.amount) < 0
+      events.push({
+        id: `pot-${c.id}`,
+        time: c.createdAt,
+        icon: JarIcon,
+        tone: isExpense ? 'clay' : 'sage',
+        title: `${memberById[c.userId]?.name || 'Alguien'} ${isExpense ? 'gastó' : 'aportó'} ${Math.abs(Number(c.amount)).toFixed(2)}€ en el pote`,
+        subtitle: c.note || null
+      })
+    }
+
+    for (const p of shoppingPurchases) {
+      if (!isSameDay(new Date(p.createdAt), cursor)) continue
+      events.push({
+        id: `purchase-${p.id}`,
+        time: p.createdAt,
+        icon: CartIcon,
+        tone: 'coral',
+        title: `${memberById[p.userId]?.name || 'Alguien'} compró ${p.itemName}`,
+        subtitle: p.price ? `${p.price}€` : null
+      })
+    }
+
+    for (const item of shoppingItems) {
+      if (!isSameDay(new Date(item.createdAt), cursor)) continue
+      events.push({
+        id: `item-${item.id}`,
+        time: item.createdAt,
+        icon: StoreIcon,
+        tone: 'violet',
+        title: `${memberById[item.createdBy]?.name || 'Alguien'} agregó "${item.name}" a la lista de compras`,
+        subtitle: null
+      })
+    }
+
+    for (const n of notifications) {
+      if (n.type !== 'lavadora' || !isSameDay(new Date(n.createdAt), cursor)) continue
+      events.push({
+        id: `notif-${n.id}`,
+        time: n.createdAt,
+        icon: WasherIcon,
+        tone: 'sky',
+        title: n.message,
+        subtitle: null
+      })
+    }
+
+    return events.sort((a, b) => new Date(a.time) - new Date(b.time))
+  }, [cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications])
+}
+
+function DayDetail({
+  cursor,
+  dayInfo,
+  completeTask,
+  uncompleteTask,
+  memberById,
+  potContributions,
+  shoppingPurchases,
+  shoppingItems,
+  notifications
+}) {
   const { type, assignee, task, isCurrentWeek } = dayInfo(cursor)
   const Icon = type ? TASK_ICONS[type.icon] : null
   const { showToast } = useToast()
+  const events = useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications)
 
   function handleToggle() {
     if (task.completed) {
@@ -215,29 +319,66 @@ function DayDetail({ cursor, dayInfo, completeTask, uncompleteTask }) {
     }
   }
 
-  if (!type) {
-    return <p className="text-sm text-center py-10 text-ink-900/50 dark:text-cream-100/50">Ninguna tarea programada este día.</p>
-  }
-
   return (
-    <div className="flex items-center gap-4 py-4">
-      <div className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-700/25 flex items-center justify-center shrink-0">
-        {Icon && <Icon className="w-7 h-7 text-violet-600 dark:text-violet-200" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-display font-semibold">{type.label}</p>
-        <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-          {assignee?.name || 'Sin asignar'} · +{type.points} Convis
-        </p>
-        {!isCurrentWeek && (
-          <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">Horario previsto, todavía no es la semana en curso.</p>
+    <div className="py-2">
+      {type ? (
+        <div className="flex items-center gap-4 py-4 border-b border-ink-900/10 dark:border-cream-100/15">
+          {type.key === 'compras' ? (
+            <Link to="/compras" className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-700/25 flex items-center justify-center shrink-0 hover:opacity-80" title="Ir a la lista de compras">
+              {Icon && <Icon className="w-7 h-7 text-violet-600 dark:text-violet-200" />}
+            </Link>
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-700/25 flex items-center justify-center shrink-0">
+              {Icon && <Icon className="w-7 h-7 text-violet-600 dark:text-violet-200" />}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            {type.key === 'compras' ? (
+              <Link to="/compras" className="font-display font-semibold underline decoration-dotted underline-offset-2 hover:opacity-80">
+                {type.label}
+              </Link>
+            ) : (
+              <p className="font-display font-semibold">{type.label}</p>
+            )}
+            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
+              {assignee?.name || 'Sin asignar'} · +{type.points} Convis
+              {isCurrentWeek && task && <span className={task.completed ? 'text-sage-500' : 'text-gold-500'}> · {task.completed ? 'Hecha' : 'Pendiente'}</span>}
+            </p>
+            {!isCurrentWeek && (
+              <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">Horario previsto, todavía no es la semana en curso.</p>
+            )}
+          </div>
+          {isCurrentWeek && task && (
+            <button type="button" onClick={handleToggle} className={task.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}>
+              {task.completed ? 'Deshacer' : 'Marcar como hecha'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">Ninguna tarea programada este día.</p>
+      )}
+
+      <div className="mt-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-2">Resumen del día</p>
+        {events.length === 0 ? (
+          <p className="text-sm text-ink-900/50 dark:text-cream-100/50 py-2">Sin más actividad registrada este día.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {events.map((e) => (
+              <li key={e.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${EVENT_TONE_CLASSES[e.tone]}`}>
+                  <e.icon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{e.title}</p>
+                  {e.subtitle && <p className="text-xs text-ink-900/50 dark:text-cream-100/50 truncate">{e.subtitle}</p>}
+                </div>
+                <span className="text-xs text-ink-900/40 dark:text-cream-100/40 shrink-0">{format(new Date(e.time), 'HH:mm')}</span>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
-      {isCurrentWeek && task && (
-        <button type="button" onClick={handleToggle} className={task.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}>
-          {task.completed ? 'Deshacer' : 'Marcar como hecha'}
-        </button>
-      )}
     </div>
   )
 }

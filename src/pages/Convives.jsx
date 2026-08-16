@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
+import Avatar from '../components/Avatar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
-import { CoinIcon, SunIcon, HomeIcon, PhoneIcon, EditIcon, CloseIcon, PlusIcon, MinusIcon } from '../components/icons'
+import { CoinIcon, SunIcon, HomeIcon, PhoneIcon, EditIcon, PlusIcon, MinusIcon } from '../components/icons'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -12,7 +14,6 @@ export default function Convives() {
   const { user, membership } = useAuth()
   const { members } = useData()
   const isAdmin = membership?.role === 'admin'
-  const [editing, setEditing] = useState(null)
 
   return (
     <AppLayout title="Convives">
@@ -26,17 +27,10 @@ export default function Convives() {
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {members.map((m, i) => (
           <Reveal key={m.id} delay={i * 60}>
-            <ConviveCard
-              member={m}
-              currentUserId={user.id}
-              isAdmin={isAdmin}
-              onEdit={() => setEditing(m)}
-            />
+            <ConviveCard member={m} currentUserId={user.id} isAdmin={isAdmin} />
           </Reveal>
         ))}
       </div>
-
-      {editing && <EditModal member={editing} onClose={() => setEditing(null)} />}
     </AppLayout>
   )
 }
@@ -46,7 +40,7 @@ function timeInFloor(joinedAt) {
   return formatDistanceToNowStrict(new Date(joinedAt), { locale: es })
 }
 
-function ConviveCard({ member, currentUserId, isAdmin, onEdit }) {
+function ConviveCard({ member, currentUserId, isAdmin }) {
   const { setMemberPotActive, setMemberActiveStatus } = useData()
   const [adjusting, setAdjusting] = useState(false)
 
@@ -54,6 +48,8 @@ function ConviveCard({ member, currentUserId, isAdmin, onEdit }) {
   const canManage = isSelf || isAdmin
   const onVacation = member.potActive === false
   const isActive = member.activeStatus !== false
+  const showAge = member.age && (isSelf || member.agePublic !== false)
+  const showPhone = member.phone && (isSelf || member.phonePublic !== false)
 
   function toggleVacation() {
     setMemberPotActive(member.membershipId, onVacation)
@@ -67,9 +63,7 @@ function ConviveCard({ member, currentUserId, isAdmin, onEdit }) {
     <div className="card p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-11 h-11 rounded-full bg-gold-400 border-2 border-ink-900 text-ink-900 flex items-center justify-center text-base font-bold shrink-0">
-            {member.name?.[0]?.toUpperCase()}
-          </div>
+          <Avatar url={member.avatarUrl} name={member.name} size="w-11 h-11" />
           <div className="min-w-0">
             <p className="font-display font-bold truncate">
               {member.name}
@@ -87,9 +81,9 @@ function ConviveCard({ member, currentUserId, isAdmin, onEdit }) {
             </span>
           )}
           {isSelf && (
-            <button onClick={onEdit} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700" title="Editar mi perfil">
+            <Link to="/perfil" className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700" title="Editar mi perfil">
               <EditIcon className="w-4 h-4" />
-            </button>
+            </Link>
           )}
         </div>
       </div>
@@ -97,6 +91,12 @@ function ConviveCard({ member, currentUserId, isAdmin, onEdit }) {
       <p className="text-sm text-ink-900/70 dark:text-cream-100/70 min-h-[2.5em]">
         {member.presentationMessage || <span className="text-ink-900/35 dark:text-cream-100/35 italic">Sin bio todavía.</span>}
       </p>
+
+      {member.interests && (
+        <p className="text-xs text-ink-900/50 dark:text-cream-100/50 -mt-2">
+          <span className="font-semibold">Le gusta:</span> {member.interests}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-1.5">
         <button
@@ -127,9 +127,9 @@ function ConviveCard({ member, currentUserId, isAdmin, onEdit }) {
 
       <div className="flex items-center justify-between text-xs text-ink-900/50 dark:text-cream-100/50 border-t border-ink-900/10 dark:border-cream-100/15 pt-3">
         <div className="flex flex-col gap-1">
-          {member.age && <span>{member.age} años</span>}
+          {showAge && <span>{member.age} años</span>}
           {timeInFloor(member.joinedAt) && <span>Vive aquí desde hace {timeInFloor(member.joinedAt)}</span>}
-          {member.phone && (
+          {showPhone && (
             <a href={`tel:${member.phone}`} className="flex items-center gap-1 text-violet-500 hover:underline">
               <PhoneIcon className="w-3 h-3" />{member.phone}
             </a>
@@ -200,83 +200,6 @@ function PointsAdjustForm({ member, onDone }) {
           <MinusIcon className="w-3.5 h-3.5" />Restar
         </button>
       </div>
-    </div>
-  )
-}
-
-function EditModal({ member, onClose }) {
-  const { updateProfile } = useData()
-  const { showToast } = useToast()
-  const [nickname, setNickname] = useState(member.nickname || '')
-  const [bio, setBio] = useState(member.presentationMessage || '')
-  const [age, setAge] = useState(member.age || '')
-  const [phone, setPhone] = useState(member.phone || '')
-  const [saving, setSaving] = useState(false)
-
-  async function handleSave(e) {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      await updateProfile(member.id, {
-        nickname: nickname.trim() || null,
-        presentationMessage: bio.trim() || null,
-        age: age ? Number(age) : null,
-        phone: phone.trim() || null
-      })
-      showToast('Perfil actualizado', 'success')
-      onClose()
-    } catch (err) {
-      showToast('No se pudo guardar: ' + err.message, 'default')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <form
-        onSubmit={handleSave}
-        onClick={(e) => e.stopPropagation()}
-        className="card p-5 w-full max-w-sm flex flex-col gap-3"
-      >
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="font-display font-bold text-lg">Editar mi perfil</h3>
-          <button type="button" onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700">
-            <CloseIcon className="w-4 h-4" />
-          </button>
-        </div>
-
-        <label className="text-sm">
-          Apodo
-          <input className="input mt-1" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Cómo te dicen" />
-        </label>
-
-        <label className="text-sm">
-          Bio
-          <textarea
-            className="input mt-1 min-h-20"
-            value={bio}
-            maxLength={240}
-            onChange={(e) => setBio(e.target.value)}
-            placeholder="Cuéntale algo de ti a tus roommates"
-          />
-          <span className="text-xs text-ink-900/40 dark:text-cream-100/40">{bio.length}/240</span>
-        </label>
-
-        <label className="text-sm">
-          Edad
-          <input type="number" min="1" max="129" className="input mt-1" value={age} onChange={(e) => setAge(e.target.value)} />
-        </label>
-
-        <label className="text-sm">
-          Teléfono
-          <input type="tel" className="input mt-1" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Opcional" />
-        </label>
-
-        <button className="btn-primary text-sm mt-2" type="submit" disabled={saving}>
-          {saving ? 'Guardando…' : 'Guardar cambios'}
-        </button>
-      </form>
     </div>
   )
 }

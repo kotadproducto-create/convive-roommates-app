@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { TASK_ICONS, CoinIcon } from './icons'
@@ -9,6 +10,7 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
   const TypeIcon = TASK_ICONS[typeInfo?.icon]
   const { showToast } = useToast()
   const [celebrate, setCelebrate] = useState(false)
+  const isCompras = typeInfo?.key === 'compras'
 
   function handleComplete() {
     setCelebrate(true)
@@ -20,21 +22,39 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
   return (
     <div className={`card p-4 flex flex-col gap-3 ${task.completed ? 'opacity-70' : ''}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center shrink-0 ${
-              celebrate ? 'celebrate-pop' : ''
-            }`}
-          >
-            {TypeIcon && <TypeIcon className="w-5 h-5" />}
+        {isCompras ? (
+          <Link to="/compras" className="flex items-center gap-3 hover:opacity-80" title="Ir a la lista de compras">
+            <div
+              className={`w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center shrink-0 ${
+                celebrate ? 'celebrate-pop' : ''
+              }`}
+            >
+              {TypeIcon && <TypeIcon className="w-5 h-5" />}
+            </div>
+            <div>
+              <p className="font-display font-semibold underline decoration-dotted underline-offset-2">{typeInfo?.label}</p>
+              <p className="flex items-center gap-1 text-xs text-ink-900/50 dark:text-cream-100/50">
+                <CoinIcon className="w-3.5 h-3.5" />+{typeInfo?.points} Convis
+              </p>
+            </div>
+          </Link>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center shrink-0 ${
+                celebrate ? 'celebrate-pop' : ''
+              }`}
+            >
+              {TypeIcon && <TypeIcon className="w-5 h-5" />}
+            </div>
+            <div>
+              <p className="font-display font-semibold">{typeInfo?.label}</p>
+              <p className="flex items-center gap-1 text-xs text-ink-900/50 dark:text-cream-100/50">
+                <CoinIcon className="w-3.5 h-3.5" />+{typeInfo?.points} Convis
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-display font-semibold">{typeInfo?.label}</p>
-            <p className="flex items-center gap-1 text-xs text-ink-900/50 dark:text-cream-100/50">
-              <CoinIcon className="w-3.5 h-3.5" />+{typeInfo?.points} Convis
-            </p>
-          </div>
-        </div>
+        )}
         {isMine && !task.completed && (
           <span className="text-[10px] uppercase tracking-wide bg-gold-100 text-gold-500 px-2 py-1 rounded-full font-bold">
             Tu turno

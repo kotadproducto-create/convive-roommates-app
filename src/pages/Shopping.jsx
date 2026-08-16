@@ -4,9 +4,34 @@ import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
-import { StoreIcon, AlertIcon, EditIcon, TrashIcon, CloseIcon } from '../components/icons'
+import { StoreIcon, AlertIcon, EditIcon, TrashIcon, CloseIcon, LinkIcon } from '../components/icons'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+
+/** Valida que sea una URL http(s) bien formada — no cualquier esquema
+ * (bloquea javascript:/data: y similares antes de guardarla como link). */
+function isValidHttpUrl(value) {
+  try {
+    const u = new URL(value)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+/** Sugerencia de nombre de supermercado a partir del dominio del link
+ * (ej. "https://www.mercadona.es/..." → "Mercadona"). Es solo una ayuda
+ * para no escribirlo a mano — el campo de supermercado sigue siendo
+ * editable libremente, no se garantiza que acierte siempre. */
+function guessStoreFromUrl(value) {
+  try {
+    const host = new URL(value).hostname.replace(/^www\./, '')
+    const name = host.split('.')[0]
+    return name.charAt(0).toUpperCase() + name.slice(1)
+  } catch {
+    return ''
+  }
+}
 
 const STOCK_META = {
   out: { label: 'Agotado', dot: 'bg-clay-500', chip: 'bg-clay-500/15 text-clay-500', order: 0 },
@@ -173,6 +198,9 @@ function ItemForm({ initial, onCancel, onSubmit }) {
   const [usualQuantity, setUsualQuantity] = useState(initial?.usualQuantity || '')
   const [recurring, setRecurring] = useState(initial?.recurring !== false)
   const [estimatedPrice, setEstimatedPrice] = useState(initial?.estimatedPrice || '')
+  const [note, setNote] = useState(initial?.note || '')
+  const [linkUrl, setLinkUrl] = useState(initial?.linkUrl || '')
+  const [linkError, setLinkError] = useState('')
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(initial?.imageUrl || null)
   const [saving, setSaving] = useState(false)
@@ -186,9 +214,26 @@ function ItemForm({ initial, onCancel, onSubmit }) {
     reader.readAsDataURL(file)
   }
 
+  function handleLinkChange(e) {
+    const value = e.target.value
+    setLinkUrl(value)
+    setLinkError('')
+    // Sugerencia de supermercado a partir del dominio, solo si el campo
+    // todavía está vacío — nunca pisa lo que el usuario ya haya escrito.
+    if (!store.trim() && isValidHttpUrl(value)) {
+      const guess = guessStoreFromUrl(value)
+      if (guess) setStore(guess)
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!name.trim()) return
+    const trimmedLink = linkUrl.trim()
+    if (trimmedLink && !isValidHttpUrl(trimmedLink)) {
+      setLinkError('El link debe ser una URL válida (empezando por http:// o https://).')
+      return
+    }
     setSaving(true)
     try {
       await onSubmit({
@@ -198,6 +243,8 @@ function ItemForm({ initial, onCancel, onSubmit }) {
         usualQuantity: usualQuantity.trim() || null,
         recurring,
         estimatedPrice: estimatedPrice || null,
+        note: note.trim() || null,
+        linkUrl: trimmedLink || null,
         ...(imageFile ? { imageFile } : {})
       })
     } finally {
@@ -239,6 +286,28 @@ function ItemForm({ initial, onCancel, onSubmit }) {
           <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageChange} />
         </label>
       </div>
+      <label className="text-sm">
+        Nota (opcional)
+        <textarea
+          className="input mt-1 min-h-16"
+          value={note}
+          maxLength={300}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Ej. Comprar la versión sin gluten, o de marca blanca"
+        />
+        <span className="text-xs text-ink-900/40 dark:text-cream-100/40">{note.length}/300</span>
+      </label>
+      <label className="text-sm">
+        Link del producto (opcional)
+        <input
+          className="input mt-1"
+          type="url"
+          value={linkUrl}
+          onChange={handleLinkChange}
+          placeholder="https://www.mercadona.es/..."
+        />
+        {linkError && <span className="text-xs font-medium text-clay-500 block mt-1">{linkError}</span>}
+      </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
         Producto recurrente (si no, queda como compra puntual)
@@ -325,6 +394,23 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
           </button>
         </div>
       </div>
+
+      {(item.note || item.linkUrl) && (
+        <div className="flex flex-col gap-1">
+          {item.note && <p className="text-xs text-ink-900/60 dark:text-cream-100/60 line-clamp-2">{item.note}</p>}
+          {item.linkUrl && (
+            <a
+              href={item.linkUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex items-center gap-1 text-xs font-semibold text-violet-500 hover:underline py-1 -my-1 w-fit"
+            >
+              <LinkIcon className="w-3.5 h-3.5 shrink-0" />
+              Ver producto{item.store ? ` en ${item.store}` : ''}
+            </a>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-1.5 flex-wrap">
         {Object.entries(STOCK_META).map(([level, m]) => (

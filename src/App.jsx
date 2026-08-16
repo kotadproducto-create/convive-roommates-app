@@ -13,6 +13,7 @@ import Rewards from './pages/Rewards'
 import Wallet from './pages/Wallet'
 import Convives from './pages/Convives'
 import Shopping from './pages/Shopping'
+import Perfil from './pages/Perfil'
 import FloorSettings from './pages/FloorSettings'
 
 function AuthedData({ children }) {
@@ -96,6 +97,16 @@ export default function App() {
                 <ProtectedRoute>
                   <AuthedData>
                     <Wallet />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/perfil"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Perfil />
                   </AuthedData>
                 </ProtectedRoute>
               }

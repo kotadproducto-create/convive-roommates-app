@@ -145,7 +145,9 @@ export async function getFloorMembers(floorId) {
   if (!floorId) return []
   const { data, error } = await supabase
     .from('floor_memberships')
-    .select('id, role, joined_at, pot_active, active_status, profile:profiles!floor_memberships_user_id_fkey(*)')
+    .select(
+      'id, role, joined_at, pot_active, active_status, removal_requested_by, removal_requested_at, profile:profiles!floor_memberships_user_id_fkey(*)'
+    )
     .eq('floor_id', floorId)
     .eq('status', 'active')
   if (error) throw error
@@ -157,7 +159,9 @@ export async function getFloorMembers(floorId) {
       role: row.role,
       joinedAt: row.joined_at,
       potActive: row.pot_active,
-      activeStatus: row.active_status
+      activeStatus: row.active_status,
+      removalRequestedBy: row.removal_requested_by,
+      removalRequestedAt: row.removal_requested_at
     }))
 }
 
@@ -327,4 +331,58 @@ export async function uploadShoppingItemImage(file, floorId) {
   if (error) throw error
   const { data } = supabase.storage.from('incident-photos').getPublicUrl(path)
   return data.publicUrl
+}
+
+/**
+ * Sube el avatar de perfil a su propio bucket (no al de incidencias/pote,
+ * porque un avatar no pertenece a un piso: debe seguir siendo visible
+ * aunque la persona cambie de piso).
+ */
+export async function uploadAvatar(file, userId) {
+  const ext = file.name.split('.').pop()
+  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from('avatars').upload(path, file)
+  if (error) throw error
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+  return data.publicUrl
+}
+
+/**
+ * Historial completo de pisos de un usuario (todos los estados, no solo
+ * el activo) — para la sección "Historial de pisos" de Perfil. La RLS de
+ * floor_memberships ya permite ver el propio historial completo.
+ */
+export async function getFloorHistory(userId) {
+  const { data, error } = await supabase
+    .from('floor_memberships')
+    .select('id, role, status, joined_at, left_at, floor:floors(name)')
+    .eq('user_id', userId)
+    .order('joined_at', { ascending: false })
+  if (error) throw error
+  return (data || []).map((row) => ({
+    id: row.id,
+    role: row.role,
+    status: row.status,
+    joinedAt: row.joined_at,
+    leftAt: row.left_at,
+    floorName: row.floor?.name || 'Piso eliminado'
+  }))
+}
+
+/**
+ * Historial de asignaciones de tareas de un piso (todas las semanas, no
+ * solo la actual) — para "Historial de rotaciones" en Piso. Se limita a
+ * las últimas `weeksLimit` semanas para no traer el histórico entero.
+ */
+export async function getRotationHistory(floorId, weeksLimit = 12) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, type, week_key, assigned_user_id, completed')
+    .eq('floor_id', floorId)
+    .order('week_key', { ascending: false })
+  if (error) throw error
+  const rows = toCamelRows(data)
+  const weeks = [...new Set(rows.map((r) => r.weekKey))].slice(0, weeksLimit)
+  const weekSet = new Set(weeks)
+  return rows.filter((r) => weekSet.has(r.weekKey))
 }

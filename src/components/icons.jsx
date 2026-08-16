@@ -266,6 +266,42 @@ export function MoreIcon(props) {
   )
 }
 
+export function CameraIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 7.2a1.4 1.4 0 0 1 1.4-1.4h1.4L6.6 4h6.8l.8 1.8h1.4A1.4 1.4 0 0 1 17 7.2v7.4a1.4 1.4 0 0 1-1.4 1.4H4.4A1.4 1.4 0 0 1 3 14.6Z" />
+      <circle cx="10" cy="10.6" r="3" />
+    </IconBase>
+  )
+}
+
+export function LockIcon(props) {
+  return (
+    <IconBase {...props}>
+      <rect x="4.5" y="8.6" width="11" height="8" rx="1.8" />
+      <path d="M6.5 8.6V6a3.5 3.5 0 0 1 7 0v2.6" />
+    </IconBase>
+  )
+}
+
+export function PersonIcon(props) {
+  return (
+    <IconBase {...props}>
+      <circle cx="10" cy="6.6" r="3.2" />
+      <path d="M3.6 16.4a6.4 6.4 0 0 1 12.8 0" />
+    </IconBase>
+  )
+}
+
+export function LinkIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M8.3 11.7a3 3 0 0 0 4.3.2l2-2a3 3 0 0 0-4.2-4.2l-1.1 1.1" />
+      <path d="M11.7 8.3a3 3 0 0 0-4.3-.2l-2 2a3 3 0 0 0 4.2 4.2l1.1-1.1" />
+    </IconBase>
+  )
+}
+
 export const TASK_ICONS = {
   cart: CartIcon,
   trash: TrashIcon,

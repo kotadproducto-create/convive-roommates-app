@@ -33,6 +33,10 @@ create table if not exists profiles (
   nickname text,
   age integer check (age is null or (age > 0 and age < 130)),
   phone text,
+  interests text, -- gustos/intereses, tarjeta de Convives y Perfil
+  avatar_url text,
+  age_public boolean not null default true, -- privacidad de presentación (no RLS): oculta la edad a otros en Convives
+  phone_public boolean not null default true, -- ídem para el teléfono
   points integer not null default 0,
   reputation_score numeric not null default 0, -- automática, no transferible, calculada desde el historial de tareas en todos los pisos (sin lógica todavía, Fase 1+)
   presentation_message text check (char_length(presentation_message) <= 240), -- Bio de la tarjeta de "Convives"; único de perfil, se reutiliza al unirse a cualquier piso
@@ -67,7 +71,9 @@ create table if not exists floor_memberships (
   left_at timestamptz,
   pot_active boolean not null default true, -- baja temporal del reparto del pote (viaje, etc.); no afecta la membresía real del piso. Se muestra como "de vacaciones" en la tarjeta de Convives (invertido: vacaciones = pot_active false)
   active_status boolean not null default true, -- indicador informativo de presencia en el piso ("Convives"); no afecta rotación de tareas ni el pote, solo visual
-  first_seen_by uuid references profiles(id) -- quién de los miembros activos "reclamó" primero el pop-up de esta solicitud pendiente (para no mostrarla a todos a la vez)
+  first_seen_by uuid references profiles(id), -- quién de los miembros activos "reclamó" primero el pop-up de esta solicitud pendiente (para no mostrarla a todos a la vez)
+  removal_requested_by uuid references profiles(id), -- salida iniciada por un admin: pendiente hasta que el propio afectado la confirme (o el admin la cancele). La salida voluntaria no usa esto, es instantánea.
+  removal_requested_at timestamptz
 );
 
 create unique index if not exists floor_memberships_one_active_per_user
@@ -174,6 +180,8 @@ create table if not exists shopping_items (
   recurring boolean not null default true,
   estimated_price numeric,
   image_url text,
+  note text check (char_length(note) <= 300), -- detalles libres del producto (marca, variante, dónde encontrarlo...)
+  link_url text, -- URL al producto en la web del supermercado
   created_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -197,6 +205,25 @@ create table if not exists shopping_purchases (
 );
 
 create index if not exists shopping_purchases_floor_idx on shopping_purchases (floor_id);
+
+-- Solicitudes de "estar fuera del piso" (ausencia temporal con fechas,
+-- aprobada o rechazada por un admin). Al aprobarse, excluye a la persona
+-- del pote (reutiliza pot_active) y de la generación de tareas de la
+-- semana en curso (whoIsAssigned salta a la siguiente persona).
+create table if not exists absence_requests (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  start_date date not null,
+  end_date date not null check (end_date >= start_date),
+  reason text,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'cancelled', 'completed')),
+  decided_by uuid references profiles(id) on delete set null,
+  decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists absence_requests_floor_idx on absence_requests (floor_id);
 
 -- =========================================================
 -- Funciones auxiliares para RLS (security definer: pueden leer
@@ -366,6 +393,15 @@ create policy "delete floor shopping items" on shopping_items for delete using (
 create policy "select floor shopping purchases" on shopping_purchases for select using (is_active_member(floor_id));
 create policy "insert floor shopping purchases" on shopping_purchases for insert with check (is_active_member(floor_id));
 
+-- absence_requests: cualquier miembro ve las solicitudes del piso (para
+-- saber quién está fuera); cada quien crea la suya; un admin la decide;
+-- el autor puede cancelarla mientras siga pendiente.
+alter table absence_requests enable row level security;
+create policy "select floor absence requests" on absence_requests for select using (is_active_member(floor_id));
+create policy "insert own absence request" on absence_requests for insert with check (is_active_member(floor_id) and user_id = auth.uid());
+create policy "admin decide absence request" on absence_requests for update using (is_floor_admin(floor_id));
+create policy "author cancel own pending absence" on absence_requests for update using (user_id = auth.uid() and status = 'pending') with check (user_id = auth.uid());
+
 -- =========================================================
 -- Realtime: para que la app reciba cambios en vivo
 -- =========================================================
@@ -379,6 +415,7 @@ alter publication supabase_realtime add table floor_memberships;
 alter publication supabase_realtime add table pot_contributions;
 alter publication supabase_realtime add table shopping_items;
 alter publication supabase_realtime add table shopping_purchases;
+alter publication supabase_realtime add table absence_requests;
 
 -- =========================================================
 -- Storage: fotos de incidencias y facturas del pote comparten un único
@@ -401,3 +438,20 @@ drop policy if exists "anyone can view photos" on storage.objects;
 create policy "anyone can view photos" on storage.objects
   for select
   using (bucket_id = 'incident-photos');
+
+-- Avatares de perfil: bucket propio porque, a diferencia de las fotos de
+-- incidencias/pote, un avatar no pertenece a un piso concreto (sigue
+-- siendo visible aunque la persona cambie de piso) — las políticas se
+-- basan en el propio user_id, no en floor_id.
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "users upload own avatar" on storage.objects;
+create policy "users upload own avatar" on storage.objects
+  for insert
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "anyone can view avatars" on storage.objects;
+create policy "anyone can view avatars" on storage.objects
+  for select using (bucket_id = 'avatars');

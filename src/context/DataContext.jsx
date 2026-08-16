@@ -8,6 +8,7 @@ import {
   subscribeFloorMembers,
   uploadPotReceipt,
   uploadShoppingItemImage,
+  uploadAvatar,
   claimPendingJoinRequests,
   subscribePendingRequests
 } from '../lib/db'
@@ -36,6 +37,7 @@ export function DataProvider({ children }) {
   const [pendingJoinRequests, setPendingJoinRequests] = useState([])
   const [shoppingItems, setShoppingItems] = useState([])
   const [shoppingPurchases, setShoppingPurchases] = useState([])
+  const [absenceRequests, setAbsenceRequests] = useState([])
 
   const weekKey = getWeekKey()
 
@@ -124,6 +126,46 @@ export function DataProvider({ children }) {
     return subscribeTable('shopping_purchases', { floorId }, setShoppingPurchases)
   }, [floorId])
 
+  useEffect(() => {
+    if (!floorId) {
+      setAbsenceRequests([])
+      return
+    }
+    return subscribeTable('absence_requests', { floorId }, setAbsenceRequests)
+  }, [floorId])
+
+  // IDs de quienes tienen una ausencia aprobada que cubre hoy — se
+  // excluyen de la generación de tareas de la semana (whoIsAssigned salta
+  // a la siguiente persona en rotationOrder). Solo afecta a la semana que
+  // se está generando ahora, no reescribe semanas ya creadas.
+  const todayISO = new Date().toISOString().slice(0, 10)
+  const awayUserIds = useMemo(
+    () =>
+      new Set(
+        absenceRequests
+          .filter((r) => r.status === 'approved' && r.startDate <= todayISO && r.endDate >= todayISO)
+          .map((r) => r.userId)
+      ),
+    [absenceRequests, todayISO]
+  )
+
+  // Cuando una ausencia aprobada ya terminó (end_date pasó), la cierra
+  // ('completed') y reactiva a la persona en el pote. Como no hay cron en
+  // esta arquitectura, esto corre de forma oportunista cada vez que
+  // alguien del piso tiene la app abierta — no es instantáneo a
+  // medianoche, pero se autocorrige en cuanto alguien entra.
+  useEffect(() => {
+    if (!currentFloor) return
+    const expired = absenceRequests.filter((r) => r.status === 'approved' && r.endDate < todayISO)
+    if (!expired.length) return
+    for (const r of expired) {
+      update('absence_requests', r.id, { status: 'completed' })
+      const member = members.find((m) => m.id === r.userId)
+      if (member) update('floor_memberships', member.membershipId, { potActive: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [absenceRequests, members, todayISO, currentFloor?.id])
+
   // Genera (una sola vez, de forma idempotente) las tareas de la semana
   // actual y las notificaciones de recordatorio de turno / pote bajo.
   useEffect(() => {
@@ -131,7 +173,8 @@ export function DataProvider({ children }) {
     let cancelled = false
 
     async function run() {
-      await ensureWeekTasks(currentFloor.id, weekKey, currentFloor.rotationOrder || [])
+      const effectiveRotationOrder = (currentFloor.rotationOrder || []).filter((id) => !awayUserIds.has(id))
+      await ensureWeekTasks(currentFloor.id, weekKey, effectiveRotationOrder)
       if (cancelled) return
 
       const existingNotifs = await getAll('notifications', { floorId: currentFloor.id })
@@ -173,7 +216,7 @@ export function DataProvider({ children }) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFloor?.id, currentFloor?.rotationOrder?.length, currentFloor?.potAmount, weekKey])
+  }, [currentFloor?.id, currentFloor?.rotationOrder?.length, currentFloor?.potAmount, weekKey, awayUserIds])
 
   const floorTasks = useMemo(() => tasks.filter((t) => t.weekKey === weekKey), [tasks, weekKey])
 
@@ -224,13 +267,60 @@ export function DataProvider({ children }) {
   const removeMember = useCallback(
     async (membershipId, profileId) => {
       if (!currentFloor) return
+      const leavingName = members.find((m) => m.id === profileId)?.name || 'Alguien'
       const newOrder = (currentFloor.rotationOrder || []).filter((id) => id !== profileId)
       await reassignPendingTasks(currentFloor.id, profileId, newOrder)
       await update('floors', currentFloor.id, { rotationOrder: newOrder })
       // Cerrar la membresía, no borrar el perfil: el usuario queda en
       // historial y podrá reactivarla más adelante con aprobación de un
       // admin de ese piso.
-      await update('floor_memberships', membershipId, { status: 'left', leftAt: new Date().toISOString() })
+      await update('floor_memberships', membershipId, {
+        status: 'left',
+        leftAt: new Date().toISOString(),
+        removalRequestedBy: null,
+        removalRequestedAt: null
+      })
+      await create('notifications', {
+        floorId: currentFloor.id,
+        userId: null,
+        type: 'member_left',
+        message: `${leavingName} ha dejado el piso`
+      })
+    },
+    [currentFloor, members]
+  )
+
+  // Un admin inicia la salida de OTRO miembro: no lo elimina al instante,
+  // solo lo marca "pendiente de confirmación" y le avisa. El propio
+  // afectado tiene que confirmar (confirmMyRemoval / removeMember) para
+  // que la salida se haga efectiva de verdad.
+  const initiateRemoval = useCallback(
+    async (membershipId, targetUserId, targetName) => {
+      if (!currentFloor || !user) return
+      await update('floor_memberships', membershipId, {
+        removalRequestedBy: user.id,
+        removalRequestedAt: new Date().toISOString()
+      })
+      await create('notifications', {
+        floorId: currentFloor.id,
+        userId: targetUserId,
+        type: 'removal_requested',
+        message: `Un administrador ha iniciado tu salida de ${currentFloor.name}. Debes confirmarla en tu Perfil.`
+      })
+    },
+    [currentFloor, user]
+  )
+
+  const cancelRemoval = useCallback(
+    async (membershipId, targetUserId, targetName) => {
+      if (!currentFloor) return
+      await update('floor_memberships', membershipId, { removalRequestedBy: null, removalRequestedAt: null })
+      await create('notifications', {
+        floorId: currentFloor.id,
+        userId: targetUserId,
+        type: 'removal_cancelled',
+        message: `Se canceló el proceso de salida de ${targetName || 'tu cuenta'} del piso.`
+      })
     },
     [currentFloor]
   )
@@ -292,7 +382,72 @@ export function DataProvider({ children }) {
     []
   )
 
-  const updateProfile = useCallback((profileId, patch) => update('profiles', profileId, patch), [])
+  // Solicitud formal de "estar fuera del piso" (con fechas y motivo,
+  // pendiente de aprobación de un admin) — distinta del toggle instantáneo
+  // de vacaciones en Convives, que sigue existiendo tal cual.
+  const requestAbsence = useCallback(
+    async ({ startDate, endDate, reason }) => {
+      if (!currentFloor || !user) return
+      await create('absence_requests', {
+        floorId: currentFloor.id,
+        userId: user.id,
+        startDate,
+        endDate,
+        reason: reason || null
+      })
+      const admins = members.filter((m) => m.role === 'admin')
+      for (const admin of admins) {
+        await create('notifications', {
+          floorId: currentFloor.id,
+          userId: admin.id,
+          type: 'absence_requested',
+          message: `${user.name} solicitó estar fuera del piso del ${startDate} al ${endDate}.`
+        })
+      }
+    },
+    [currentFloor, user, members]
+  )
+
+  // Al aprobar, reutiliza pot_active (misma exclusión que ya usa
+  // "vacaciones" en Convives) para no duplicar el mecanismo; la exclusión
+  // de la rotación de tareas la calcula awayUserIds más arriba.
+  const decideAbsenceRequest = useCallback(
+    async (requestId, approve) => {
+      if (!currentFloor || !user) return
+      const request = absenceRequests.find((r) => r.id === requestId)
+      if (!request) return
+      await update('absence_requests', requestId, {
+        status: approve ? 'approved' : 'rejected',
+        decidedBy: user.id,
+        decidedAt: new Date().toISOString()
+      })
+      if (approve) {
+        const member = members.find((m) => m.id === request.userId)
+        if (member) await update('floor_memberships', member.membershipId, { potActive: false })
+      }
+      await create('notifications', {
+        floorId: currentFloor.id,
+        userId: request.userId,
+        type: 'absence_decided',
+        message: approve
+          ? `Tu solicitud para estar fuera del piso fue aprobada.`
+          : `Tu solicitud para estar fuera del piso fue rechazada. Sigues en la rotación.`
+      })
+    },
+    [currentFloor, user, absenceRequests, members]
+  )
+
+  const cancelAbsenceRequest = useCallback((requestId) => update('absence_requests', requestId, { status: 'cancelled' }), [])
+
+  // "patch" puede traer un File en avatarFile (foto nueva a subir); el
+  // resto de campos se guarda tal cual, como un patch parcial normal.
+  const updateProfile = useCallback(async (profileId, patch) => {
+    const { avatarFile, ...rest } = patch
+    if (avatarFile) {
+      rest.avatarUrl = await uploadAvatar(avatarFile, profileId)
+    }
+    return update('profiles', profileId, rest)
+  }, [])
 
   const adjustMemberPoints = useCallback(
     async (profileId, delta, reason) => {
@@ -402,6 +557,8 @@ export function DataProvider({ children }) {
         recurring: item.recurring !== false,
         estimatedPrice: item.estimatedPrice ? Number(item.estimatedPrice) : null,
         imageUrl,
+        note: item.note || null,
+        linkUrl: item.linkUrl || null,
         createdBy: user.id
       })
     },
@@ -519,10 +676,17 @@ export function DataProvider({ children }) {
     removeShoppingItem,
     setItemStock,
     markItemPurchased,
+    absenceRequests,
+    awayUserIds,
+    requestAbsence,
+    decideAbsenceRequest,
+    cancelAbsenceRequest,
     completeTask,
     uncompleteTask,
     reorderRotation,
     removeMember,
+    initiateRemoval,
+    cancelRemoval,
     setMemberRole,
     setMemberPotActive,
     setMemberActiveStatus,

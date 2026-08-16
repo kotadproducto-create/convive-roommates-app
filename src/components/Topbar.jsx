@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useTheme } from '../context/ThemeContext'
 import { MoonIcon, SunIcon, BellIcon } from './icons'
+import Avatar from './Avatar'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -65,13 +67,13 @@ export default function Topbar({ title }) {
         </div>
 
         <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-ink-900/10 dark:border-cream-100/15">
-          <div className="w-8 h-8 rounded-full bg-gold-400 border-2 border-ink-900 text-ink-900 flex items-center justify-center text-sm font-bold">
-            {user?.name?.[0]?.toUpperCase()}
-          </div>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold">{user?.name}</p>
-            <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{membership?.role === 'admin' ? 'Admin' : 'Miembro'}</p>
-          </div>
+          <Link to="/perfil" className="flex items-center gap-2 hover:opacity-80" title="Ir a Perfil">
+            <Avatar url={user?.avatarUrl} name={user?.name} size="w-8 h-8" />
+            <div className="leading-tight">
+              <p className="text-sm font-semibold">{user?.name}</p>
+              <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{membership?.role === 'admin' ? 'Admin' : 'Miembro'}</p>
+            </div>
+          </Link>
           <button onClick={logout} className="ml-2 text-xs font-semibold text-violet-500 hover:underline">
             Salir
           </button>

@@ -196,10 +196,25 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut()
   }
 
+  // Re-verifica la contraseña actual (inicia sesión con ella) antes de
+  // aplicar la nueva, para que cambiar la contraseña exija de verdad
+  // conocer la actual y no solo tener una sesión abierta sin vigilar.
+  async function changePassword(currentPassword, newPassword) {
+    if (!session?.user?.email) throw new Error('No hay sesión activa.')
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: session.user.email,
+      password: currentPassword
+    })
+    if (verifyError) throw new Error('La contraseña actual no es correcta.')
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) throw new Error(traduceErrorAuth(error))
+  }
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        email: session?.user?.email || null,
         floor,
         membership,
         pendingRequest,
@@ -209,6 +224,7 @@ export function AuthProvider({ children }) {
         registerAndRequestJoin,
         requestJoinFloor,
         withdrawRequest,
+        changePassword,
         logout,
         refresh
       }}

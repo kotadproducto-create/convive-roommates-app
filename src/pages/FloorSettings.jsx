@@ -1,14 +1,34 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
+import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
-import { update } from '../lib/db'
-import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon } from '../components/icons'
-import Reveal from '../components/Reveal'
+import { update, getRotationHistory } from '../lib/db'
+import { TASK_TYPES, getWeekKey, getMondayOfWeek, whoIsAssigned } from '../lib/rotation'
+import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, TASK_ICONS } from '../components/icons'
+import { format, addDays } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 export default function FloorSettings() {
   const { user, membership } = useAuth()
-  const { floor, members, reorderRotation, removeMember, setMemberRole, pendingJoinRequests, approveJoinRequest, rejectJoinRequest } = useData()
+  const {
+    floor,
+    members,
+    weekKey,
+    absenceRequests,
+    awayUserIds,
+    reorderRotation,
+    initiateRemoval,
+    cancelRemoval,
+    setMemberRole,
+    requestAbsence,
+    decideAbsenceRequest,
+    cancelAbsenceRequest,
+    pendingJoinRequests,
+    approveJoinRequest,
+    rejectJoinRequest
+  } = useData()
   const isAdmin = membership?.role === 'admin'
   const [threshold, setThreshold] = useState(floor?.potThreshold ?? 30)
   const [perPerson, setPerPerson] = useState(floor?.potPerPerson ?? 10)
@@ -28,11 +48,15 @@ export default function FloorSettings() {
 
   function handleRemove(member) {
     if (member.id === user.id) {
-      alert('No puedes eliminarte a ti mismo. Pide a otro admin que lo haga.')
+      alert('Para salir tú mismo del piso, usa "Dejar el piso" en tu Perfil.')
       return
     }
-    if (confirm('¿Eliminar a este roommate? Sus tareas pendientes se reasignarán automáticamente.')) {
-      removeMember(member.membershipId, member.id)
+    if (
+      confirm(
+        `Se iniciará el proceso de salida de ${member.name}: deberá confirmarlo desde su propia cuenta antes de perder el acceso. ¿Continuar?`
+      )
+    ) {
+      initiateRemoval(member.membershipId, member.id, member.name)
     }
   }
 
@@ -85,6 +109,9 @@ export default function FloorSettings() {
     }
   }
 
+  const myAbsenceRequests = absenceRequests.filter((r) => r.userId === user.id)
+  const pendingAbsenceRequests = absenceRequests.filter((r) => r.status === 'pending')
+
   return (
     <AppLayout title="Tu piso">
       <div className="grid md:grid-cols-2 gap-5">
@@ -111,32 +138,21 @@ export default function FloorSettings() {
           )}
         </Reveal>
 
-        <Reveal as="section" delay={80} className="card p-5">
-          <h2 className="font-display font-semibold mb-3">Orden de rotación</h2>
-          <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
-            Este es el orden en el que van pasando las 3 tareas semanales.
-            {!isAdmin && ' Solo un admin puede reordenarlo.'}
-          </p>
-          <ol className="flex flex-col gap-2">
-            {order.map((id, idx) => {
-              const m = memberById[id]
-              if (!m) return null
-              return (
-                <li key={id} className="flex items-center justify-between bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
-                  <span className="text-sm font-medium">
-                    <span className="text-ink-900/40 dark:text-cream-100/40 mr-2">{idx + 1}.</span>
-                    {m.name} {m.role === 'admin' && <span className="text-[10px] uppercase font-bold text-violet-500 ml-1">admin</span>}
-                  </span>
-                  {isAdmin && (
-                    <div className="flex gap-1">
-                      <button onClick={() => move(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
-                      <button onClick={() => move(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ol>
+        <Reveal as="section" delay={80} className="card p-5 md:col-span-2">
+          <RotationSection
+            isAdmin={isAdmin}
+            order={order}
+            memberById={memberById}
+            move={move}
+            weekKey={weekKey}
+            awayUserIds={awayUserIds}
+            floorId={floor?.id}
+            myAbsenceRequests={myAbsenceRequests}
+            pendingAbsenceRequests={pendingAbsenceRequests}
+            requestAbsence={requestAbsence}
+            decideAbsenceRequest={decideAbsenceRequest}
+            cancelAbsenceRequest={cancelAbsenceRequest}
+          />
         </Reveal>
 
         {pendingJoinRequests.length > 0 && (
@@ -173,23 +189,38 @@ export default function FloorSettings() {
           <h2 className="font-display font-semibold mb-3">Roommates</h2>
           <ul className="flex flex-col gap-2">
             {members.map((m) => (
-              <li key={m.id} className="flex items-center justify-between px-1 py-1.5 text-sm">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-medium">{m.name}</span>
-                  <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40">
-                    · <CoinIcon className="w-3.5 h-3.5" />{m.points || 0}
-                  </span>
+              <li key={m.id} className="flex flex-col gap-1 px-1 py-1.5 text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{m.name}</span>
+                    <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40">
+                      · <CoinIcon className="w-3.5 h-3.5" />{m.points || 0}
+                    </span>
+                  </div>
+                  {isAdmin && m.id !== user.id && !m.removalRequestedBy && (
+                    <div className="flex gap-2">
+                      {m.role !== 'admin' && (
+                        <button onClick={() => makeAdmin(m)} className="text-xs font-semibold text-violet-500 hover:underline">
+                          Hacer admin
+                        </button>
+                      )}
+                      <button onClick={() => handleRemove(m)} className="text-xs font-semibold text-clay-500 hover:underline">
+                        Quitar
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {isAdmin && m.id !== user.id && (
-                  <div className="flex gap-2">
-                    {m.role !== 'admin' && (
-                      <button onClick={() => makeAdmin(m)} className="text-xs font-semibold text-violet-500 hover:underline">
-                        Hacer admin
+                {m.removalRequestedBy && (
+                  <div className="flex items-center justify-between bg-clay-500/10 text-clay-500 text-xs font-medium px-2 py-1.5 rounded-lg">
+                    <span>Salida pendiente de que {m.id === user.id ? 'la confirmes' : 'la confirme'}</span>
+                    {isAdmin && (
+                      <button
+                        onClick={() => cancelRemoval(m.membershipId, m.id, m.name)}
+                        className="font-semibold hover:underline shrink-0 ml-2"
+                      >
+                        Cancelar
                       </button>
                     )}
-                    <button onClick={() => handleRemove(m)} className="text-xs font-semibold text-clay-500 hover:underline">
-                      Quitar
-                    </button>
                   </div>
                 )}
               </li>
@@ -209,5 +240,267 @@ export default function FloorSettings() {
         )}
       </div>
     </AppLayout>
+  )
+}
+
+function RotationSection({
+  isAdmin,
+  order,
+  memberById,
+  move,
+  weekKey,
+  awayUserIds,
+  floorId,
+  myAbsenceRequests,
+  pendingAbsenceRequests,
+  requestAbsence,
+  decideAbsenceRequest,
+  cancelAbsenceRequest
+}) {
+  const [showAbsenceForm, setShowAbsenceForm] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const [history, setHistory] = useState(null)
+
+  const monday = getMondayOfWeek(weekKey)
+  const sunday = addDays(monday, 6)
+  const nextMonday = addDays(monday, 7)
+  const nextWeekKey = getWeekKey(nextMonday)
+
+  async function loadHistory() {
+    if (history !== null || !floorId) return
+    const rows = await getRotationHistory(floorId)
+    setHistory(rows)
+  }
+
+  return (
+    <div>
+      <h2 className="font-display font-semibold mb-1">Orden de rotación</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
+        Rotación semanal fija (lunes a domingo). Este es el orden en el que van pasando las 3 tareas.
+        {!isAdmin && ' Solo un admin puede reordenarlo.'}
+      </p>
+
+      <div className="grid sm:grid-cols-2 gap-3 mb-4 text-sm">
+        <div className="bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40">Rotación actual</p>
+          <p className="font-medium">{format(monday, "d MMM", { locale: es })} – {format(sunday, "d MMM", { locale: es })}</p>
+        </div>
+        <div className="bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40">Próximo cambio</p>
+          <p className="font-medium">{format(nextMonday, "d 'de' MMMM", { locale: es })}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5 mb-4">
+        {TASK_TYPES.map((type) => {
+          const Icon = TASK_ICONS[type.icon]
+          const currentId = whoIsAssigned(order, weekKey, type.offset)
+          const nextId = whoIsAssigned(order, nextWeekKey, type.offset)
+          return (
+            <div key={type.key} className="flex items-center justify-between text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+              {type.key === 'compras' ? (
+                <Link to="/compras" className="flex items-center gap-2 hover:opacity-80" title="Ir a la lista de compras">
+                  {Icon && <Icon className="w-4 h-4 text-violet-500" />}
+                  <span className="underline decoration-dotted underline-offset-2">{type.label}</span>
+                </Link>
+              ) : (
+                <span className="flex items-center gap-2">
+                  {Icon && <Icon className="w-4 h-4 text-violet-500" />}
+                  {type.label}
+                </span>
+              )}
+              <span className="text-xs text-ink-900/50 dark:text-cream-100/50">
+                <strong className="text-ink-900 dark:text-cream-100">{memberById[currentId]?.name || 'Sin asignar'}</strong>
+                {' → siguiente: '}
+                {memberById[nextId]?.name || 'Sin asignar'}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      <ol className="flex flex-col gap-2 mb-4">
+        {order.map((id, idx) => {
+          const m = memberById[id]
+          if (!m) return null
+          const away = awayUserIds.has(id)
+          return (
+            <li key={id} className="flex items-center justify-between bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+              <span className="text-sm font-medium flex items-center gap-1.5">
+                <span className="text-ink-900/40 dark:text-cream-100/40">{idx + 1}.</span>
+                {m.name} {m.role === 'admin' && <span className="text-[10px] uppercase font-bold text-violet-500">admin</span>}
+                {away && (
+                  <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md">
+                    <SunIcon className="w-3 h-3" />Fuera
+                  </span>
+                )}
+              </span>
+              {isAdmin && (
+                <div className="flex gap-1">
+                  <button onClick={() => move(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
+                  <button onClick={() => move(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+
+      <div className="border-t border-ink-900/10 dark:border-cream-100/15 pt-4 mb-4">
+        <button type="button" className="btn-secondary text-sm" onClick={() => setShowAbsenceForm((s) => !s)}>
+          {showAbsenceForm ? 'Cancelar' : 'Solicitar estar fuera del piso'}
+        </button>
+        {showAbsenceForm && (
+          <AbsenceRequestForm
+            onCancel={() => setShowAbsenceForm(false)}
+            onSubmit={async (payload) => {
+              await requestAbsence(payload)
+              setShowAbsenceForm(false)
+            }}
+          />
+        )}
+
+        {myAbsenceRequests.length > 0 && (
+          <ul className="flex flex-col gap-1.5 mt-3">
+            {myAbsenceRequests
+              .filter((r) => r.status === 'pending' || r.status === 'approved')
+              .map((r) => (
+                <li key={r.id} className="flex items-center justify-between text-xs px-2.5 py-2 rounded-lg bg-cream-100 dark:bg-ink-700">
+                  <span>
+                    Del {r.startDate} al {r.endDate}
+                    {r.reason ? ` · ${r.reason}` : ''}
+                    {' — '}
+                    <span className={r.status === 'approved' ? 'text-sage-500 font-semibold' : 'text-gold-500 font-semibold'}>
+                      {r.status === 'approved' ? 'Aprobada' : 'Pendiente'}
+                    </span>
+                  </span>
+                  {r.status === 'pending' && (
+                    <button onClick={() => cancelAbsenceRequest(r.id)} className="font-semibold text-violet-500 hover:underline shrink-0 ml-2">
+                      Anular
+                    </button>
+                  )}
+                </li>
+              ))}
+          </ul>
+        )}
+      </div>
+
+      {isAdmin && pendingAbsenceRequests.length > 0 && (
+        <div className="border-t border-ink-900/10 dark:border-cream-100/15 pt-4 mb-4">
+          <p className="text-sm font-medium mb-2">Solicitudes de ausencia pendientes</p>
+          <ul className="flex flex-col gap-2">
+            {pendingAbsenceRequests.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+                <span className="text-sm">
+                  <strong>{memberById[r.userId]?.name || 'Alguien'}</strong> · {r.startDate} a {r.endDate}
+                  {r.reason && <span className="text-ink-900/50 dark:text-cream-100/50"> · {r.reason}</span>}
+                </span>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => decideAbsenceRequest(r.id, false)} className="btn-danger text-xs px-3 py-1.5">Rechazar</button>
+                  <button onClick={() => decideAbsenceRequest(r.id, true)} className="btn-primary text-xs px-3 py-1.5">Aceptar</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="border-t border-ink-900/10 dark:border-cream-100/15 pt-4">
+        <button
+          type="button"
+          className="flex items-center justify-between w-full"
+          onClick={() => {
+            setShowHistory((s) => !s)
+            loadHistory()
+          }}
+        >
+          <p className="text-sm font-medium">Historial de rotaciones</p>
+          <span className="text-xs font-semibold text-violet-500">{showHistory ? 'Ocultar' : 'Ver'}</span>
+        </button>
+        {showHistory && <RotationHistory history={history} memberById={memberById} />}
+      </div>
+    </div>
+  )
+}
+
+function RotationHistory({ history, memberById }) {
+  const grouped = useMemo(() => {
+    if (!history) return []
+    const byWeek = new Map()
+    for (const t of history) {
+      if (!byWeek.has(t.weekKey)) byWeek.set(t.weekKey, [])
+      byWeek.get(t.weekKey).push(t)
+    }
+    return [...byWeek.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
+  }, [history])
+
+  if (history === null) return <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">Cargando…</p>
+  if (grouped.length === 0) return <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">Sin historial todavía.</p>
+
+  return (
+    <ul className="flex flex-col gap-3 mt-3 max-h-80 overflow-y-auto">
+      {grouped.map(([week, weekTasks]) => (
+        <li key={week}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mb-1">
+            Semana de {format(getMondayOfWeek(week), "d 'de' MMMM", { locale: es })}
+          </p>
+          <ul className="flex flex-col gap-1">
+            {weekTasks.map((t) => {
+              const type = TASK_TYPES.find((tt) => tt.key === t.type)
+              return (
+                <li key={t.id} className="flex items-center justify-between text-sm px-2.5 py-1.5 rounded-lg bg-cream-100 dark:bg-ink-700">
+                  <span>{type?.label || t.type} · {memberById[t.assignedUserId]?.name || 'Sin asignar'}</span>
+                  <span className={t.completed ? 'text-sage-500 text-xs font-semibold' : 'text-ink-900/40 dark:text-cream-100/40 text-xs'}>
+                    {t.completed ? 'Hecha' : 'Sin completar'}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function AbsenceRequestForm({ onCancel, onSubmit }) {
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!startDate || !endDate || endDate < startDate) return
+    setSubmitting(true)
+    try {
+      await onSubmit({ startDate, endDate, reason: reason.trim() || null })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-3 pt-3 border-t border-ink-900/10 dark:border-cream-100/15">
+      <div className="grid sm:grid-cols-2 gap-3">
+        <label className="text-sm">
+          Desde
+          <input type="date" className="input mt-1" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+        </label>
+        <label className="text-sm">
+          Hasta
+          <input type="date" className="input mt-1" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} required />
+        </label>
+      </div>
+      <input className="input text-sm" placeholder="Motivo (opcional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <div className="flex gap-2">
+        <button type="button" className="btn-secondary text-xs self-start" onClick={onCancel}>
+          Cancelar
+        </button>
+        <button type="submit" className="btn-primary text-xs self-start" disabled={submitting}>
+          {submitting ? 'Enviando…' : 'Enviar solicitud'}
+        </button>
+      </div>
+    </form>
   )
 }

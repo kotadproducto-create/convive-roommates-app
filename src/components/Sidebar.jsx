@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon, UsersIcon, CartIcon, MoreIcon, CloseIcon } from './icons'
+import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon, UsersIcon, CartIcon, MoreIcon, CloseIcon, PersonIcon } from './icons'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Inicio', Icon: StampIcon, end: true },
@@ -10,7 +10,8 @@ const NAV_ITEMS = [
   { to: '/convives', label: 'Convives', Icon: UsersIcon },
   { to: '/recompensas', label: 'Convis', Icon: CoinIcon },
   { to: '/pote', label: 'Pote', Icon: JarIcon },
-  { to: '/piso', label: 'Piso', Icon: HomeIcon }
+  { to: '/piso', label: 'Piso', Icon: HomeIcon },
+  { to: '/perfil', label: 'Perfil', Icon: PersonIcon }
 ]
 
 // En móvil solo hay sitio cómodo para 4 pestañas + el botón "Más"; el

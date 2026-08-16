@@ -14,7 +14,20 @@ import { es } from 'date-fns/locale'
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const { floor, members, tasks, shoppingItems, completeTask, uncompleteTask, requestWasher, addPotContribution, weekKey } = useData()
+  const {
+    floor,
+    members,
+    tasks,
+    shoppingItems,
+    shoppingPurchases,
+    potContributions,
+    notifications,
+    completeTask,
+    uncompleteTask,
+    requestWasher,
+    addPotContribution,
+    weekKey
+  } = useData()
   const [contribution, setContribution] = useState(floor?.potPerPerson || 10)
   const [washerMsg, setWasherMsg] = useState(false)
 
@@ -52,6 +65,22 @@ export default function Dashboard() {
           </Link>
         </Reveal>
       )}
+
+      <Reveal as="section" className="mb-8">
+        <h2 className="font-display text-lg font-bold mb-3">Calendario</h2>
+        <CalendarView
+          floor={floor}
+          memberById={memberById}
+          currentWeekKey={weekKey}
+          tasks={tasks}
+          completeTask={completeTask}
+          uncompleteTask={uncompleteTask}
+          potContributions={potContributions}
+          shoppingPurchases={shoppingPurchases}
+          shoppingItems={shoppingItems}
+          notifications={notifications}
+        />
+      </Reveal>
 
       {/* Encabezado: dónde estamos */}
       <div className="mb-6">
@@ -139,18 +168,6 @@ export default function Dashboard() {
           </Reveal>
         </aside>
       </div>
-
-      <Reveal as="section">
-        <h2 className="font-display text-lg font-bold mb-3">Calendario</h2>
-        <CalendarView
-          floor={floor}
-          memberById={memberById}
-          currentWeekKey={weekKey}
-          tasks={tasks}
-          completeTask={completeTask}
-          uncompleteTask={uncompleteTask}
-        />
-      </Reveal>
     </AppLayout>
   )
 }
