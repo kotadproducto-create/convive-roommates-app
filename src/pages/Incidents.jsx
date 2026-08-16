@@ -4,6 +4,9 @@ import IncidentCard from '../components/IncidentCard'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { uploadIncidentPhoto } from '../lib/db'
+import { PinIcon } from '../components/icons'
+import { useToast } from '../context/ToastContext'
+import Reveal from '../components/Reveal'
 
 const EXAMPLES = [
   'Cuidado con la limpieza de la cocina',
@@ -15,6 +18,7 @@ const EXAMPLES = [
 export default function Incidents() {
   const { user, membership } = useAuth()
   const { floor, incidents, addIncident, removeIncident } = useData()
+  const { showToast } = useToast()
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -44,6 +48,7 @@ export default function Incidents() {
         photoUrl = await uploadIncidentPhoto(photoFile, floor.id)
       }
       await addIncident({ title, description, photoUrl, expiresAt: expiresAt || null })
+      showToast('Incidencia publicada en el muro', 'success')
       setTitle('')
       setDescription('')
       setPhotoFile(null)
@@ -60,7 +65,7 @@ export default function Incidents() {
   return (
     <AppLayout title="Muro de incidencias">
       <div className="flex items-center justify-between mb-5">
-        <p className="text-sm text-charcoal-900/60 dark:text-linen-100/60">
+        <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
           Avisos temporales para todo el piso: paquetes, permisos, cuidados puntuales...
         </p>
         <button className="btn-primary text-sm shrink-0" onClick={() => setShowForm((s) => !s)}>
@@ -83,13 +88,13 @@ export default function Incidents() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          <div className="flex flex-wrap gap-2 text-xs text-charcoal-900/50 dark:text-linen-100/50">
+          <div className="flex flex-wrap gap-2 text-xs font-medium text-ink-900/50 dark:text-cream-100/50">
             {EXAMPLES.map((ex) => (
               <button
                 type="button"
                 key={ex}
                 onClick={() => setTitle(ex)}
-                className="px-2 py-1 rounded-full bg-linen-100 dark:bg-charcoal-700 hover:bg-linen-200"
+                className="px-2 py-1 rounded-full bg-cream-100 dark:bg-ink-700 hover:bg-cream-200"
               >
                 {ex}
               </button>
@@ -102,11 +107,11 @@ export default function Incidents() {
             </label>
             {photoPreview && <img src={photoPreview} alt="preview" className="w-14 h-14 object-cover rounded-lg" />}
             <div className="flex items-center gap-2 text-sm ml-auto">
-              <label className="text-charcoal-900/60 dark:text-linen-100/60">Expira:</label>
+              <label className="text-ink-900/60 dark:text-cream-100/60">Expira:</label>
               <input type="date" className="input w-auto" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             </div>
           </div>
-          {error && <p className="text-sm text-clay-500">{error}</p>}
+          {error && <p className="text-sm font-medium text-clay-500">{error}</p>}
           <button className="btn-primary self-start" type="submit" disabled={submitting}>
             {submitting ? 'Publicando…' : 'Publicar en el muro'}
           </button>
@@ -114,18 +119,24 @@ export default function Incidents() {
       )}
 
       {incidents.length === 0 ? (
-        <p className="text-sm text-center py-16 text-charcoal-900/50 dark:text-linen-100/50">
-          No hay incidencias activas. Cuando publiques una, aparecerá aquí para todo el piso.
-        </p>
+        <div className="flex flex-col items-center gap-3 py-16">
+          <div className="w-12 h-12 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-500 dark:text-violet-200 flex items-center justify-center">
+            <PinIcon className="w-6 h-6" />
+          </div>
+          <p className="text-sm text-center text-ink-900/50 dark:text-cream-100/50 max-w-xs">
+            Todavía no hay nada en el muro. El primer aviso que publiques queda fijado aquí para todo el piso.
+          </p>
+        </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {incidents.map((incident) => (
-            <IncidentCard
-              key={incident.id}
-              incident={incident}
-              canDelete={incident.userId === user.id || membership?.role === 'admin'}
-              onDelete={removeIncident}
-            />
+          {incidents.map((incident, i) => (
+            <Reveal key={incident.id} delay={i * 60}>
+              <IncidentCard
+                incident={incident}
+                canDelete={incident.userId === user.id || membership?.role === 'admin'}
+                onDelete={removeIncident}
+              />
+            </Reveal>
           ))}
         </div>
       )}

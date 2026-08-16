@@ -5,44 +5,61 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['Fredoka', 'sans-serif'],
-        body: ['Inter', 'sans-serif']
+        display: ['"Bricolage Grotesque"', 'sans-serif'],
+        body: ['"Plus Jakarta Sans"', 'sans-serif']
       },
       colors: {
-        linen: {
-          50: '#FBFAF7',
-          100: '#F6F3EE',
-          200: '#EDE8DE'
+        // Fondo / superficie
+        cream: {
+          50: '#FFFDF9',
+          100: '#FBF4E9',
+          200: '#F3E7D3'
         },
-        plum: {
-          50: '#F1EEF9',
-          100: '#DCD4EF',
-          300: '#9C89CC',
-          500: '#5B4B8A',
-          600: '#4A3B73',
-          700: '#3A2E5C'
+        // Primario — Convive
+        violet: {
+          50: '#F1EDFC',
+          100: '#E1D8F8',
+          300: '#A78EEA',
+          500: '#6B4FE0',
+          600: '#5A3FC7',
+          700: '#4630A0'
         },
-        mustard: {
-          100: '#FBEACB',
-          400: '#E8A33D',
-          500: '#D6912E'
+        // Secundario
+        coral: {
+          100: '#FFE1D6',
+          400: '#FF8563',
+          500: '#FF6B4A'
         },
+        // Convis / recompensas
+        gold: {
+          100: '#FCEBBE',
+          400: '#F5B942',
+          500: '#E0A32C'
+        },
+        // Éxito
         sage: {
-          100: '#DFEEE3',
-          500: '#4F9D69'
+          100: '#DCEEE1',
+          500: '#3FAE6A'
         },
+        // Error
         clay: {
-          100: '#F6DAD4',
-          500: '#D0574A'
+          100: '#FBDCD3',
+          500: '#E8503A'
         },
-        charcoal: {
-          900: '#1E1B24',
-          800: '#282433',
-          700: '#332E42'
+        // Info
+        sky: {
+          100: '#E1E9FF',
+          500: '#4C7FFF'
+        },
+        // Texto / estructura oscura
+        ink: {
+          900: '#17131C',
+          800: '#231D2B',
+          700: '#332B3D'
         }
       },
       borderRadius: {
-        xl2: '1.25rem'
+        xl2: '0.85rem'
       }
     }
   },

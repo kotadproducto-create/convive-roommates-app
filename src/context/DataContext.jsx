@@ -21,6 +21,7 @@ export function DataProvider({ children }) {
   const [incidents, setIncidents] = useState([])
   const [notifications, setNotifications] = useState([])
   const [redemptions, setRedemptions] = useState([])
+  const [potContributions, setPotContributions] = useState([])
 
   const weekKey = getWeekKey()
 
@@ -77,6 +78,14 @@ export function DataProvider({ children }) {
     return subscribeTable('redemptions', { floorId }, setRedemptions)
   }, [floorId])
 
+  useEffect(() => {
+    if (!floorId) {
+      setPotContributions([])
+      return
+    }
+    return subscribeTable('pot_contributions', { floorId }, setPotContributions)
+  }, [floorId])
+
   // Genera (una sola vez, de forma idempotente) las tareas de la semana
   // actual y las notificaciones de recordatorio de turno / pote bajo.
   useEffect(() => {
@@ -103,7 +112,7 @@ export function DataProvider({ children }) {
             type: 'turno',
             weekKey,
             read: false,
-            message: `Esta semana te toca: ${typeInfo?.icon || ''} ${typeInfo?.label || t.type}`
+            message: `Esta semana te toca: ${typeInfo?.label || t.type}`
           })
         }
       }
@@ -227,11 +236,17 @@ export function DataProvider({ children }) {
   }, [currentFloor, user, weekKey])
 
   const addPotContribution = useCallback(
-    (amount) => {
-      if (!currentFloor) return
-      update('floors', currentFloor.id, { potAmount: (currentFloor.potAmount || 0) + Number(amount) })
+    async (amount) => {
+      if (!currentFloor || !user) return
+      await create('pot_contributions', { floorId: currentFloor.id, userId: user.id, amount: Number(amount) })
+      await update('floors', currentFloor.id, { potAmount: (currentFloor.potAmount || 0) + Number(amount) })
     },
-    [currentFloor]
+    [currentFloor, user]
+  )
+
+  const setMemberPotActive = useCallback(
+    (membershipId, active) => update('floor_memberships', membershipId, { potActive: active }),
+    []
   )
 
   const spendFromPot = useCallback(
@@ -276,11 +291,13 @@ export function DataProvider({ children }) {
     unreadCount,
     leaderboard,
     redemptions,
+    potContributions,
     completeTask,
     uncompleteTask,
     reorderRotation,
     removeMember,
     setMemberRole,
+    setMemberPotActive,
     addIncident,
     removeIncident,
     markAllNotificationsRead,

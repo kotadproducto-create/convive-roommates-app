@@ -1,13 +1,16 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { ToastProvider } from './context/ToastContext'
 import { DataProvider } from './context/DataContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import Timeline from './pages/Timeline'
 import Dashboard from './pages/Dashboard'
 import Incidents from './pages/Incidents'
 import Rewards from './pages/Rewards'
+import Wallet from './pages/Wallet'
 import FloorSettings from './pages/FloorSettings'
 
 function AuthedData({ children }) {
@@ -19,6 +22,7 @@ function AuthedData({ children }) {
 export default function App() {
   return (
     <ThemeProvider>
+      <ToastProvider>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
@@ -26,6 +30,16 @@ export default function App() {
             <Route path="/register" element={<Register />} />
             <Route
               path="/"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Timeline />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/calendario"
               element={
                 <ProtectedRoute>
                   <AuthedData>
@@ -55,6 +69,16 @@ export default function App() {
               }
             />
             <Route
+              path="/pote"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Wallet />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/piso"
               element={
                 <ProtectedRoute>
@@ -67,6 +91,7 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
+      </ToastProvider>
     </ThemeProvider>
   )
 }

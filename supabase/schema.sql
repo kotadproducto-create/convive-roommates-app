@@ -60,7 +60,8 @@ create table if not exists floor_memberships (
   role text not null default 'member' check (role in ('admin', 'member')),
   status text not null default 'active' check (status in ('active', 'left', 'pending')),
   joined_at timestamptz not null default now(),
-  left_at timestamptz
+  left_at timestamptz,
+  pot_active boolean not null default true -- baja temporal del reparto del pote (viaje, etc.); no afecta la membresía real del piso
 );
 
 create unique index if not exists floor_memberships_one_active_per_user
@@ -137,6 +138,17 @@ create table if not exists coin_transactions (
   created_at timestamptz not null default now()
 );
 
+-- Ledger inmutable de aportes reales (EUR) al pote de compras compartido.
+-- floors.pot_amount sigue siendo el total rápido de mostrar; esta tabla es
+-- el historial que permite calcular cuánto aportó cada quién.
+create table if not exists pot_contributions (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  amount numeric not null,
+  created_at timestamptz not null default now()
+);
+
 -- =========================================================
 -- Funciones auxiliares para RLS (security definer: pueden leer
 -- floor_memberships sin quedar atrapadas por sus propias políticas)
@@ -188,6 +200,7 @@ alter table incidents enable row level security;
 alter table notifications enable row level security;
 alter table redemptions enable row level security;
 alter table coin_transactions enable row level security;
+alter table pot_contributions enable row level security;
 
 -- profiles: ves tu propio perfil y el de cualquiera que comparta
 -- contigo un piso activo; solo puedes crear/editar el tuyo; nunca
@@ -255,6 +268,11 @@ create policy "write floor redemptions" on redemptions for insert with check (is
 create policy "select floor coin transactions" on coin_transactions for select using (is_active_member(floor_id));
 create policy "insert floor coin transactions" on coin_transactions for insert with check (is_active_member(floor_id));
 
+-- pot_contributions: ledger inmutable — cada quien registra su propio
+-- aporte, nadie edita ni borra una fila ya escrita.
+create policy "select floor pot contributions" on pot_contributions for select using (is_active_member(floor_id));
+create policy "insert own pot contributions" on pot_contributions for insert with check (is_active_member(floor_id) and user_id = auth.uid());
+
 -- =========================================================
 -- Realtime: para que la app reciba cambios en vivo
 -- =========================================================
@@ -265,3 +283,4 @@ alter publication supabase_realtime add table floors;
 alter publication supabase_realtime add table profiles;
 alter publication supabase_realtime add table redemptions;
 alter publication supabase_realtime add table floor_memberships;
+alter publication supabase_realtime add table pot_contributions;

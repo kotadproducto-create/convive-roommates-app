@@ -7,11 +7,11 @@ html, body, #root {
 }
 
 body {
-  @apply bg-linen-100 text-charcoal-900 font-body antialiased;
+  @apply bg-cream-100 text-ink-900 font-body antialiased;
 }
 
 .dark body {
-  @apply bg-charcoal-900 text-linen-100;
+  @apply bg-ink-900 text-cream-100;
 }
 
 * {
@@ -19,37 +19,109 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid theme('colors.plum.500');
+  outline: 2px solid theme('colors.violet.500');
   outline-offset: 2px;
 }
 
 .card {
-  @apply bg-white dark:bg-charcoal-800 border border-linen-200 dark:border-charcoal-700 rounded-xl2 shadow-sm;
+  @apply bg-white dark:bg-ink-800 border-2 border-ink-900/10 dark:border-cream-100/15 rounded-xl2 shadow-sm;
 }
 
+/* Botones "tecla": sombra sólida como base, se aplastan al presionar —
+   el aire lúdico viene de la interacción, no solo del color. */
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 bg-plum-500 hover:bg-plum-600 text-white font-medium px-4 py-2 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply inline-flex items-center justify-center gap-2 bg-violet-500 hover:bg-violet-600 border-2 border-ink-900 text-white font-display font-semibold px-4 py-2 rounded-full
+    shadow-[0_4px_0_0_theme(colors.ink.900)] transition-[transform,box-shadow,background-color] duration-100 ease-out
+    hover:-translate-y-0.5 hover:shadow-[0_5px_0_0_theme(colors.ink.900)]
+    active:translate-y-1 active:shadow-[0_0px_0_0_theme(colors.ink.900)]
+    disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 bg-linen-200 hover:bg-linen-200/70 dark:bg-charcoal-700 dark:hover:bg-charcoal-700/70 text-charcoal-900 dark:text-linen-100 font-medium px-4 py-2 rounded-xl transition-colors;
+  @apply inline-flex items-center justify-center gap-2 bg-cream-200 hover:bg-cream-200/70 dark:bg-ink-700 dark:hover:bg-ink-700/70 border-2 border-ink-900/15 dark:border-cream-100/20 text-ink-900 dark:text-cream-100 font-display font-semibold px-4 py-2 rounded-full
+    shadow-[0_3px_0_0_theme(colors.ink.900/15%)] dark:shadow-[0_3px_0_0_theme(colors.cream.100/20%)] transition-[transform,box-shadow,background-color] duration-100 ease-out
+    hover:-translate-y-0.5
+    active:translate-y-0.5 active:shadow-none
+    disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
 }
 
 .btn-danger {
-  @apply inline-flex items-center justify-center gap-2 bg-clay-500 hover:opacity-90 text-white font-medium px-4 py-2 rounded-xl transition-colors;
+  @apply inline-flex items-center justify-center gap-2 bg-clay-500 hover:opacity-90 border-2 border-ink-900 text-white font-display font-semibold px-4 py-2 rounded-full
+    shadow-[0_4px_0_0_theme(colors.ink.900)] transition-[transform,box-shadow,background-color] duration-100 ease-out
+    hover:-translate-y-0.5 hover:shadow-[0_5px_0_0_theme(colors.ink.900)]
+    active:translate-y-1 active:shadow-[0_0px_0_0_theme(colors.ink.900)]
+    disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
 }
 
 .input {
-  @apply w-full bg-linen-50 dark:bg-charcoal-700 border border-linen-200 dark:border-charcoal-700 rounded-xl px-3 py-2 text-sm placeholder:text-charcoal-900/40 dark:placeholder:text-linen-100/40;
+  @apply w-full bg-white dark:bg-ink-700 border-2 border-ink-900/15 dark:border-cream-100/20 rounded-xl px-3 py-2 text-sm placeholder:text-ink-900/40 dark:placeholder:text-cream-100/40 focus-visible:outline-2 focus-visible:outline-violet-500;
 }
 
-/* Chore-wheel signature element: subtle continuous rotation, respects reduced motion */
+/* Sello del calendario de racha: mismo mecanismo de "tecla" que los botones */
+.stamp-btn {
+  transition: transform 0.1s ease-out;
+}
+.stamp-btn:not(:disabled):active {
+  transform: translateY(2px) scale(0.94);
+}
+
+/* Scroll-reveal: fundido + deslizamiento la primera vez que el elemento
+   entra en pantalla (ver components/Reveal.jsx). */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.55s ease-out, transform 0.55s ease-out;
+}
+.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Pop-up de notificación: entra con un pequeño rebote */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-14px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.toast-pop {
+  animation: toast-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* "Reacción" al completar una tarea: un pequeño pop de celebración */
+@keyframes celebrate-pop {
+  0% { transform: scale(1) rotate(0deg); }
+  45% { transform: scale(1.3) rotate(-6deg); }
+  75% { transform: scale(0.95) rotate(3deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.celebrate-pop {
+  animation: celebrate-pop 0.5s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .toast-pop, .celebrate-pop { animation: none; }
+}
+
+/* Textura de puntos — usar con moderación (hero, auth, secciones destacadas) */
+.dot-grid {
+  background-image: radial-gradient(currentColor 1px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+/* Marca circular de Convive: rotación continua sutil, respeta reduced-motion */
 .chore-wheel {
   animation: spin-slow 40s linear infinite;
   transform-origin: 50% 50%;
 }
 @media (prefers-reduced-motion: reduce) {
   .chore-wheel { animation: none; }
+  .btn-primary, .btn-secondary, .btn-danger, .stamp-btn {
+    transition: none !important;
+  }
+  .btn-primary:hover, .btn-secondary:hover, .btn-danger:hover, .stamp-btn:hover,
+  .btn-primary:active, .btn-secondary:active, .btn-danger:active, .stamp-btn:active {
+    transform: none !important;
+  }
 }
 @keyframes spin-slow {
   from { transform: rotate(0deg); }

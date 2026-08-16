@@ -35,23 +35,23 @@ export default function Register() {
 
   return (
     <AuthShell>
-      <h1 className="font-display text-2xl font-semibold mb-1">Crea tu cuenta</h1>
-      <p className="text-sm text-charcoal-900/60 dark:text-linen-100/60 mb-5">
+      <h1 className="font-display text-2xl font-bold tracking-tight mb-1">Crea tu cuenta</h1>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-5">
         Empieza un piso nuevo o únete a uno con un código.
       </p>
 
-      <div className="flex bg-linen-200 dark:bg-charcoal-700 rounded-xl p-1 mb-5 text-sm font-medium">
+      <div className="flex bg-cream-200 dark:bg-ink-700 rounded-xl p-1 mb-5 text-sm font-semibold">
         <button
           type="button"
           onClick={() => setMode('create')}
-          className={`flex-1 py-1.5 rounded-lg ${mode === 'create' ? 'bg-white dark:bg-charcoal-800 shadow-sm' : ''}`}
+          className={`flex-1 py-1.5 rounded-lg ${mode === 'create' ? 'bg-white dark:bg-ink-800 shadow-sm' : ''}`}
         >
           Crear piso
         </button>
         <button
           type="button"
           onClick={() => setMode('join')}
-          className={`flex-1 py-1.5 rounded-lg ${mode === 'join' ? 'bg-white dark:bg-charcoal-800 shadow-sm' : ''}`}
+          className={`flex-1 py-1.5 rounded-lg ${mode === 'join' ? 'bg-white dark:bg-ink-800 shadow-sm' : ''}`}
         >
           Unirme a un piso
         </button>
@@ -86,14 +86,14 @@ export default function Register() {
             required
           />
         )}
-        {error && <p className="text-sm text-clay-500">{error}</p>}
+        {error && <p className="text-sm font-medium text-clay-500">{error}</p>}
         <button className="btn-primary mt-2" type="submit" disabled={submitting}>
           {submitting ? 'Creando…' : mode === 'create' ? 'Crear piso y cuenta' : 'Unirme'}
         </button>
       </form>
 
-      <p className="text-sm mt-5 text-center text-charcoal-900/60 dark:text-linen-100/60">
-        ¿Ya tienes cuenta? <Link to="/login" className="text-plum-500 font-medium hover:underline">Inicia sesión</Link>
+      <p className="text-sm mt-5 text-center text-ink-900/60 dark:text-cream-100/60">
+        ¿Ya tienes cuenta? <Link to="/login" className="text-violet-500 font-semibold hover:underline">Inicia sesión</Link>
       </p>
     </AuthShell>
   )

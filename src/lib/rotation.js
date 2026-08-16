@@ -7,10 +7,17 @@ import { getAll, update, upsertIgnoreDuplicates } from './db'
  * 3 tareas a la misma persona la misma semana).
  */
 export const TASK_TYPES = [
-  { key: 'compras', label: 'Compras del piso', offset: 0, icon: '🛒', points: 15 },
-  { key: 'basura', label: 'Sacar la basura', offset: 1, icon: '🗑️', points: 5 },
-  { key: 'lavadora', label: 'Lavadora (lencería de baño)', offset: 2, icon: '🧺', points: 10 }
+  { key: 'compras', label: 'Compras del piso', offset: 0, icon: 'cart', points: 15 },
+  { key: 'basura', label: 'Sacar la basura', offset: 1, icon: 'trash', points: 5 },
+  { key: 'lavadora', label: 'Lavadora (lencería de baño)', offset: 2, icon: 'washer', points: 10 }
 ]
+
+/**
+ * Día de la semana (0=lunes..6=domingo) en el que se muestra cada tipo de
+ * tarea en las vistas de calendario. Es solo de presentación — la
+ * asignación real sigue siendo semanal, vía whoIsAssigned/rotationOrder.
+ */
+export const TASK_DAY_OFFSET = { compras: 0, basura: 2, lavadora: 4 }
 
 /** Devuelve una clave estable de semana ISO, ej: "2026-W32" */
 export function getWeekKey(date = new Date()) {

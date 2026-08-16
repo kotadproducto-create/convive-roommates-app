@@ -3,6 +3,8 @@ import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { update } from '../lib/db'
+import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon } from '../components/icons'
+import Reveal from '../components/Reveal'
 
 export default function FloorSettings() {
   const { user, membership } = useAuth()
@@ -86,13 +88,13 @@ export default function FloorSettings() {
   return (
     <AppLayout title="Tu piso">
       <div className="grid md:grid-cols-2 gap-5">
-        <section className="card p-5">
+        <Reveal as="section" delay={0} className="card p-5">
           <h2 className="font-display font-semibold mb-1">Invitar roommates</h2>
-          <p className="text-sm text-charcoal-900/60 dark:text-linen-100/60 mb-3">
+          <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
             Comparte este código para que se unan a <strong>{floor?.name}</strong>.
           </p>
           <div className="flex items-center gap-2">
-            <div className="flex-1 bg-linen-100 dark:bg-charcoal-700 rounded-xl px-4 py-3 text-center text-2xl font-display tracking-widest font-semibold">
+            <div className="flex-1 bg-cream-100 dark:bg-ink-700 border-2 border-ink-900/10 dark:border-cream-100/15 rounded-xl px-4 py-3 text-center text-2xl font-display tracking-widest font-bold">
               {floor?.inviteCode}
             </div>
             <button
@@ -100,18 +102,18 @@ export default function FloorSettings() {
               title="Copiar o compartir código"
               className="btn-secondary text-sm shrink-0 px-3"
             >
-              {copied ? '✓' : '🔗'}
+              {copied ? '✓' : <ShareIcon className="w-4 h-4" />}
             </button>
           </div>
-          {copied && <p className="text-xs text-sage-500 mt-2 text-center">Código copiado</p>}
+          {copied && <p className="text-xs font-semibold text-sage-500 mt-2 text-center">Código copiado</p>}
           {copyError && (
-            <p className="text-xs text-clay-500 mt-2 text-center">No se pudo copiar, selecciónalo manualmente.</p>
+            <p className="text-xs font-semibold text-clay-500 mt-2 text-center">No se pudo copiar, selecciónalo manualmente.</p>
           )}
-        </section>
+        </Reveal>
 
-        <section className="card p-5">
+        <Reveal as="section" delay={80} className="card p-5">
           <h2 className="font-display font-semibold mb-3">Orden de rotación</h2>
-          <p className="text-sm text-charcoal-900/60 dark:text-linen-100/60 mb-3">
+          <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
             Este es el orden en el que van pasando las 3 tareas semanales.
             {!isAdmin && ' Solo un admin puede reordenarlo.'}
           </p>
@@ -120,40 +122,42 @@ export default function FloorSettings() {
               const m = memberById[id]
               if (!m) return null
               return (
-                <li key={id} className="flex items-center justify-between bg-linen-100 dark:bg-charcoal-700 rounded-xl px-3 py-2">
-                  <span className="text-sm">
-                    <span className="text-charcoal-900/40 dark:text-linen-100/40 mr-2">{idx + 1}.</span>
-                    {m.name} {m.role === 'admin' && <span className="text-[10px] uppercase text-plum-500 ml-1">admin</span>}
+                <li key={id} className="flex items-center justify-between bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+                  <span className="text-sm font-medium">
+                    <span className="text-ink-900/40 dark:text-cream-100/40 mr-2">{idx + 1}.</span>
+                    {m.name} {m.role === 'admin' && <span className="text-[10px] uppercase font-bold text-violet-500 ml-1">admin</span>}
                   </span>
                   {isAdmin && (
                     <div className="flex gap-1">
-                      <button onClick={() => move(idx, -1)} className="w-7 h-7 rounded-lg hover:bg-linen-200 dark:hover:bg-charcoal-800">↑</button>
-                      <button onClick={() => move(idx, 1)} className="w-7 h-7 rounded-lg hover:bg-linen-200 dark:hover:bg-charcoal-800">↓</button>
+                      <button onClick={() => move(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
+                      <button onClick={() => move(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
                     </div>
                   )}
                 </li>
               )
             })}
           </ol>
-        </section>
+        </Reveal>
 
-        <section className="card p-5">
+        <Reveal as="section" delay={160} className="card p-5">
           <h2 className="font-display font-semibold mb-3">Roommates</h2>
           <ul className="flex flex-col gap-2">
             {members.map((m) => (
               <li key={m.id} className="flex items-center justify-between px-1 py-1.5 text-sm">
-                <div>
-                  <span className="font-medium">{m.name}</span>{' '}
-                  <span className="text-charcoal-900/40 dark:text-linen-100/40">· {m.points || 0} pts</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium">{m.name}</span>
+                  <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40">
+                    · <CoinIcon className="w-3.5 h-3.5" />{m.points || 0}
+                  </span>
                 </div>
                 {isAdmin && m.id !== user.id && (
                   <div className="flex gap-2">
                     {m.role !== 'admin' && (
-                      <button onClick={() => makeAdmin(m)} className="text-xs text-plum-500 hover:underline">
+                      <button onClick={() => makeAdmin(m)} className="text-xs font-semibold text-violet-500 hover:underline">
                         Hacer admin
                       </button>
                     )}
-                    <button onClick={() => handleRemove(m)} className="text-xs text-clay-500 hover:underline">
+                    <button onClick={() => handleRemove(m)} className="text-xs font-semibold text-clay-500 hover:underline">
                       Quitar
                     </button>
                   </div>
@@ -161,17 +165,17 @@ export default function FloorSettings() {
               </li>
             ))}
           </ul>
-        </section>
+        </Reveal>
 
         {isAdmin && (
-          <section className="card p-5">
+          <Reveal as="section" delay={240} className="card p-5">
             <h2 className="font-display font-semibold mb-3">Ajustes del pote</h2>
             <label className="text-sm block mb-1">Aviso cuando el pote baje de</label>
             <input className="input mb-3" type="number" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
             <label className="text-sm block mb-1">Aportación sugerida por persona</label>
             <input className="input mb-4" type="number" value={perPerson} onChange={(e) => setPerPerson(e.target.value)} />
             <button className="btn-primary text-sm" onClick={saveSettings}>Guardar ajustes</button>
-          </section>
+          </Reveal>
         )}
       </div>
     </AppLayout>

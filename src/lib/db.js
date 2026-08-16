@@ -145,7 +145,7 @@ export async function getFloorMembers(floorId) {
   if (!floorId) return []
   const { data, error } = await supabase
     .from('floor_memberships')
-    .select('id, role, joined_at, profile:profiles(*)')
+    .select('id, role, joined_at, pot_active, profile:profiles(*)')
     .eq('floor_id', floorId)
     .eq('status', 'active')
   if (error) throw error
@@ -155,7 +155,8 @@ export async function getFloorMembers(floorId) {
       ...toCamel(row.profile),
       membershipId: row.id,
       role: row.role,
-      joinedAt: row.joined_at
+      joinedAt: row.joined_at,
+      potActive: row.pot_active
     }))
 }
 
