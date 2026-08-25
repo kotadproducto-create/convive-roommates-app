@@ -34,9 +34,9 @@ function guessStoreFromUrl(value) {
 }
 
 const STOCK_META = {
-  out: { label: 'Agotado', dot: 'bg-clay-500', chip: 'bg-clay-500/15 text-clay-500', order: 0 },
-  low: { label: 'Por acabarse', dot: 'bg-gold-500', chip: 'bg-gold-400/20 text-gold-500', order: 1 },
-  ok: { label: 'Con stock', dot: 'bg-sage-500', chip: 'bg-sage-500/15 text-sage-500', order: 2 }
+  out: { label: 'Agotado', dot: 'bg-clay-500', chip: 'bg-clay-100 dark:bg-clay-500/20 text-clay-500 border-2 border-clay-500/40', order: 0 },
+  low: { label: 'Por acabarse', dot: 'bg-gold-500', chip: 'bg-gold-100 dark:bg-gold-400/20 text-gold-500 border-2 border-gold-500/40', order: 1 },
+  ok: { label: 'Con stock', dot: 'bg-sage-500', chip: 'bg-sage-100 dark:bg-sage-500/20 text-sage-500 border-2 border-sage-500/40', order: 2 }
 }
 
 export default function Shopping() {

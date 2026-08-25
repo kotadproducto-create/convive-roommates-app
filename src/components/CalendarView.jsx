@@ -18,6 +18,7 @@ import { es } from 'date-fns/locale'
 import { TASK_TYPES, TASK_DAY_OFFSET, getWeekKey, whoIsAssigned } from '../lib/rotation'
 import { TASK_ICONS, JarIcon, CartIcon, StoreIcon, WasherIcon } from './icons'
 import { useToast } from '../context/ToastContext'
+import { TASK_TONE_CLASSES } from './TaskCard'
 
 const VIEW_MODES = [
   { key: 'month', label: 'Mes' },
@@ -226,8 +227,8 @@ function WeekStrip({ cursor, dayInfo }) {
 }
 
 const EVENT_TONE_CLASSES = {
-  sage: 'bg-sage-500/15 text-sage-500',
-  clay: 'bg-clay-500/15 text-clay-500',
+  sage: 'bg-sage-100 dark:bg-sage-500/20 text-sage-500',
+  clay: 'bg-clay-100 dark:bg-clay-500/20 text-clay-500',
   coral: 'bg-coral-100 dark:bg-coral-500/20 text-coral-500',
   violet: 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200',
   sky: 'bg-sky-100 dark:bg-sky-500/20 text-sky-500'
@@ -307,6 +308,7 @@ function DayDetail({
 }) {
   const { type, assignee, task, isCurrentWeek } = dayInfo(cursor)
   const Icon = type ? TASK_ICONS[type.icon] : null
+  const toneClass = TASK_TONE_CLASSES[type?.key] || 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
   const { showToast } = useToast()
   const events = useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications)
 
@@ -324,12 +326,18 @@ function DayDetail({
       {type ? (
         <div className="flex items-center gap-4 py-4 border-b border-ink-900/10 dark:border-cream-100/15">
           {type.key === 'compras' ? (
-            <Link to="/compras" className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-700/25 flex items-center justify-center shrink-0 hover:opacity-80" title="Ir a la lista de compras">
-              {Icon && <Icon className="w-7 h-7 text-violet-600 dark:text-violet-200" />}
+            <Link
+              to="/compras"
+              className={`w-14 h-14 rounded-2xl border-2 border-ink-900/70 dark:border-cream-100/30 ${toneClass} flex items-center justify-center shrink-0 hover:opacity-80`}
+              title="Ir a la lista de compras"
+            >
+              {Icon && <Icon className="w-7 h-7" />}
             </Link>
           ) : (
-            <div className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-700/25 flex items-center justify-center shrink-0">
-              {Icon && <Icon className="w-7 h-7 text-violet-600 dark:text-violet-200" />}
+            <div
+              className={`w-14 h-14 rounded-2xl border-2 border-ink-900/70 dark:border-cream-100/30 ${toneClass} flex items-center justify-center shrink-0`}
+            >
+              {Icon && <Icon className="w-7 h-7" />}
             </div>
           )}
           <div className="flex-1 min-w-0">
@@ -366,7 +374,9 @@ function DayDetail({
           <ul className="flex flex-col gap-2">
             {events.map((e) => (
               <li key={e.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${EVENT_TONE_CLASSES[e.tone]}`}>
+                <div
+                  className={`w-9 h-9 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center shrink-0 ${EVENT_TONE_CLASSES[e.tone]}`}
+                >
                   <e.icon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">

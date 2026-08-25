@@ -10,3 +10,11 @@ export function potAmountColorClass(amount) {
   if (n < 5) return 'text-gold-500'
   return 'text-sage-500'
 }
+
+/** Mensaje corto para el globo de diálogo del pote, a juego con el mismo semáforo. */
+export function potAmountBubbleMessage(amount) {
+  const n = Number(amount) || 0
+  if (n < 0) return '¡Toca reponer! 🪫'
+  if (n < 5) return 'Va quedando poco 👀'
+  return '¡Vais bien! 🌿'
+}

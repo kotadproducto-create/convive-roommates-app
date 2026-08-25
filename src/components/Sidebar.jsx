@@ -39,7 +39,7 @@ export default function Sidebar() {
       </aside>
 
       {/* Móvil: barra inferior con 4 fijas + "Más" */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-ink-800/95 backdrop-blur border-t border-ink-900/10 dark:border-cream-100/15 flex justify-around py-2">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-ink-800/95 backdrop-blur border-t-[2.5px] border-ink-900 dark:border-cream-100/40 flex justify-around py-2">
         {primaryItems.map(({ to, label, Icon, end }) => (
           <NavLink
             key={to}
@@ -47,22 +47,38 @@ export default function Sidebar() {
             end={end}
             className={({ isActive }) =>
               `flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
-                isActive ? 'text-violet-500' : 'text-ink-900/60 dark:text-cream-100/60'
+                isActive ? 'text-ink-900 dark:text-cream-100' : 'text-ink-900/60 dark:text-cream-100/60'
               }`
             }
           >
-            <Icon className="w-5 h-5" />
-            {label}
+            {({ isActive }) => (
+              <>
+                <span
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                    isActive ? 'bg-gold-100 dark:bg-gold-400/25 border-2 border-ink-900 dark:border-cream-100/50' : ''
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                </span>
+                {label}
+              </>
+            )}
           </NavLink>
         ))}
         <button
           type="button"
           onClick={() => setShowMore(true)}
           className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
-            isMoreActive ? 'text-violet-500' : 'text-ink-900/60 dark:text-cream-100/60'
+            isMoreActive ? 'text-ink-900 dark:text-cream-100' : 'text-ink-900/60 dark:text-cream-100/60'
           }`}
         >
-          <MoreIcon className="w-5 h-5" />
+          <span
+            className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              isMoreActive ? 'bg-gold-100 dark:bg-gold-400/25 border-2 border-ink-900 dark:border-cream-100/50' : ''
+            }`}
+          >
+            <MoreIcon className="w-5 h-5" />
+          </span>
           Más
         </button>
       </nav>
@@ -70,7 +86,7 @@ export default function Sidebar() {
       {showMore && (
         <div className="md:hidden fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end" onClick={() => setShowMore(false)}>
           <div
-            className="w-full bg-cream-100 dark:bg-ink-800 rounded-t-2xl p-5 pb-8"
+            className="w-full bg-cream-100 dark:bg-ink-800 border-t-[2.5px] border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -91,10 +107,10 @@ export default function Sidebar() {
                   end={end}
                   onClick={() => setShowMore(false)}
                   className={({ isActive }) =>
-                    `flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold ${
+                    `flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold border-2 ${
                       isActive
-                        ? 'bg-violet-50 text-violet-600 dark:bg-violet-700/25 dark:text-violet-100'
-                        : 'text-ink-900/70 dark:text-cream-100/70 hover:bg-cream-200 dark:hover:bg-ink-700'
+                        ? 'bg-gold-100 dark:bg-gold-400/25 border-ink-900 dark:border-cream-100/50 text-ink-900 dark:text-cream-100'
+                        : 'border-transparent text-ink-900/70 dark:text-cream-100/70 hover:bg-cream-200 dark:hover:bg-ink-700'
                     }`
                   }
                 >
@@ -131,10 +147,10 @@ function NavItem({ to, label, Icon, end }) {
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-transform duration-100 active:scale-95 ${
+        `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold border-2 transition-transform duration-100 active:scale-95 ${
           isActive
-            ? 'bg-violet-50 text-violet-600 dark:bg-violet-700/25 dark:text-violet-100'
-            : 'text-ink-900/70 dark:text-cream-100/70 hover:bg-cream-200 dark:hover:bg-ink-700'
+            ? 'bg-gold-100 dark:bg-gold-400/25 border-ink-900 dark:border-cream-100/50 text-ink-900 dark:text-cream-100'
+            : 'border-transparent text-ink-900/70 dark:text-cream-100/70 hover:bg-cream-200 dark:hover:bg-ink-700'
         }`
       }
     >

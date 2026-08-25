@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { JarIcon, EditIcon, TrashIcon } from '../components/icons'
-import { potAmountColorClass } from '../lib/pot'
+import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -105,8 +105,9 @@ export default function Wallet() {
       <Reveal delay={40}>
         <div className="card p-5 mb-5 flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gold-100 dark:bg-gold-400/20 text-gold-500 flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-3 hoverbubble" tabIndex={0}>
+              <div className="bubble">{potAmountBubbleMessage(floor?.potAmount ?? 0)}</div>
+              <div className="w-12 h-12 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 bg-gold-100 dark:bg-gold-400/20 text-gold-500 flex items-center justify-center shrink-0">
                 <JarIcon className="w-6 h-6" />
               </div>
               <div>

@@ -24,7 +24,7 @@ body {
 }
 
 .card {
-  @apply bg-white dark:bg-ink-800 border-2 border-ink-900/10 dark:border-cream-100/15 rounded-xl2 shadow-sm;
+  @apply bg-white dark:bg-ink-800 border-[2.5px] border-ink-900 dark:border-cream-100/40 rounded-xl2;
 }
 
 /* Botones "tecla": sombra sólida como base, se aplastan al presionar —
@@ -38,8 +38,8 @@ body {
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 bg-cream-200 hover:bg-cream-200/70 dark:bg-ink-700 dark:hover:bg-ink-700/70 border-2 border-ink-900/15 dark:border-cream-100/20 text-ink-900 dark:text-cream-100 font-display font-semibold px-4 py-2 rounded-full
-    shadow-[0_3px_0_0_theme(colors.ink.900/15%)] dark:shadow-[0_3px_0_0_theme(colors.cream.100/20%)] transition-[transform,box-shadow,background-color] duration-100 ease-out
+  @apply inline-flex items-center justify-center gap-2 bg-cream-200 hover:bg-cream-200/70 dark:bg-ink-700 dark:hover:bg-ink-700/70 border-2 border-ink-900 dark:border-cream-100/40 text-ink-900 dark:text-cream-100 font-display font-semibold px-4 py-2 rounded-full
+    shadow-[0_3px_0_0_theme(colors.ink.900/25%)] dark:shadow-[0_3px_0_0_theme(colors.cream.100/20%)] transition-[transform,box-shadow,background-color] duration-100 ease-out
     hover:-translate-y-0.5
     active:translate-y-0.5 active:shadow-none
     disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
@@ -54,7 +54,7 @@ body {
 }
 
 .input {
-  @apply w-full bg-white dark:bg-ink-700 border-2 border-ink-900/15 dark:border-cream-100/20 rounded-xl px-3 py-2 text-sm placeholder:text-ink-900/40 dark:placeholder:text-cream-100/40 focus-visible:outline-2 focus-visible:outline-violet-500;
+  @apply w-full bg-white dark:bg-ink-700 border-2 border-ink-900/70 dark:border-cream-100/30 rounded-xl px-3 py-2 text-sm placeholder:text-ink-900/40 dark:placeholder:text-cream-100/40 focus-visible:outline-2 focus-visible:outline-violet-500;
 }
 
 /* Sello del calendario de racha: mismo mecanismo de "tecla" que los botones */
@@ -100,6 +100,63 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; transition: none; }
   .toast-pop, .celebrate-pop { animation: none; }
+}
+
+/* Balanceo suave de la mascota (ver components/Mascot.jsx) */
+.mascot-wobble {
+  animation: mascot-wobble 4.5s ease-in-out infinite;
+}
+@keyframes mascot-wobble {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-wobble { animation: none; }
+}
+
+/* Globo de diálogo tipo cómic: aparece al pasar el cursor o enfocar, en
+   vez de ocupar espacio fijo en la pantalla. Usar con moderación, solo
+   donde de verdad aporta un empujoncito (ver Dashboard, Wallet). */
+.hoverbubble {
+  position: relative;
+}
+.bubble {
+  position: absolute;
+  top: -0.9rem;
+  right: 0.6rem;
+  background: theme('colors.gold.400');
+  border: 2.5px solid theme('colors.ink.900');
+  border-radius: 0.85rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: theme('colors.ink.900');
+  opacity: 0;
+  transform: translateY(4px) scale(0.9);
+  transition: opacity 0.18s ease-out, transform 0.18s ease-out;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+}
+.bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -0.5rem;
+  right: 1.1rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  background: theme('colors.gold.400');
+  border-right: 2.5px solid theme('colors.ink.900');
+  border-bottom: 2.5px solid theme('colors.ink.900');
+  transform: rotate(45deg);
+}
+.hoverbubble:hover .bubble,
+.hoverbubble:focus-within .bubble {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bubble { transition: none; }
 }
 
 /* Textura de puntos — usar con moderación (hero, auth, secciones destacadas) */

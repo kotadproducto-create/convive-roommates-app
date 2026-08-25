@@ -210,6 +210,26 @@ export function AuthProvider({ children }) {
     if (error) throw new Error(traduceErrorAuth(error))
   }
 
+  // Envía el email de recuperación de contraseña. No revela si el email
+  // existe o no en la respuesta (Supabase no da error por email
+  // desconocido), así que la pantalla siempre debe mostrar el mismo
+  // mensaje de éxito, evitando que alguien use este formulario para
+  // averiguar qué emails están registrados.
+  async function requestPasswordReset(email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/restablecer-contrasena`
+    })
+    if (error) throw new Error(traduceErrorAuth(error))
+  }
+
+  // Se llama desde la pantalla que abre el enlace del correo: Supabase ya
+  // crea ahí una sesión temporal de recuperación al detectar el token en
+  // la URL, así que no hace falta pedir la contraseña actual.
+  async function updatePasswordWithRecovery(newPassword) {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) throw new Error(traduceErrorAuth(error))
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -225,6 +245,8 @@ export function AuthProvider({ children }) {
         requestJoinFloor,
         withdrawRequest,
         changePassword,
+        requestPasswordReset,
+        updatePasswordWithRecovery,
         logout,
         refresh
       }}

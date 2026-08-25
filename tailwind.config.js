@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"Bricolage Grotesque"', 'sans-serif'],
+        display: ['"Baloo 2"', 'sans-serif'],
         body: ['"Plus Jakarta Sans"', 'sans-serif']
       },
       colors: {
@@ -59,7 +59,7 @@ export default {
         }
       },
       borderRadius: {
-        xl2: '0.85rem'
+        xl2: '1.15rem'
       }
     }
   },

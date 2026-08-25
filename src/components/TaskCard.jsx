@@ -5,12 +5,21 @@ import { es } from 'date-fns/locale'
 import { TASK_ICONS, CoinIcon } from './icons'
 import { useToast } from '../context/ToastContext'
 
+// Cada tipo de tarea, su propio bloque pastel — así el ojo distingue
+// "compras" de "basura" de "lavadora" antes incluso de leer el texto.
+export const TASK_TONE_CLASSES = {
+  compras: 'bg-coral-100 dark:bg-coral-500/20 text-coral-500',
+  basura: 'bg-gold-100 dark:bg-gold-400/20 text-gold-500',
+  lavadora: 'bg-sky-100 dark:bg-sky-500/20 text-sky-500'
+}
+
 export default function TaskCard({ task, typeInfo, assignee, currentUserId, onToggle }) {
   const isMine = task.assignedUserId === currentUserId
   const TypeIcon = TASK_ICONS[typeInfo?.icon]
   const { showToast } = useToast()
   const [celebrate, setCelebrate] = useState(false)
   const isCompras = typeInfo?.key === 'compras'
+  const toneClass = TASK_TONE_CLASSES[typeInfo?.key] || 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
 
   function handleComplete() {
     setCelebrate(true)
@@ -25,7 +34,7 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
         {isCompras ? (
           <Link to="/compras" className="flex items-center gap-3 hover:opacity-80" title="Ir a la lista de compras">
             <div
-              className={`w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center shrink-0 ${
+              className={`w-10 h-10 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 ${toneClass} flex items-center justify-center shrink-0 ${
                 celebrate ? 'celebrate-pop' : ''
               }`}
             >
@@ -41,7 +50,7 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
         ) : (
           <div className="flex items-center gap-3">
             <div
-              className={`w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center shrink-0 ${
+              className={`w-10 h-10 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 ${toneClass} flex items-center justify-center shrink-0 ${
                 celebrate ? 'celebrate-pop' : ''
               }`}
             >
@@ -56,7 +65,7 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
           </div>
         )}
         {isMine && !task.completed && (
-          <span className="text-[10px] uppercase tracking-wide bg-gold-100 text-gold-500 px-2 py-1 rounded-full font-bold">
+          <span className="text-[10px] uppercase tracking-wide bg-gold-100 dark:bg-gold-400/20 text-gold-500 border-2 border-ink-900/70 dark:border-cream-100/30 px-2 py-1 rounded-full font-bold">
             Tu turno
           </span>
         )}

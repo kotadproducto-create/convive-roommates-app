@@ -7,7 +7,7 @@ import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { TASK_TYPES, getMondayOfWeek } from '../lib/rotation'
-import { potAmountColorClass } from '../lib/pot'
+import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
 import { AlertIcon } from '../components/icons'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -83,12 +83,15 @@ export default function Dashboard() {
       </Reveal>
 
       {/* Encabezado: dónde estamos */}
-      <div className="mb-6">
-        <h2 className="font-display text-2xl font-bold tracking-tight">Hola, {user?.name?.split(' ')[0]}</h2>
-        <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-          Semana del {format(monday, "d 'de' MMMM", { locale: es })} al {format(sunday, "d 'de' MMMM", { locale: es })} en {floor?.name}
-        </p>
-      </div>
+      <Reveal>
+        <div className="card bg-violet-100 dark:bg-violet-700/20 p-4 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-200 mb-0.5">Hoy</p>
+          <h2 className="font-display text-2xl font-bold tracking-tight">¡Hola, {user?.name?.split(' ')[0]}!</h2>
+          <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
+            Semana del {format(monday, "d 'de' MMMM", { locale: es })} al {format(sunday, "d 'de' MMMM", { locale: es })} en {floor?.name}
+          </p>
+        </div>
+      </Reveal>
 
       <div className="grid lg:grid-cols-3 gap-5 items-start mb-8">
         {/* Zona primaria: qué tengo pendiente */}
@@ -117,7 +120,8 @@ export default function Dashboard() {
         {/* Zona secundaria: pote, lavadora, cómo va la rotación */}
         <aside className="flex flex-col gap-4">
           <Reveal delay={80}>
-          <div className="card p-4">
+          <div className="card hoverbubble p-4" tabIndex={0}>
+            <div className="bubble">{potAmountBubbleMessage(floor?.potAmount ?? 0)}</div>
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">Pote de compras</p>
             <p className={`text-2xl font-display font-bold mb-3 ${potAmountColorClass(floor?.potAmount ?? 0)}`}>
               {floor?.potAmount ?? 0}€
