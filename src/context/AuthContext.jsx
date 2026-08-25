@@ -74,6 +74,23 @@ export function AuthProvider({ children }) {
     }
   }, [loadProfileAndFloor])
 
+  // Asocia (o desasocia) el dispositivo con el id de Supabase en OneSignal,
+  // para que el envío de notificaciones push pueda apuntar directo a
+  // `external_id: [userId]` sin guardar ningún token nuestro en la base de
+  // datos — ver src/context/PushContext.jsx para el resto de la integración.
+  useEffect(() => {
+    const authUserId = session?.user?.id
+    window.OneSignalDeferred = window.OneSignalDeferred || []
+    window.OneSignalDeferred.push(async (OneSignal) => {
+      try {
+        if (authUserId) await OneSignal.login(authUserId)
+        else await OneSignal.logout()
+      } catch (err) {
+        console.warn('No se pudo sincronizar la sesión con OneSignal:', err)
+      }
+    })
+  }, [session?.user?.id])
+
   // Mientras no hay piso activo (esperando aprobación, o rechazado), se
   // escucha en vivo la propia fila de floor_memberships para que la
   // pantalla de espera se actualice sola en cuanto alguien decida, sin

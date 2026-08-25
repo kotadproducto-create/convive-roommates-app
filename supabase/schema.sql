@@ -125,6 +125,44 @@ create table if not exists notifications (
   created_at timestamptz not null default now()
 );
 
+-- Notificaciones push (OneSignal): cada INSERT en notifications dispara
+-- la Edge Function notify-push vía pg_net. El secreto compartido con esa
+-- función se lee de Supabase Vault (nunca queda en texto plano aquí) —
+-- ver supabase/functions/notify-push y el paso "vault.create_secret(...)"
+-- que se corre una sola vez desde el SQL Editor.
+create extension if not exists pg_net;
+
+create or replace function public.notify_push_on_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, vault
+as $$
+declare
+  webhook_secret text;
+begin
+  select decrypted_secret into webhook_secret
+  from vault.decrypted_secrets
+  where name = 'notify_push_webhook_secret';
+
+  perform net.http_post(
+    url := 'https://troidfaunaliukrgtywc.supabase.co/functions/v1/notify-push',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-webhook-secret', webhook_secret
+    ),
+    body := jsonb_build_object('type', 'INSERT', 'table', 'notifications', 'record', to_jsonb(new))
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_push_trigger on public.notifications;
+create trigger notify_push_trigger
+  after insert on public.notifications
+  for each row
+  execute function public.notify_push_on_notification();
+
 create table if not exists redemptions (
   id uuid primary key default gen_random_uuid(),
   floor_id uuid not null references floors(id) on delete cascade,

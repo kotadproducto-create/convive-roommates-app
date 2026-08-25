@@ -1,8 +1,8 @@
 /**
- * Blob redondo de Convive: mismo trazo grueso y cara simple que el resto
- * del set de iconos, con la moneda de las recompensas como marca propia (para no
- * repetir el mascota de ninguna otra app). Se usa como toque de bienvenida
- * en pantallas de auth y estados vacíos — nunca como icono funcional.
+ * Mascota de Convive: una llave simple, sin cara — cada roommate es una
+ * llave más del piso. Mismo trazo grueso que el resto del set de iconos.
+ * Se usa como toque de bienvenida en pantallas de auth y estados vacíos —
+ * nunca como icono funcional.
  */
 export default function Mascot({ className = 'w-24 h-24', wobble = true }) {
   return (
@@ -11,25 +11,36 @@ export default function Mascot({ className = 'w-24 h-24', wobble = true }) {
       fill="none"
       className={`text-ink-900 dark:text-cream-100 ${className}`}
       role="img"
-      aria-label="Mascota de Convive"
+      aria-label="Mascota de Convive: una llave"
     >
-      <g className={wobble ? 'mascot-wobble' : ''} style={{ transformOrigin: '50% 92%' }}>
-        <ellipse cx="70" cy="118" rx="30" ry="6" fill="currentColor" opacity="0.1" />
-        <path
-          d="M70 22c26 0 42 19 42 46 0 30-19 48-42 48S28 98 28 68c0-27 16-46 42-46Z"
+      <g className={wobble ? 'mascot-wobble' : ''} style={{ transformOrigin: '50% 20%' }}>
+        <ellipse cx="70" cy="122" rx="24" ry="6" fill="currentColor" opacity="0.1" />
+
+        {/* Paletón (el cuerpo) — se dibuja antes que el ojal para que este
+            lo tape y no se note la costura entre ambos. */}
+        <rect
+          x="59"
+          y="56"
+          width="22"
+          height="54"
+          rx="7"
           className="fill-gold-100 dark:fill-gold-400/25"
           stroke="currentColor"
           strokeWidth="3.5"
         />
-        <circle cx="56" cy="66" r="5.5" fill="currentColor" />
-        <circle cx="86" cy="66" r="5.5" fill="currentColor" />
-        <path d="M55 84c6 7 24 7 30 0" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" fill="none" />
-        <path d="M40 52c-8-6-9-16-4-20" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" fill="none" />
-        <path d="M100 52c8-6 9-16 4-20" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" fill="none" />
-        <circle cx="30" cy="20" r="9" className="fill-coral-100 dark:fill-coral-500/25" stroke="currentColor" strokeWidth="3" />
-        <text x="30" y="24" fontFamily="Baloo 2, sans-serif" fontWeight="800" fontSize="10" textAnchor="middle" fill="currentColor">
-          ₡
-        </text>
+        {/* Dientes */}
+        <rect x="81" y="80" width="14" height="9" rx="3" className="fill-gold-100 dark:fill-gold-400/25" stroke="currentColor" strokeWidth="3" />
+        <rect x="81" y="95" width="18" height="9" rx="3" className="fill-gold-100 dark:fill-gold-400/25" stroke="currentColor" strokeWidth="3" />
+
+        {/* Ojal, con el agujero real (fill-rule evenodd) para que se vea
+            el fondo detrás, sin depender de un color fijo. */}
+        <path
+          fillRule="evenodd"
+          d="M70,14 a22,22 0 1,0 0.01,0 Z M70,27 a9,9 0 1,0 0.01,0 Z"
+          className="fill-gold-100 dark:fill-gold-400/25"
+          stroke="currentColor"
+          strokeWidth="3.5"
+        />
       </g>
     </svg>
   )

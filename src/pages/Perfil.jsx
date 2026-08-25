@@ -5,9 +5,10 @@ import Avatar from '../components/Avatar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useTheme } from '../context/ThemeContext'
+import { usePush } from '../context/PushContext'
 import { useToast } from '../context/ToastContext'
 import { getFloorHistory } from '../lib/db'
-import { CameraIcon, LockIcon, MoonIcon, SunIcon, AlertIcon } from '../components/icons'
+import { CameraIcon, LockIcon, MoonIcon, SunIcon, AlertIcon, BellIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -422,6 +423,7 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
 
 function PreferencesCard() {
   const { theme, toggleTheme } = useTheme()
+  const { supported, subscribed, needsInstall, optIn, optOut } = usePush()
 
   return (
     <div className="card p-5">
@@ -435,6 +437,26 @@ function PreferencesCard() {
           Cambiar a {theme === 'light' ? 'oscuro' : 'claro'}
         </button>
       </div>
+
+      {supported && (
+        <div className="mt-4 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <BellIcon className="w-4 h-4" />
+              Notificaciones push {subscribed ? 'activadas' : 'desactivadas'}
+            </div>
+            <button type="button" className="btn-secondary text-sm" onClick={subscribed ? optOut : optIn}>
+              {subscribed ? 'Desactivar' : 'Activar'}
+            </button>
+          </div>
+          {needsInstall && (
+            <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mt-2">
+              En iPhone/iPad: primero añade Convive a tu pantalla de inicio (Compartir → "Añadir a pantalla de
+              inicio") y ábrela desde ahí para poder activarlas.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

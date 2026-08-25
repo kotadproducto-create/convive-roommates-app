@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { ToastProvider } from './context/ToastContext'
+import { PushProvider } from './context/PushContext'
 import { DataProvider } from './context/DataContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
@@ -28,6 +29,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
+      <PushProvider>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
@@ -128,6 +130,7 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
+      </PushProvider>
       </ToastProvider>
     </ThemeProvider>
   )
