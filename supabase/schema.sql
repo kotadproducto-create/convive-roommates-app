@@ -264,6 +264,21 @@ create table if not exists absence_requests (
 
 create index if not exists absence_requests_floor_idx on absence_requests (floor_id);
 
+-- Pareja de habitacion: dos miembros del piso se emparejan por
+-- consentimiento mutuo (uno invita, el otro confirma). Una vez
+-- aceptada, las notificaciones dirigidas a uno tambien le llegan al
+-- otro (logica en DataContext.jsx, no aqui).
+create table if not exists room_partners (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  requester_id uuid not null references profiles(id) on delete cascade,
+  partner_id uuid not null references profiles(id) on delete cascade,
+  status text not null default 'pending'
+    check (status in ('pending','accepted','rejected','cancelled')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz
+);
+
 -- =========================================================
 -- Funciones auxiliares para RLS (security definer: pueden leer
 -- floor_memberships sin quedar atrapadas por sus propias políticas)
@@ -441,6 +456,13 @@ create policy "insert own absence request" on absence_requests for insert with c
 create policy "admin decide absence request" on absence_requests for update using (is_floor_admin(floor_id));
 create policy "author cancel own pending absence" on absence_requests for update using (user_id = auth.uid() and status = 'pending') with check (user_id = auth.uid());
 
+alter table room_partners enable row level security;
+create policy "select floor room_partners" on room_partners for select using (is_active_member(floor_id));
+create policy "requester create room_partner" on room_partners for insert with check (requester_id = auth.uid() and is_active_member(floor_id));
+create policy "partner decide room_partner" on room_partners for update using (partner_id = auth.uid() and status = 'pending') with check (partner_id = auth.uid());
+create policy "requester cancel own pending room_partner" on room_partners for update using (requester_id = auth.uid() and status = 'pending') with check (requester_id = auth.uid());
+create policy "either side unlink accepted room_partner" on room_partners for update using ((requester_id = auth.uid() or partner_id = auth.uid()) and status = 'accepted') with check (requester_id = auth.uid() or partner_id = auth.uid());
+
 -- =========================================================
 -- Realtime: para que la app reciba cambios en vivo
 -- =========================================================
@@ -455,6 +477,7 @@ alter publication supabase_realtime add table pot_contributions;
 alter publication supabase_realtime add table shopping_items;
 alter publication supabase_realtime add table shopping_purchases;
 alter publication supabase_realtime add table absence_requests;
+alter publication supabase_realtime add table room_partners;
 
 -- =========================================================
 -- Storage: fotos de incidencias y facturas del pote comparten un único

@@ -13,6 +13,11 @@ export default function Topbar({ title }) {
   const { notifications, unreadCount, markAllNotificationsRead } = useData()
   const { theme, toggleTheme } = useTheme()
   const [open, setOpen] = useState(false)
+  const [showAll, setShowAll] = useState(false)
+
+  const unread = notifications.filter((n) => !n.read)
+  const hasRead = notifications.length > unread.length
+  const visibleNotifications = showAll ? notifications : unread
 
   return (
     <header className="flex items-center justify-between px-5 py-4 border-b border-ink-900/10 dark:border-cream-100/15 sticky top-0 bg-cream-100/90 dark:bg-ink-900/90 backdrop-blur z-20">
@@ -32,10 +37,7 @@ export default function Topbar({ title }) {
 
         <div className="relative">
           <button
-            onClick={() => {
-              setOpen((o) => !o)
-              if (!open) markAllNotificationsRead()
-            }}
+            onClick={() => setOpen((o) => !o)}
             aria-label="Notificaciones"
             className="relative w-10 h-10 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
           >
@@ -49,19 +51,43 @@ export default function Topbar({ title }) {
 
           {open && (
             <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto card p-2 z-30">
-              {notifications.length === 0 && (
+              <div className="flex items-center justify-between px-2 py-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">
+                  {showAll ? 'Todas' : 'Recientes'}
+                </p>
+                {unread.length > 0 && (
+                  <button
+                    onClick={markAllNotificationsRead}
+                    className="text-xs font-semibold text-violet-500 hover:underline"
+                  >
+                    Marcar leídas
+                  </button>
+                )}
+              </div>
+
+              {visibleNotifications.length === 0 && (
                 <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">
-                  Sin notificaciones todavía.
+                  {showAll ? 'Sin notificaciones todavía.' : 'Sin notificaciones nuevas.'}
                 </p>
               )}
-              {notifications.map((n) => (
+              {visibleNotifications.map((n) => (
                 <div key={n.id} className="px-3 py-2 rounded-lg hover:bg-cream-100 dark:hover:bg-ink-700 text-sm">
-                  <p>{n.message}</p>
+                  <p className={n.read ? '' : 'font-semibold'}>{n.message}</p>
                   <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">
                     {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: es })}
                   </p>
                 </div>
               ))}
+
+              {hasRead && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll((s) => !s)}
+                  className="w-full text-center text-xs font-semibold text-violet-500 hover:underline pt-2 mt-1 border-t border-ink-900/10 dark:border-cream-100/15"
+                >
+                  {showAll ? 'Ocultar anteriores' : 'Ver notificaciones anteriores'}
+                </button>
+              )}
             </div>
           )}
         </div>

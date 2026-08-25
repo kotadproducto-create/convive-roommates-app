@@ -2,6 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Propilen: tipografía de marca para títulos (font-display). Se sirve
+   desde /fonts en vez de un servicio externo — son los archivos que
+   trajo el usuario. Baloo 2 (Google Fonts) queda como respaldo si por
+   algún motivo no cargan. */
+@font-face {
+  font-family: 'Propilen';
+  src: url('/fonts/propilen/Propilen-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Propilen';
+  src: url('/fonts/propilen/Propilen-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Propilen';
+  src: url('/fonts/propilen/Propilen-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Propilen';
+  src: url('/fonts/propilen/Propilen-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 html, body, #root {
   height: 100%;
 }

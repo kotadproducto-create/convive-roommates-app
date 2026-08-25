@@ -38,6 +38,7 @@ export function DataProvider({ children }) {
   const [shoppingItems, setShoppingItems] = useState([])
   const [shoppingPurchases, setShoppingPurchases] = useState([])
   const [absenceRequests, setAbsenceRequests] = useState([])
+  const [roomPartners, setRoomPartners] = useState([])
 
   const weekKey = getWeekKey()
 
@@ -134,6 +135,14 @@ export function DataProvider({ children }) {
     return subscribeTable('absence_requests', { floorId }, setAbsenceRequests)
   }, [floorId])
 
+  useEffect(() => {
+    if (!floorId) {
+      setRoomPartners([])
+      return
+    }
+    return subscribeTable('room_partners', { floorId }, setRoomPartners)
+  }, [floorId])
+
   // IDs de quienes tienen una ausencia aprobada que cubre hoy — se
   // excluyen de la generación de tareas de la semana (whoIsAssigned salta
   // a la siguiente persona en rotationOrder). Solo afecta a la semana que
@@ -187,14 +196,7 @@ export function DataProvider({ children }) {
         for (const t of weekTasks) {
           if (!t.assignedUserId) continue
           const typeInfo = TASK_TYPES.find((tt) => tt.key === t.type)
-          await create('notifications', {
-            floorId: currentFloor.id,
-            userId: t.assignedUserId,
-            type: 'turno',
-            weekKey,
-            read: false,
-            message: `Esta semana te toca: ${typeInfo?.label || t.type}`
-          })
+          await notifyUser(currentFloor.id, t.assignedUserId, 'turno', `Esta semana te toca: ${typeInfo?.label || t.type}`, weekKey)
         }
       }
 
@@ -237,7 +239,73 @@ export function DataProvider({ children }) {
 
   const unreadCount = myNotifications.filter((n) => !n.read).length
 
+  // Pareja de habitación aceptada del usuario actual, resuelta al otro
+  // miembro (no solo el id) para poder mostrar nombre/avatar directo.
+  const myRoomPartner = useMemo(() => {
+    if (!user) return null
+    const accepted = roomPartners.find(
+      (p) => p.status === 'accepted' && (p.requesterId === user.id || p.partnerId === user.id)
+    )
+    if (!accepted) return null
+    const otherId = accepted.requesterId === user.id ? accepted.partnerId : accepted.requesterId
+    return { requestId: accepted.id, member: members.find((m) => m.id === otherId) || null }
+  }, [roomPartners, user, members])
+
+  // Invitaciones de pareja que me llegaron a mí (para Aceptar/Rechazar) y
+  // la mía propia si estoy esperando que la otra persona confirme.
+  const incomingPartnerRequests = useMemo(
+    () => roomPartners.filter((p) => p.status === 'pending' && p.partnerId === user?.id),
+    [roomPartners, user]
+  )
+  const outgoingPartnerRequest = useMemo(
+    () => roomPartners.find((p) => p.status === 'pending' && p.requesterId === user?.id) || null,
+    [roomPartners, user]
+  )
+
   // --- Acciones ---
+
+  // Crea una notificación para userId y, si tiene una pareja de
+  // habitación aceptada en este piso, una copia idéntica para ella —
+  // así ninguna de las dos se queda sin enterarse de lo que le toca al
+  // otro. Usar esto en vez de create('notifications', ...) directo
+  // para cualquier notificación dirigida a UNA sola persona (las de
+  // todo el piso ya le llegan a la pareja igual, por ser miembro activo).
+  const notifyUser = useCallback(
+    async (targetFloorId, userId, type, message, weekKeyArg = null) => {
+      await create('notifications', { floorId: targetFloorId, userId, type, weekKey: weekKeyArg, read: false, message })
+      const partnership = roomPartners.find(
+        (p) =>
+          p.status === 'accepted' &&
+          p.floorId === targetFloorId &&
+          (p.requesterId === userId || p.partnerId === userId)
+      )
+      if (partnership) {
+        const partnerUserId = partnership.requesterId === userId ? partnership.partnerId : partnership.requesterId
+        await create('notifications', { floorId: targetFloorId, userId: partnerUserId, type, weekKey: weekKeyArg, read: false, message })
+      }
+    },
+    [roomPartners]
+  )
+
+  const requestRoomPartner = useCallback(
+    async (partnerUserId) => {
+      if (!currentFloor || !user) return
+      await create('room_partners', { floorId: currentFloor.id, requesterId: user.id, partnerId: partnerUserId })
+    },
+    [currentFloor, user]
+  )
+
+  const acceptRoomPartner = useCallback(
+    (requestId) => update('room_partners', requestId, { status: 'accepted', decidedAt: new Date().toISOString() }),
+    []
+  )
+
+  const rejectRoomPartner = useCallback(
+    (requestId) => update('room_partners', requestId, { status: 'rejected', decidedAt: new Date().toISOString() }),
+    []
+  )
+
+  const cancelRoomPartner = useCallback((requestId) => update('room_partners', requestId, { status: 'cancelled' }), [])
 
   const completeTask = useCallback(
     async (taskId) => {
@@ -301,28 +369,28 @@ export function DataProvider({ children }) {
         removalRequestedBy: user.id,
         removalRequestedAt: new Date().toISOString()
       })
-      await create('notifications', {
-        floorId: currentFloor.id,
-        userId: targetUserId,
-        type: 'removal_requested',
-        message: `Un administrador ha iniciado tu salida de ${currentFloor.name}. Debes confirmarla en tu Perfil.`
-      })
+      await notifyUser(
+        currentFloor.id,
+        targetUserId,
+        'removal_requested',
+        `Un administrador ha iniciado tu salida de ${currentFloor.name}. Debes confirmarla en tu Perfil.`
+      )
     },
-    [currentFloor, user]
+    [currentFloor, user, notifyUser]
   )
 
   const cancelRemoval = useCallback(
     async (membershipId, targetUserId, targetName) => {
       if (!currentFloor) return
       await update('floor_memberships', membershipId, { removalRequestedBy: null, removalRequestedAt: null })
-      await create('notifications', {
-        floorId: currentFloor.id,
-        userId: targetUserId,
-        type: 'removal_cancelled',
-        message: `Se canceló el proceso de salida de ${targetName || 'tu cuenta'} del piso.`
-      })
+      await notifyUser(
+        currentFloor.id,
+        targetUserId,
+        'removal_cancelled',
+        `Se canceló el proceso de salida de ${targetName || 'tu cuenta'} del piso.`
+      )
     },
-    [currentFloor]
+    [currentFloor, notifyUser]
   )
 
   const setMemberRole = useCallback((membershipId, role) => update('floor_memberships', membershipId, { role }), [])
@@ -397,15 +465,15 @@ export function DataProvider({ children }) {
       })
       const admins = members.filter((m) => m.role === 'admin')
       for (const admin of admins) {
-        await create('notifications', {
-          floorId: currentFloor.id,
-          userId: admin.id,
-          type: 'absence_requested',
-          message: `${user.name} solicitó estar fuera del piso del ${startDate} al ${endDate}.`
-        })
+        await notifyUser(
+          currentFloor.id,
+          admin.id,
+          'absence_requested',
+          `${user.name} solicitó estar fuera del piso del ${startDate} al ${endDate}.`
+        )
       }
     },
-    [currentFloor, user, members]
+    [currentFloor, user, members, notifyUser]
   )
 
   // Al aprobar, reutiliza pot_active (misma exclusión que ya usa
@@ -425,16 +493,16 @@ export function DataProvider({ children }) {
         const member = members.find((m) => m.id === request.userId)
         if (member) await update('floor_memberships', member.membershipId, { potActive: false })
       }
-      await create('notifications', {
-        floorId: currentFloor.id,
-        userId: request.userId,
-        type: 'absence_decided',
-        message: approve
+      await notifyUser(
+        currentFloor.id,
+        request.userId,
+        'absence_decided',
+        approve
           ? `Tu solicitud para estar fuera del piso fue aprobada.`
           : `Tu solicitud para estar fuera del piso fue rechazada. Sigues en la rotación.`
-      })
+      )
     },
-    [currentFloor, user, absenceRequests, members]
+    [currentFloor, user, absenceRequests, members, notifyUser]
   )
 
   const cancelAbsenceRequest = useCallback((requestId) => update('absence_requests', requestId, { status: 'cancelled' }), [])
@@ -681,6 +749,13 @@ export function DataProvider({ children }) {
     requestAbsence,
     decideAbsenceRequest,
     cancelAbsenceRequest,
+    myRoomPartner,
+    incomingPartnerRequests,
+    outgoingPartnerRequest,
+    requestRoomPartner,
+    acceptRoomPartner,
+    rejectRoomPartner,
+    cancelRoomPartner,
     completeTask,
     uncompleteTask,
     reorderRotation,

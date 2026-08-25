@@ -16,7 +16,19 @@ const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/
 
 export default function Perfil() {
   const { user, email, membership, floor, changePassword, logout, refresh } = useAuth()
-  const { updateProfile, removeMember, members, potContributions } = useData()
+  const {
+    updateProfile,
+    removeMember,
+    members,
+    potContributions,
+    myRoomPartner,
+    incomingPartnerRequests,
+    outgoingPartnerRequest,
+    requestRoomPartner,
+    acceptRoomPartner,
+    rejectRoomPartner,
+    cancelRoomPartner
+  } = useData()
   const { showToast } = useToast()
 
   if (!user) return null
@@ -45,6 +57,20 @@ export default function Perfil() {
         </Reveal>
         <Reveal delay={120}>
           <AccountCard user={user} email={email} membership={membership} floor={floor} />
+        </Reveal>
+        <Reveal delay={150}>
+          <RoomPartnerCard
+            user={user}
+            members={members}
+            myRoomPartner={myRoomPartner}
+            incomingPartnerRequests={incomingPartnerRequests}
+            outgoingPartnerRequest={outgoingPartnerRequest}
+            requestRoomPartner={requestRoomPartner}
+            acceptRoomPartner={acceptRoomPartner}
+            rejectRoomPartner={rejectRoomPartner}
+            cancelRoomPartner={cancelRoomPartner}
+            showToast={showToast}
+          />
         </Reveal>
         <Reveal delay={180}>
           <SecurityCard
@@ -324,6 +350,122 @@ function AccountCard({ user, email, membership, floor }) {
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+function RoomPartnerCard({
+  user,
+  members,
+  myRoomPartner,
+  incomingPartnerRequests,
+  outgoingPartnerRequest,
+  requestRoomPartner,
+  acceptRoomPartner,
+  rejectRoomPartner,
+  cancelRoomPartner,
+  showToast
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [selected, setSelected] = useState('')
+  const otherMembers = members.filter((m) => m.id !== user.id)
+  const outgoingTarget = outgoingPartnerRequest
+    ? members.find((m) => m.id === outgoingPartnerRequest.partnerId)
+    : null
+
+  async function handleInvite() {
+    if (!selected) return
+    await requestRoomPartner(selected)
+    showToast('Invitación enviada', 'success')
+    setPickerOpen(false)
+    setSelected('')
+  }
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-display font-semibold mb-1">Compañero de habitación</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
+        Si comparten habitación, emparéjate con esa persona para que las dos reciban las mismas notificaciones del
+        piso (quién está a cargo de qué, avisos de la lavadora, del pote, etc.).
+      </p>
+
+      {myRoomPartner?.member && (
+        <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+          <div className="flex items-center gap-2 min-w-0">
+            <Avatar url={myRoomPartner.member.avatarUrl} name={myRoomPartner.member.name} size="w-8 h-8" />
+            <span className="text-sm font-medium truncate">{myRoomPartner.member.name}</span>
+          </div>
+          <button
+            onClick={() => cancelRoomPartner(myRoomPartner.requestId)}
+            className="text-xs font-semibold text-clay-500 hover:underline shrink-0 ml-2"
+          >
+            Desvincular
+          </button>
+        </div>
+      )}
+
+      {incomingPartnerRequests.map((r) => {
+        const requester = members.find((m) => m.id === r.requesterId)
+        return (
+          <div
+            key={r.id}
+            className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-gold-100 dark:bg-gold-400/15 mt-2"
+          >
+            <span className="text-sm min-w-0">
+              <strong>{requester?.name || 'Alguien'}</strong> te invitó a emparejarse
+            </span>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => rejectRoomPartner(r.id)} className="btn-danger text-xs px-3 py-1.5">
+                Rechazar
+              </button>
+              <button onClick={() => acceptRoomPartner(r.id)} className="btn-primary text-xs px-3 py-1.5">
+                Aceptar
+              </button>
+            </div>
+          </div>
+        )
+      })}
+
+      {outgoingPartnerRequest && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700 mt-2">
+          <span className="text-sm">Esperando que {outgoingTarget?.name || 'la otra persona'} confirme</span>
+          <button
+            onClick={() => cancelRoomPartner(outgoingPartnerRequest.id)}
+            className="text-xs font-semibold text-violet-500 hover:underline shrink-0"
+          >
+            Anular
+          </button>
+        </div>
+      )}
+
+      {!myRoomPartner?.member &&
+        !outgoingPartnerRequest &&
+        (otherMembers.length === 0 ? (
+          <p className="text-sm text-ink-900/50 dark:text-cream-100/50">No hay más gente en el piso todavía.</p>
+        ) : pickerOpen ? (
+          <div className="flex flex-col gap-2 mt-2">
+            <select className="input" value={selected} onChange={(e) => setSelected(e.target.value)}>
+              <option value="">Elige un roommate</option>
+              {otherMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button type="button" className="btn-secondary text-sm" onClick={() => setPickerOpen(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn-primary text-sm" onClick={handleInvite} disabled={!selected}>
+                Invitar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" className="btn-secondary text-sm" onClick={() => setPickerOpen(true)}>
+            + Invitar a alguien
+          </button>
+        ))}
     </div>
   )
 }

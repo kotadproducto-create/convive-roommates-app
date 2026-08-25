@@ -1,10 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { TASK_TYPES, TASK_DAY_OFFSET, getMondayOfWeek } from '../lib/rotation'
-import { StampIcon, DropletIcon, JarIcon, SparkleIcon, CartIcon } from '../components/icons'
+import { StampIcon, DropletIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon } from '../components/icons'
 import { potAmountColorClass } from '../lib/pot'
 import { useToast } from '../context/ToastContext'
 import Reveal from '../components/Reveal'
@@ -15,8 +15,12 @@ export default function Timeline() {
   const { user } = useAuth()
   const { floor, members, tasks, notifications, shoppingItems, completeTask, uncompleteTask, weekKey, markAllNotificationsRead } = useData()
   const { showToast } = useToast()
+  const [showAllNotifications, setShowAllNotifications] = useState(false)
 
   const monday = getMondayOfWeek(weekKey)
+  const unreadNotifications = notifications.filter((n) => !n.read)
+  const hasReadNotifications = notifications.length > unreadNotifications.length
+  const visibleNotifications = showAllNotifications ? notifications : unreadNotifications
 
   function handleStamp(task, type) {
     if (task.completed) {
@@ -42,17 +46,38 @@ export default function Timeline() {
   const hygieneTasks = tasks.filter((t) => t.type === 'basura' || t.type === 'lavadora')
   const hygieneDone = hygieneTasks.filter((t) => t.completed).length
   const outOfStockCount = shoppingItems.filter((i) => i.stockLevel === 'out').length
+  const weekDone = tasks.filter((t) => t.completed).length
 
   return (
     <AppLayout title="Inicio">
+      {/* Chips: tareas de la semana, recompensas, pote */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold border-2 border-ink-900/70 dark:border-cream-100/30 rounded-full pl-2 pr-2.5 py-1 bg-sage-100 dark:bg-sage-500/15 text-sage-600 dark:text-sage-300">
+          <StampIcon className="w-3.5 h-3.5" />
+          {weekDone}/{tasks.length}
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold border-2 border-ink-900/70 dark:border-cream-100/30 rounded-full pl-2 pr-2.5 py-1 bg-gold-100 dark:bg-gold-400/15 text-gold-600 dark:text-gold-300">
+          <CoinIcon className="w-3.5 h-3.5" />
+          {user?.points || 0}
+        </span>
+        <span
+          className={`inline-flex items-center gap-1.5 text-xs font-bold border-2 border-ink-900/70 dark:border-cream-100/30 rounded-full pl-2 pr-2.5 py-1 bg-violet-100 dark:bg-violet-700/20 ${potAmountColorClass(floor?.potAmount ?? 0)}`}
+        >
+          <JarIcon className="w-3.5 h-3.5" />
+          {floor?.potAmount ?? 0}€
+        </span>
+      </div>
+
       {/* Perfil + saludo */}
       <div className="flex items-center gap-4 mb-6">
         <div className="w-14 h-14 rounded-full bg-gold-400 border-2 border-ink-900 text-ink-900 flex items-center justify-center text-xl font-bold shrink-0">
           {user?.name?.[0]?.toUpperCase()}
         </div>
         <div className="min-w-0">
-          <h2 className="font-display text-xl font-bold tracking-tight">Hola, {user?.name?.split(' ')[0]}</h2>
-          <p className="text-sm text-ink-900/60 dark:text-cream-100/60">Esto es lo que pasa en {floor?.name}.</p>
+          <h2 className="font-display text-xl font-bold tracking-tight">¡Hola, {user?.name?.split(' ')[0]}!</h2>
+          <p className="font-display text-sm font-medium text-ink-900/60 dark:text-cream-100/60">
+            Esto es lo que pasa en {floor?.name}.
+          </p>
         </div>
       </div>
 
@@ -131,17 +156,19 @@ export default function Timeline() {
           <div className="card p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-display text-base font-bold">Notificaciones</h3>
-              {notifications.length > 0 && (
+              {unreadNotifications.length > 0 && (
                 <button onClick={markAllNotificationsRead} className="text-xs font-semibold text-violet-500 hover:underline">
                   Marcar leídas
                 </button>
               )}
             </div>
-            {notifications.length === 0 ? (
-              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Sin notificaciones todavía.</p>
+            {visibleNotifications.length === 0 ? (
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">
+                {showAllNotifications ? 'Sin notificaciones todavía.' : 'Sin notificaciones nuevas.'}
+              </p>
             ) : (
               <ul className="flex flex-col gap-2.5">
-                {notifications.slice(0, 5).map((n) => (
+                {visibleNotifications.slice(0, 5).map((n) => (
                   <li key={n.id} className="text-sm">
                     <p className={n.read ? '' : 'font-semibold'}>{n.message}</p>
                     <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
@@ -151,6 +178,15 @@ export default function Timeline() {
                 ))}
               </ul>
             )}
+            {hasReadNotifications && (
+              <button
+                type="button"
+                onClick={() => setShowAllNotifications((s) => !s)}
+                className="w-full text-center text-xs font-semibold text-violet-500 hover:underline pt-3 mt-3 border-t border-ink-900/10 dark:border-cream-100/15"
+              >
+                {showAllNotifications ? 'Ocultar anteriores' : 'Ver notificaciones anteriores'}
+              </button>
+            )}
           </div>
         </aside>
       </div>
@@ -158,8 +194,11 @@ export default function Timeline() {
       {/* Temas */}
       <section>
         <h3 className="font-display text-lg font-bold mb-3">Temas</h3>
+        <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mb-3 sm:hidden">Desliza una tarjeta para ir más rápido.</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Reveal delay={0}><ThemeCard to="/calendario" icon={DropletIcon} tone="violet" label="Higiene" stat={`${hygieneDone}/${hygieneTasks.length} hecho`} /></Reveal>
+          <Reveal delay={0}>
+            <ThemeCard to="/calendario" icon={DropletIcon} tone="violet" label="Higiene" stat={`${hygieneDone}/${hygieneTasks.length} hecho`} />
+          </Reveal>
           <Reveal delay={60}>
             <ThemeCard
               to="/compras"
@@ -167,40 +206,121 @@ export default function Timeline() {
               tone="coral"
               label="Compras"
               stat={outOfStockCount > 0 ? `${outOfStockCount} agotado${outOfStockCount > 1 ? 's' : ''}` : `${shoppingItems.length} en la lista`}
-              statColorClass={outOfStockCount > 0 ? 'text-clay-500' : undefined}
+              warn={outOfStockCount > 0}
             />
           </Reveal>
-          <Reveal delay={120}><ThemeCard to="/pote" icon={JarIcon} tone="gold" label="Pote de dinero" stat={`${floor?.potAmount ?? 0}€`} statColorClass={potAmountColorClass(floor?.potAmount ?? 0)} /></Reveal>
-          <Reveal delay={180}><ThemeCard icon={SparkleIcon} tone="sky" label="Actividades" stat="Próximamente" soon /></Reveal>
+          <Reveal delay={120}>
+            <ThemeCard to="/pote" icon={JarIcon} tone="gold" label="Pote de dinero" stat={`${floor?.potAmount ?? 0}€ disponibles`} />
+          </Reveal>
+          <Reveal delay={180}>
+            <ThemeCard icon={SparkleIcon} tone="sky" label="Actividades" stat="Próximamente" soon />
+          </Reveal>
         </div>
       </section>
     </AppLayout>
   )
 }
 
-const TONE_CLASSES = {
-  violet: 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200',
-  coral: 'bg-coral-100 dark:bg-coral-500/20 text-coral-500',
-  gold: 'bg-gold-100 dark:bg-gold-400/20 text-gold-500',
-  sky: 'bg-sky-100 dark:bg-sky-500/20 text-sky-500'
+const GRADIENT_CLASSES = {
+  violet: 'bg-gradient-to-br from-violet-500 to-[#4C36AD] text-white',
+  coral: 'bg-gradient-to-br from-coral-500 to-[#E24322] text-white',
+  gold: 'bg-gradient-to-br from-gold-400 to-[#D99420] text-ink-900',
+  sky: 'bg-gradient-to-br from-sky-500 to-[#2E5BD9] text-white'
 }
+const ICON_BADGE_CLASSES = {
+  violet: 'bg-white/20 border-white/50 text-white',
+  coral: 'bg-white/20 border-white/50 text-white',
+  gold: 'bg-ink-900/10 border-ink-900/35 text-ink-900',
+  sky: 'bg-white/20 border-white/50 text-white'
+}
+const STAT_CLASSES = {
+  violet: 'text-white/85',
+  coral: 'text-white/85',
+  gold: 'text-ink-900/75',
+  sky: 'text-white/85'
+}
+const SWIPE_REVEAL = 64
 
-function ThemeCard({ icon: Icon, label, stat, tone, warn, soon, to, statColorClass }) {
+// Tarjeta de sección: arrastrarla hacia la izquierda revela un acceso
+// directo "Ir" detrás — sigue siendo un <Link> normal por debajo, así
+// que tocarla (sin arrastrar) navega igual que antes.
+function ThemeCard({ icon: Icon, label, stat, tone, warn, soon, to }) {
+  const [dragX, setDragX] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const drag = useRef({ startX: 0, active: false, moved: false })
+  const draggable = Boolean(to) && !soon
+
+  function handlePointerDown(e) {
+    if (!draggable) return
+    drag.current = { startX: e.clientX, active: true, moved: false }
+    setIsDragging(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  function handlePointerMove(e) {
+    if (!drag.current.active) return
+    const delta = drag.current.startX - e.clientX
+    if (Math.abs(delta) > 4) drag.current.moved = true
+    setDragX(Math.min(Math.max(delta, 0), SWIPE_REVEAL))
+  }
+  function handlePointerUp() {
+    if (!drag.current.active) return
+    drag.current.active = false
+    setIsDragging(false)
+    setDragX((x) => (x > SWIPE_REVEAL / 2 ? SWIPE_REVEAL : 0))
+  }
+  function handleClickCapture(e) {
+    if (drag.current.moved) {
+      e.preventDefault()
+      drag.current.moved = false
+    }
+  }
+
   const content = (
     <>
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${TONE_CLASSES[tone]}`}>
+      <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center relative shrink-0 ${ICON_BADGE_CLASSES[tone]}`}>
         <Icon className="w-5 h-5" />
+        {warn && (
+          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-clay-500 border-2 border-cream-100 dark:border-ink-900" />
+        )}
       </div>
-      <p className="font-display font-semibold text-sm">{label}</p>
-      <p className={`text-xs font-semibold ${statColorClass || (warn ? 'text-clay-500' : 'text-ink-900/50 dark:text-cream-100/50')}`}>{stat}</p>
+      <p className="font-display font-bold text-base mt-2.5">{label}</p>
+      <p className={`font-display text-xs font-semibold ${STAT_CLASSES[tone]}`}>{stat}</p>
     </>
   )
-  if (to && !soon) {
+
+  if (!draggable) {
     return (
-      <Link to={to} className="card p-4 flex flex-col gap-2 transition-transform hover:-translate-y-0.5 active:scale-95">
+      <div
+        className={`rounded-2xl p-4 flex flex-col min-h-[128px] border-2 border-ink-900/70 dark:border-cream-100/20 ${GRADIENT_CLASSES[tone]} ${soon ? 'opacity-55' : ''}`}
+      >
         {content}
-      </Link>
+      </div>
     )
   }
-  return <div className={`card p-4 flex flex-col gap-2 ${soon ? 'opacity-60' : ''}`}>{content}</div>
+
+  return (
+    <div className="relative rounded-2xl overflow-hidden border-2 border-ink-900 dark:border-cream-100/40">
+      <div className="absolute inset-0 flex items-center justify-end pr-3 bg-ink-900">
+        <Link
+          to={to}
+          className="w-10 h-10 rounded-full border-2 border-cream-100 bg-cream-100 text-ink-900 flex items-center justify-center text-lg font-bold shrink-0"
+          aria-label={`Ir a ${label}`}
+        >
+          →
+        </Link>
+      </div>
+      <Link
+        to={to}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onClickCapture={handleClickCapture}
+        style={{ transform: `translateX(${-dragX}px)`, touchAction: 'pan-y' }}
+        className={`relative flex flex-col min-h-[128px] p-4 transition-transform ${isDragging ? '' : 'duration-200 ease-out'} ${GRADIENT_CLASSES[tone]}`}
+      >
+        {content}
+      </Link>
+    </div>
+  )
 }

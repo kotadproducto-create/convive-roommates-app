@@ -4,7 +4,7 @@ import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
-import { StoreIcon, AlertIcon, EditIcon, TrashIcon, CloseIcon, LinkIcon } from '../components/icons'
+import { StoreIcon, AlertIcon, EditIcon, TrashIcon, CloseIcon, LinkIcon, CameraIcon, PlusIcon } from '../components/icons'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -124,16 +124,14 @@ export default function Shopping() {
       )}
 
       {(showForm || editing) && (
-        <Reveal>
-          <ItemForm
-            initial={editing}
-            onCancel={() => {
-              setShowForm(false)
-              setEditing(null)
-            }}
-            onSubmit={handleFormSubmit}
-          />
-        </Reveal>
+        <ItemForm
+          initial={editing}
+          onCancel={() => {
+            setShowForm(false)
+            setEditing(null)
+          }}
+          onSubmit={handleFormSubmit}
+        />
       )}
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
@@ -205,6 +203,27 @@ function ItemForm({ initial, onCancel, onSubmit }) {
   const [imagePreview, setImagePreview] = useState(initial?.imageUrl || null)
   const [saving, setSaving] = useState(false)
 
+  // Las filas de detalle empiezan abiertas solo si ya tenían algo cargado
+  // (al editar); si no, quedan colapsadas detrás de un "+" para no saturar
+  // el formulario con campos que la mayoría de las veces quedan vacíos.
+  const [openRows, setOpenRows] = useState(() => {
+    const open = new Set()
+    if (initial?.storeLocation) open.add('ubicacion')
+    if (initial?.usualQuantity) open.add('cantidad')
+    if (initial?.estimatedPrice) open.add('precio')
+    if (initial?.note) open.add('nota')
+    if (initial?.linkUrl) open.add('link')
+    return open
+  })
+
+  function toggleRow(key) {
+    setOpenRows((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
   function handleImageChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -232,6 +251,7 @@ function ItemForm({ initial, onCancel, onSubmit }) {
     const trimmedLink = linkUrl.trim()
     if (trimmedLink && !isValidHttpUrl(trimmedLink)) {
       setLinkError('El link debe ser una URL válida (empezando por http:// o https://).')
+      setOpenRows((prev) => new Set(prev).add('link'))
       return
     }
     setSaving(true)
@@ -253,74 +273,124 @@ function ItemForm({ initial, onCancel, onSubmit }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card p-4 mb-4 flex flex-col gap-3">
-      <div className="grid sm:grid-cols-2 gap-3">
-        <input className="input" placeholder="Producto (ej. Leche)" value={name} onChange={(e) => setName(e.target.value)} required />
-        <input
-          className="input"
-          placeholder="Cantidad habitual (ej. 2 unidades)"
-          value={usualQuantity}
-          onChange={(e) => setUsualQuantity(e.target.value)}
-        />
-        <input className="input" placeholder="Supermercado" value={store} onChange={(e) => setStore(e.target.value)} />
-        <input
-          className="input"
-          placeholder="Ubicación (opcional)"
-          value={storeLocation}
-          onChange={(e) => setStoreLocation(e.target.value)}
-        />
-        <input
-          className="input"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="Precio estimado (opcional)"
-          value={estimatedPrice}
-          onChange={(e) => setEstimatedPrice(e.target.value)}
-        />
-      </div>
-      <div className="flex items-center gap-3">
-        {imagePreview && <img src={imagePreview} alt="" className="w-14 h-14 object-cover rounded-lg shrink-0" />}
-        <label className="btn-secondary text-sm cursor-pointer">
-          {imagePreview ? 'Cambiar foto' : 'Añadir foto (opcional)'}
-          <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageChange} />
+    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
+      <form
+        onSubmit={handleSubmit}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-md sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 max-h-[88vh] overflow-y-auto relative"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <button
+          type="button"
+          onClick={onCancel}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+          aria-label="Cerrar"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+
+        <h2 className="font-display text-lg font-bold mb-4">{initial ? 'Editar producto' : 'Agregar producto'}</h2>
+
+        {/* Tarjeta del producto: foto + nombre + supermercado, siempre visibles */}
+        <div className="bg-cream-200/60 dark:bg-ink-700/60 rounded-2xl p-4 flex flex-col items-center text-center mb-4">
+          <div className="w-16 h-16 rounded-2xl border-2 border-ink-900/70 dark:border-cream-100/30 bg-coral-100 dark:bg-coral-500/20 flex items-center justify-center overflow-hidden mb-2">
+            {imagePreview ? (
+              <img src={imagePreview} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <CameraIcon className="w-6 h-6 text-coral-500" />
+            )}
+          </div>
+          <input
+            className="font-display font-semibold text-center bg-transparent border-none focus-visible:outline-none w-full mb-1 placeholder:text-ink-900/30 dark:placeholder:text-cream-100/30"
+            placeholder="Nombre del producto"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <input
+            className="text-xs text-center bg-transparent border-none focus-visible:outline-none w-full text-ink-900/50 dark:text-cream-100/50 placeholder:text-ink-900/30 dark:placeholder:text-cream-100/30"
+            placeholder="Supermercado (opcional)"
+            value={store}
+            onChange={(e) => setStore(e.target.value)}
+          />
+          <label className="btn-secondary text-xs cursor-pointer mt-3">
+            {imagePreview ? 'Cambiar foto' : 'Añadir foto'}
+            <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageChange} />
+          </label>
+        </div>
+
+        <div className="flex flex-col">
+          <ExpandRow label="Ubicación" open={openRows.has('ubicacion')} onToggle={() => toggleRow('ubicacion')}>
+            <input
+              className="input"
+              placeholder="Ej. Pasillo de lácteos"
+              value={storeLocation}
+              onChange={(e) => setStoreLocation(e.target.value)}
+            />
+          </ExpandRow>
+          <ExpandRow label="Cantidad habitual" open={openRows.has('cantidad')} onToggle={() => toggleRow('cantidad')}>
+            <input
+              className="input"
+              placeholder="Ej. 2 litros"
+              value={usualQuantity}
+              onChange={(e) => setUsualQuantity(e.target.value)}
+            />
+          </ExpandRow>
+          <ExpandRow label="Precio estimado" open={openRows.has('precio')} onToggle={() => toggleRow('precio')}>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="€"
+              value={estimatedPrice}
+              onChange={(e) => setEstimatedPrice(e.target.value)}
+            />
+          </ExpandRow>
+          <ExpandRow label="Nota" open={openRows.has('nota')} onToggle={() => toggleRow('nota')}>
+            <textarea
+              className="input min-h-16"
+              value={note}
+              maxLength={300}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ej. Comprar la versión sin gluten, o de marca blanca"
+            />
+            <span className="text-xs text-ink-900/40 dark:text-cream-100/40">{note.length}/300</span>
+          </ExpandRow>
+          <ExpandRow label="Link del producto" open={openRows.has('link')} onToggle={() => toggleRow('link')}>
+            <input className="input" type="url" value={linkUrl} onChange={handleLinkChange} placeholder="https://www.mercadona.es/..." />
+            {linkError && <span className="text-xs font-medium text-clay-500 block mt-1">{linkError}</span>}
+          </ExpandRow>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm mt-4">
+          <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
+          Producto recurrente (si no, queda como compra puntual)
         </label>
-      </div>
-      <label className="text-sm">
-        Nota (opcional)
-        <textarea
-          className="input mt-1 min-h-16"
-          value={note}
-          maxLength={300}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Ej. Comprar la versión sin gluten, o de marca blanca"
-        />
-        <span className="text-xs text-ink-900/40 dark:text-cream-100/40">{note.length}/300</span>
-      </label>
-      <label className="text-sm">
-        Link del producto (opcional)
-        <input
-          className="input mt-1"
-          type="url"
-          value={linkUrl}
-          onChange={handleLinkChange}
-          placeholder="https://www.mercadona.es/..."
-        />
-        {linkError && <span className="text-xs font-medium text-clay-500 block mt-1">{linkError}</span>}
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
-        Producto recurrente (si no, queda como compra puntual)
-      </label>
-      <div className="flex gap-2">
-        <button type="button" className="btn-secondary text-sm" onClick={onCancel}>
-          Cancelar
+
+        <button type="submit" className="btn-primary text-sm w-full mt-5" disabled={saving}>
+          {saving ? 'Guardando…' : 'Guardar cambios'}
         </button>
-        <button type="submit" className="btn-primary text-sm" disabled={saving}>
-          {saving ? 'Guardando…' : 'Guardar'}
-        </button>
-      </div>
-    </form>
+      </form>
+    </div>
+  )
+}
+
+/** Fila de detalle colapsable: toca el encabezado para mostrar/ocultar el
+ * campo. El "+" gira 45° (queda como "×") cuando está abierta. */
+function ExpandRow({ label, open, onToggle, children }) {
+  return (
+    <div className="border-b border-ink-900/10 dark:border-cream-100/15 last:border-0">
+      <button type="button" onClick={onToggle} className="w-full flex items-center justify-between py-3 text-sm font-semibold">
+        {label}
+        <span
+          className={`w-5 h-5 rounded-full border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center shrink-0 transition-transform ${open ? 'rotate-45' : ''}`}
+        >
+          <PlusIcon className="w-2.5 h-2.5" />
+        </span>
+      </button>
+      {open && <div className="pb-3">{children}</div>}
+    </div>
   )
 }
 

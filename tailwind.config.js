@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"Baloo 2"', 'sans-serif'],
+        display: ['"Propilen"', '"Baloo 2"', 'sans-serif'],
         body: ['"Plus Jakarta Sans"', 'sans-serif']
       },
       colors: {
