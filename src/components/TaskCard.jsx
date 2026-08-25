@@ -24,7 +24,7 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
   function handleComplete() {
     setCelebrate(true)
     setTimeout(() => setCelebrate(false), 500)
-    showToast(`¡${typeInfo?.label} completada! +${typeInfo?.points} Convis`, 'success')
+    showToast(`¡${typeInfo?.label} completada! +${typeInfo?.points} recompensas`, 'success')
     onToggle(task.id)
   }
 
@@ -43,7 +43,7 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
             <div>
               <p className="font-display font-semibold underline decoration-dotted underline-offset-2">{typeInfo?.label}</p>
               <p className="flex items-center gap-1 text-xs text-ink-900/50 dark:text-cream-100/50">
-                <CoinIcon className="w-3.5 h-3.5" />+{typeInfo?.points} Convis
+                <CoinIcon className="w-3.5 h-3.5" />+{typeInfo?.points} recompensas
               </p>
             </div>
           </Link>
@@ -59,7 +59,7 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
             <div>
               <p className="font-display font-semibold">{typeInfo?.label}</p>
               <p className="flex items-center gap-1 text-xs text-ink-900/50 dark:text-cream-100/50">
-                <CoinIcon className="w-3.5 h-3.5" />+{typeInfo?.points} Convis
+                <CoinIcon className="w-3.5 h-3.5" />+{typeInfo?.points} recompensas
               </p>
             </div>
           </div>

@@ -171,7 +171,7 @@ function PointsAdjustForm({ member, onDone }) {
     const n = Number(amount)
     if (!n || n <= 0) return
     await adjustMemberPoints(member.id, sign * n, reason.trim() || null)
-    showToast(`${sign > 0 ? 'Otorgaste' : 'Restaste'} ${n} Convis a ${member.name}`, 'success')
+    showToast(`${sign > 0 ? 'Otorgaste' : 'Restaste'} ${n} recompensas a ${member.name}`, 'success')
     onDone()
   }
 

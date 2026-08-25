@@ -51,7 +51,7 @@ export function WasherIcon(props) {
   )
 }
 
-/** Símbolo de Convis: una ficha, no un signo de dinero. */
+/** Símbolo de las recompensas: una ficha, no un signo de dinero. */
 export function CoinIcon(props) {
   return (
     <IconBase {...props}>
@@ -289,6 +289,15 @@ export function PersonIcon(props) {
     <IconBase {...props}>
       <circle cx="10" cy="6.6" r="3.2" />
       <path d="M3.6 16.4a6.4 6.4 0 0 1 12.8 0" />
+    </IconBase>
+  )
+}
+
+export function ChatIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 9.6a6.4 6.4 0 0 1 6.8-6.4c3.6.2 6.4 3.2 6.2 6.8-.2 3.4-3.1 6-6.5 6H4.6L3 17.4l.7-3.5A6.3 6.3 0 0 1 3 9.6Z" />
+      <path d="M7 9h6M7 12h4" />
     </IconBase>
   )
 }

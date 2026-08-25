@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { TASK_TYPES, getMondayOfWeek } from '../lib/rotation'
 import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
-import { AlertIcon } from '../components/icons'
+import { AlertIcon, ChatIcon } from '../components/icons'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -150,6 +150,25 @@ export default function Dashboard() {
             </button>
           </div>
           </Reveal>
+
+          {floor?.whatsappGroupUrl && (
+            <Reveal delay={190}>
+              <a
+                href={floor.whatsappGroupUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="card p-4 flex items-center gap-3 hover:-translate-y-0.5 transition-transform"
+              >
+                <div className="w-10 h-10 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 bg-sage-100 dark:bg-sage-500/20 text-sage-500 flex items-center justify-center shrink-0">
+                  <ChatIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-display font-semibold">Grupo de WhatsApp</p>
+                  <p className="text-xs text-ink-900/50 dark:text-cream-100/50">Abrir en WhatsApp</p>
+                </div>
+              </a>
+            </Reveal>
+          )}
 
           <Reveal delay={220}>
           <div className="card p-4">

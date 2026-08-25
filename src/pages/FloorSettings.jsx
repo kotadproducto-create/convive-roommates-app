@@ -6,9 +6,20 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { update, getRotationHistory } from '../lib/db'
 import { TASK_TYPES, getWeekKey, getMondayOfWeek, whoIsAssigned } from '../lib/rotation'
-import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, TASK_ICONS } from '../components/icons'
+import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, TASK_ICONS } from '../components/icons'
 import { format, addDays } from 'date-fns'
 import { es } from 'date-fns/locale'
+
+/** Valida que sea una URL http(s) bien formada, igual que en la lista de
+ * compras — bloquea javascript:/data: antes de guardarla como enlace. */
+function isValidHttpUrl(value) {
+  try {
+    const u = new URL(value)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
 
 export default function FloorSettings() {
   const { user, membership } = useAuth()
@@ -34,6 +45,9 @@ export default function FloorSettings() {
   const [perPerson, setPerPerson] = useState(floor?.potPerPerson ?? 10)
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState(false)
+  const [whatsappUrl, setWhatsappUrl] = useState(floor?.whatsappGroupUrl || '')
+  const [whatsappError, setWhatsappError] = useState('')
+  const [whatsappSaved, setWhatsappSaved] = useState(false)
 
   const order = floor?.rotationOrder || []
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]))
@@ -62,6 +76,19 @@ export default function FloorSettings() {
 
   function saveSettings() {
     update('floors', floor.id, { potThreshold: Number(threshold), potPerPerson: Number(perPerson) })
+  }
+
+  function saveWhatsappUrl(e) {
+    e.preventDefault()
+    setWhatsappError('')
+    const trimmed = whatsappUrl.trim()
+    if (trimmed && !isValidHttpUrl(trimmed)) {
+      setWhatsappError('El enlace debe ser una URL válida (empezando por http:// o https://).')
+      return
+    }
+    update('floors', floor.id, { whatsappGroupUrl: trimmed || null })
+    setWhatsappSaved(true)
+    setTimeout(() => setWhatsappSaved(false), 2000)
   }
 
   function makeAdmin(member) {
@@ -135,6 +162,47 @@ export default function FloorSettings() {
           {copied && <p className="text-xs font-semibold text-sage-500 mt-2 text-center">Código copiado</p>}
           {copyError && (
             <p className="text-xs font-semibold text-clay-500 mt-2 text-center">No se pudo copiar, selecciónalo manualmente.</p>
+          )}
+        </Reveal>
+
+        <Reveal as="section" delay={40} className="card p-5">
+          <h2 className="font-display font-semibold mb-1">Grupo de WhatsApp</h2>
+          <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
+            Enlace de invitación al grupo del piso (WhatsApp → Info del grupo → Invitar por enlace).
+          </p>
+
+          {floor?.whatsappGroupUrl && (
+            <a
+              href={floor.whatsappGroupUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="btn-primary text-sm w-full mb-3"
+            >
+              <ChatIcon className="w-4 h-4" />
+              Abrir grupo de WhatsApp
+            </a>
+          )}
+
+          {isAdmin ? (
+            <form onSubmit={saveWhatsappUrl} className="flex flex-col gap-2">
+              <input
+                className="input"
+                type="url"
+                placeholder="https://chat.whatsapp.com/..."
+                value={whatsappUrl}
+                onChange={(e) => setWhatsappUrl(e.target.value)}
+              />
+              {whatsappError && <span className="text-xs font-medium text-clay-500">{whatsappError}</span>}
+              <button type="submit" className="btn-secondary text-sm self-start">
+                {whatsappSaved ? 'Guardado ✓' : 'Guardar enlace'}
+              </button>
+            </form>
+          ) : (
+            !floor?.whatsappGroupUrl && (
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">
+                Todavía no hay enlace configurado. Pide a un admin que lo agregue.
+              </p>
+            )
           )}
         </Reveal>
 

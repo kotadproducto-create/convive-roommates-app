@@ -23,7 +23,7 @@ export default function Timeline() {
       uncompleteTask(task.id)
     } else {
       completeTask(task.id)
-      showToast(`¡${type.label} completada! +${type.points} Convis`, 'success')
+      showToast(`¡${type.label} completada! +${type.points} recompensas`, 'success')
     }
   }
 

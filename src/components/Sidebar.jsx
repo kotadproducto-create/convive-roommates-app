@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { to: '/compras', label: 'Compras', Icon: CartIcon },
   { to: '/incidencias', label: 'Muro', Icon: PinIcon },
   { to: '/convives', label: 'Convives', Icon: UsersIcon },
-  { to: '/recompensas', label: 'Convis', Icon: CoinIcon },
+  { to: '/recompensas', label: 'Recompensas', Icon: CoinIcon },
   { to: '/pote', label: 'Pote', Icon: JarIcon },
   { to: '/piso', label: 'Piso', Icon: HomeIcon },
   { to: '/perfil', label: 'Perfil', Icon: PersonIcon }

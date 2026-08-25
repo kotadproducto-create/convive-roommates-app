@@ -1,6 +1,6 @@
 /**
  * Blob redondo de Convive: mismo trazo grueso y cara simple que el resto
- * del set de iconos, con la moneda de Convis como marca propia (para no
+ * del set de iconos, con la moneda de las recompensas como marca propia (para no
  * repetir el mascota de ninguna otra app). Se usa como toque de bienvenida
  * en pantallas de auth y estados vacíos — nunca como icono funcional.
  */

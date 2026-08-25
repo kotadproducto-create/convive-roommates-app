@@ -51,6 +51,7 @@ create table if not exists floors (
   pot_amount numeric not null default 0,
   pot_threshold numeric not null default 30,
   pot_per_person numeric not null default 10,
+  whatsapp_group_url text,
   created_at timestamptz not null default now()
 );
 

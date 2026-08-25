@@ -20,7 +20,7 @@ export default function Rewards() {
   }
 
   return (
-    <AppLayout title="Convis y recompensas">
+    <AppLayout title="Recompensas">
       <div className="grid md:grid-cols-2 gap-5">
         <Reveal as="section" delay={0} className="card p-5">
           <h2 className="font-display font-semibold mb-4">Ranking del piso</h2>
@@ -41,9 +41,9 @@ export default function Rewards() {
         </Reveal>
 
         <Reveal as="section" delay={80} className="card p-5">
-          <h2 className="font-display font-semibold mb-1">Canjear Convis</h2>
+          <h2 className="font-display font-semibold mb-1">Canjear recompensas</h2>
           <p className="flex items-center gap-1.5 text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">
-            Tienes <strong className="inline-flex items-center gap-1"><CoinIcon className="w-4 h-4 text-gold-500" />{user.points || 0}</strong> Convis disponibles.
+            Tienes <strong className="inline-flex items-center gap-1"><CoinIcon className="w-4 h-4 text-gold-500" />{user.points || 0}</strong> recompensas disponibles.
           </p>
           <div className="flex flex-col gap-3">
             {REWARD_CATALOG.map((r) => {
@@ -55,7 +55,7 @@ export default function Rewards() {
                     <div>
                       <p className="text-sm font-medium">{r.label}</p>
                       <p className="flex items-center gap-1 text-xs text-ink-900/50 dark:text-cream-100/50">
-                        <CoinIcon className="w-3 h-3" />{r.cost} Convis
+                        <CoinIcon className="w-3 h-3" />{r.cost} recompensas
                       </p>
                     </div>
                   </div>

@@ -317,7 +317,7 @@ function DayDetail({
       uncompleteTask(task.id)
     } else {
       completeTask(task.id)
-      showToast(`¡${type.label} completada! +${type.points} Convis`, 'success')
+      showToast(`¡${type.label} completada! +${type.points} recompensas`, 'success')
     }
   }
 
@@ -349,7 +349,7 @@ function DayDetail({
               <p className="font-display font-semibold">{type.label}</p>
             )}
             <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-              {assignee?.name || 'Sin asignar'} · +{type.points} Convis
+              {assignee?.name || 'Sin asignar'} · +{type.points} recompensas
               {isCurrentWeek && task && <span className={task.completed ? 'text-sage-500' : 'text-gold-500'}> · {task.completed ? 'Hecha' : 'Pendiente'}</span>}
             </p>
             {!isCurrentWeek && (
