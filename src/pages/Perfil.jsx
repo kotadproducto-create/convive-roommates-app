@@ -438,17 +438,25 @@ function PreferencesCard() {
         </button>
       </div>
 
-      {supported && (
+      {(supported || needsInstall) && (
         <div className="mt-4 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
-          <div className="flex items-center justify-between">
+          {supported && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <BellIcon className="w-4 h-4" />
+                Notificaciones push {subscribed ? 'activadas' : 'desactivadas'}
+              </div>
+              <button type="button" className="btn-secondary text-sm" onClick={subscribed ? optOut : optIn}>
+                {subscribed ? 'Desactivar' : 'Activar'}
+              </button>
+            </div>
+          )}
+          {!supported && needsInstall && (
             <div className="flex items-center gap-2 text-sm">
               <BellIcon className="w-4 h-4" />
-              Notificaciones push {subscribed ? 'activadas' : 'desactivadas'}
+              Notificaciones push
             </div>
-            <button type="button" className="btn-secondary text-sm" onClick={subscribed ? optOut : optIn}>
-              {subscribed ? 'Desactivar' : 'Activar'}
-            </button>
-          </div>
+          )}
           {needsInstall && (
             <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mt-2">
               En iPhone/iPad: primero añade Convive a tu pantalla de inicio (Compartir → "Añadir a pantalla de
