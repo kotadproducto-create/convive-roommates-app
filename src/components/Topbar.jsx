@@ -8,7 +8,7 @@ import Avatar from './Avatar'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-export default function Topbar({ title }) {
+export default function Topbar({ title, subheader }) {
   const { user, floor, membership, logout } = useAuth()
   const { notifications, unreadCount, markAllNotificationsRead } = useData()
   const { theme, toggleTheme } = useTheme()
@@ -20,13 +20,14 @@ export default function Topbar({ title }) {
   const visibleNotifications = showAll ? notifications : unread
 
   return (
-    <header className="flex items-center justify-between px-5 py-4 border-b border-ink-900/10 dark:border-cream-100/15 sticky top-0 bg-cream-100/90 dark:bg-ink-900/90 backdrop-blur z-20">
-      <div>
-        <h1 className="font-display text-xl font-bold tracking-tight">{title}</h1>
-        {floor && <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{floor.name} · código {floor.inviteCode}</p>}
-      </div>
+    <header className="sticky top-0 bg-cream-100/90 dark:bg-ink-900/90 backdrop-blur z-20 border-b border-ink-900/10 dark:border-cream-100/15">
+      <div className={`flex items-center justify-between px-5 ${subheader ? 'pt-4 pb-2.5' : 'py-4'}`}>
+        <div>
+          <h1 className="font-display text-xl font-bold tracking-tight">{title}</h1>
+          {floor && <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{floor.name} · código {floor.inviteCode}</p>}
+        </div>
 
-      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
         <button
           onClick={toggleTheme}
           aria-label="Cambiar tema"
@@ -105,6 +106,8 @@ export default function Topbar({ title }) {
           </button>
         </div>
       </div>
+      </div>
+      {subheader}
     </header>
   )
 }

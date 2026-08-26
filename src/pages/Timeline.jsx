@@ -4,8 +4,9 @@ import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { TASK_TYPES, TASK_DAY_OFFSET, getMondayOfWeek } from '../lib/rotation'
-import { StampIcon, DropletIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon } from '../components/icons'
+import { StampIcon, DropletIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon } from '../components/icons'
 import { potAmountColorClass } from '../lib/pot'
+import { getTimeGreeting } from '../lib/greeting'
 import { useToast } from '../context/ToastContext'
 import Reveal from '../components/Reveal'
 import { format, formatDistanceToNow, isSameDay } from 'date-fns'
@@ -46,35 +47,41 @@ export default function Timeline() {
   const hygieneTasks = tasks.filter((t) => t.type === 'basura' || t.type === 'lavadora')
   const hygieneDone = hygieneTasks.filter((t) => t.completed).length
   const outOfStockCount = shoppingItems.filter((i) => i.stockLevel === 'out').length
+  const pendingShoppingCount = shoppingItems.filter((i) => i.stockLevel !== 'ok').length
   const weekDone = tasks.filter((t) => t.completed).length
+  const greeting = getTimeGreeting()
+  const GreetingIcon = greeting.icon === 'moon' ? MoonIcon : SunIcon
 
   return (
-    <AppLayout title="Inicio">
-      {/* Chips: tareas de la semana, recompensas, pote */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="inline-flex items-center gap-1.5 text-xs font-bold border-2 border-ink-900/70 dark:border-cream-100/30 rounded-full pl-2 pr-2.5 py-1 bg-sage-100 dark:bg-sage-500/15 text-sage-600 dark:text-sage-300">
-          <StampIcon className="w-3.5 h-3.5" />
-          {weekDone}/{tasks.length}
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-xs font-bold border-2 border-ink-900/70 dark:border-cream-100/30 rounded-full pl-2 pr-2.5 py-1 bg-gold-100 dark:bg-gold-400/15 text-gold-600 dark:text-gold-300">
-          <CoinIcon className="w-3.5 h-3.5" />
-          {user?.points || 0}
-        </span>
-        <span
-          className={`inline-flex items-center gap-1.5 text-xs font-bold border-2 border-ink-900/70 dark:border-cream-100/30 rounded-full pl-2 pr-2.5 py-1 bg-violet-100 dark:bg-violet-700/20 ${potAmountColorClass(floor?.potAmount ?? 0)}`}
-        >
-          <JarIcon className="w-3.5 h-3.5" />
-          {floor?.potAmount ?? 0}€
-        </span>
-      </div>
-
-      {/* Perfil + saludo */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="w-14 h-14 rounded-full bg-gold-400 border-2 border-ink-900 text-ink-900 flex items-center justify-center text-xl font-bold shrink-0">
+    <AppLayout
+      title="Inicio"
+      subheader={
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-5 pb-3">
+          <Chip to="/calendario" tone="sage" icon={StampIcon} value={`${weekDone}/${tasks.length}`} label="Racha" />
+          <Chip to="/recompensas" tone="gold" icon={CoinIcon} value={user?.points || 0} label="Puntos" />
+          <Chip
+            to="/pote"
+            tone="violet"
+            icon={JarIcon}
+            value={`${floor?.potAmount ?? 0}€`}
+            label="Pote"
+            valueClassName={potAmountColorClass(floor?.potAmount ?? 0)}
+          />
+          <Chip to="/compras" tone="coral" icon={CartIcon} value={pendingShoppingCount} label="Compras" />
+        </div>
+      }
+    >
+      {/* Perfil + saludo: sin caja, flotando sobre el fondo */}
+      <div className="flex items-center gap-4 mb-6 mt-1">
+        <div className="w-16 h-16 rounded-full bg-gold-400 border-2 border-ink-900 text-ink-900 flex items-center justify-center text-2xl font-bold shrink-0">
           {user?.name?.[0]?.toUpperCase()}
         </div>
         <div className="min-w-0">
-          <h2 className="font-display text-xl font-bold tracking-tight">¡Hola, {user?.name?.split(' ')[0]}!</h2>
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-violet-500 dark:text-violet-300">
+            <GreetingIcon className="w-3.5 h-3.5" />
+            {greeting.label}
+          </p>
+          <h2 className="font-display text-2xl font-bold tracking-tight -mt-0.5">{user?.name?.split(' ')[0]}</h2>
           <p className="font-display text-sm font-medium text-ink-900/60 dark:text-cream-100/60">
             Esto es lo que pasa en {floor?.name}.
           </p>
@@ -218,6 +225,36 @@ export default function Timeline() {
         </div>
       </section>
     </AppLayout>
+  )
+}
+
+const CHIP_TONE_CLASSES = {
+  sage: { bg: 'bg-sage-100 dark:bg-sage-500/15', badge: 'bg-sage-500' },
+  gold: { bg: 'bg-gold-100 dark:bg-gold-400/15', badge: 'bg-gold-500' },
+  violet: { bg: 'bg-violet-100 dark:bg-violet-700/20', badge: 'bg-violet-500' },
+  coral: { bg: 'bg-coral-100 dark:bg-coral-500/15', badge: 'bg-coral-500' }
+}
+
+// Botón de acceso rápido de la cabecera de Inicio (racha, recompensas,
+// pote, compras): icono en una burbuja de color sólido + valor/etiqueta,
+// y lleva directo a su apartado.
+function Chip({ to, tone, icon: Icon, value, label, valueClassName }) {
+  const t = CHIP_TONE_CLASSES[tone]
+  return (
+    <Link
+      to={to}
+      className={`shrink-0 inline-flex items-center gap-1.5 border-2 border-ink-900/70 dark:border-cream-100/30 rounded-full pl-1 pr-2.5 py-1 ${t.bg} shadow-[0_2px_0_0_theme(colors.ink.900/20%)] dark:shadow-[0_2px_0_0_theme(colors.cream.100/15%)] transition-transform active:translate-y-0.5 active:shadow-none`}
+    >
+      <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${t.badge}`}>
+        <Icon className="w-3 h-3 text-white" />
+      </span>
+      <span className="leading-tight whitespace-nowrap">
+        <span className={`block text-xs font-bold ${valueClassName || 'text-ink-900 dark:text-cream-100'}`}>{value}</span>
+        <span className="block text-[9px] font-bold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 -mt-0.5">
+          {label}
+        </span>
+      </span>
+    </Link>
   )
 }
 

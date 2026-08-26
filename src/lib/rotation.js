@@ -79,6 +79,26 @@ export async function ensureWeekTasks(floorId, weekKey, rotationOrder) {
 }
 
 /**
+ * Devuelve un nuevo orden de rotación con `partnerId` colocado justo
+ * después de `anchorId`. Se usa cuando dos personas confirman que
+ * comparten habitación: como cada tarea avanza una posición del
+ * `rotationOrder` por semana (ver `whoIsAssigned`), dejarlas contiguas
+ * hace que a la pareja le toque la semana inmediatamente siguiente a
+ * la del otro. Si alguno de los dos todavía no está en el orden (caso
+ * raro), se agrega antes de emparejar. Preserva el orden relativo del
+ * resto de miembros.
+ */
+export function placeAdjacentInRotation(order, anchorId, partnerId) {
+  if (!anchorId || !partnerId || anchorId === partnerId) return order || []
+  const base = (order || []).includes(anchorId) ? [...order] : [...(order || []), anchorId]
+  const withoutPartner = base.filter((id) => id !== partnerId)
+  const anchorIdx = withoutPartner.indexOf(anchorId)
+  const newOrder = [...withoutPartner]
+  newOrder.splice(anchorIdx + 1, 0, partnerId)
+  return newOrder
+}
+
+/**
  * Reasigna las tareas PENDIENTES de un usuario eliminado al siguiente
  * miembro disponible en la rotación (según el nuevo rotationOrder, ya
  * sin el usuario eliminado).

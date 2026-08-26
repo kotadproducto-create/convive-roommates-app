@@ -12,7 +12,7 @@ import {
   claimPendingJoinRequests,
   subscribePendingRequests
 } from '../lib/db'
-import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks } from '../lib/rotation'
+import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation } from '../lib/rotation'
 import { useAuth } from './AuthContext'
 
 const DataContext = createContext(null)
@@ -296,8 +296,19 @@ export function DataProvider({ children }) {
   )
 
   const acceptRoomPartner = useCallback(
-    (requestId) => update('room_partners', requestId, { status: 'accepted', decidedAt: new Date().toISOString() }),
-    []
+    async (requestId) => {
+      await update('room_partners', requestId, { status: 'accepted', decidedAt: new Date().toISOString() })
+      // Al confirmarse la pareja de habitación, se dejan contiguas en el
+      // orden de rotación semanal: así, a quien comparte habitación le
+      // toca la semana siguiente a la de su compañero (ver
+      // placeAdjacentInRotation).
+      const request = roomPartners.find((r) => r.id === requestId)
+      if (request && currentFloor) {
+        const newOrder = placeAdjacentInRotation(currentFloor.rotationOrder, request.requesterId, request.partnerId)
+        await update('floors', currentFloor.id, { rotationOrder: newOrder })
+      }
+    },
+    [roomPartners, currentFloor]
   )
 
   const rejectRoomPartner = useCallback(

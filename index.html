@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Convive — Tareas del piso</title>
+
+    <!-- Evita el parpadeo blanco antes de que cargue el CSS/JS: pinta el
+         fondo (y el tema claro/oscuro guardado) desde el primer frame,
+         igual que hace ThemeContext luego con la clase "dark". -->
+    <style>
+      html { background: #FBF4E9; }
+      html.dark { background: #17131C; }
+    </style>
+    <script>
+      try {
+        if (localStorage.getItem('convive_theme') === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
