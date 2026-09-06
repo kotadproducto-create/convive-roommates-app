@@ -4,7 +4,19 @@ import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
-import { StoreIcon, AlertIcon, EditIcon, TrashIcon, CloseIcon, LinkIcon, CameraIcon, PlusIcon } from '../components/icons'
+import {
+  StoreIcon,
+  AlertIcon,
+  EditIcon,
+  TrashIcon,
+  CloseIcon,
+  LinkIcon,
+  CameraIcon,
+  PlusIcon,
+  MinusIcon,
+  CartIcon,
+  StampIcon
+} from '../components/icons'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -50,9 +62,12 @@ export default function Shopping() {
     updateShoppingItem,
     removeShoppingItem,
     setItemStock,
-    markItemPurchased
+    markItemPurchased,
+    recordPurchaseSession
   } = useData()
   const { showToast } = useToast()
+  // 'menu' | 'buy' (Hacer la compra) | 'edit' (Preparar lista) | 'status'
+  const [mode, setMode] = useState('menu')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
@@ -72,6 +87,7 @@ export default function Shopping() {
     [shoppingItems]
   )
   const outCount = shoppingItems.filter((i) => i.stockLevel === 'out').length
+  const pendingItems = useMemo(() => sortedItems.filter((i) => i.stockLevel !== 'ok'), [sortedItems])
 
   const history = useMemo(
     () => shoppingPurchases.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
@@ -90,27 +106,157 @@ export default function Shopping() {
     setEditing(null)
   }
 
+  async function handleAddOnTheFly(name) {
+    return addShoppingItem({ name, recurring: false })
+  }
+
+  async function handleConfirmPurchase(payload) {
+    await recordPurchaseSession(payload)
+    showToast('Compra registrada — el pote y el estado de los productos ya se actualizaron', 'success')
+    setMode('menu')
+  }
+
   return (
     <AppLayout title="Compras">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 className="font-display text-lg font-bold">Lista de compras</h2>
-          {shopper && (
-            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-              Esta semana compra {isShopper ? <strong>tú</strong> : <strong>{shopper.name}</strong>}.
-            </p>
+      {mode === 'menu' && (
+        <MenuScreen
+          pendingCount={pendingItems.length}
+          outCount={outCount}
+          totalCount={shoppingItems.length}
+          onSelect={setMode}
+        />
+      )}
+
+      {mode === 'buy' && (
+        <BuyScreen
+          items={pendingItems}
+          onAddItem={handleAddOnTheFly}
+          onConfirm={handleConfirmPurchase}
+          onBack={() => setMode('menu')}
+        />
+      )}
+
+      {mode === 'status' && <StatusScreen items={sortedItems} onSetStock={setItemStock} onBack={() => setMode('menu')} />}
+
+      {mode === 'edit' && (
+        <>
+          <BackButton onBack={() => setMode('menu')} />
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-display text-lg font-bold">Lista de compras</h2>
+              {shopper && (
+                <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
+                  Esta semana compra {isShopper ? <strong>tú</strong> : <strong>{shopper.name}</strong>}.
+                </p>
+              )}
+            </div>
+            <button
+              className="btn-primary text-sm shrink-0"
+              onClick={() => {
+                setEditing(null)
+                setShowForm((s) => !s)
+              }}
+            >
+              {showForm && !editing ? 'Cancelar' : '+ Producto'}
+            </button>
+          </div>
+
+          {outCount > 0 && (
+            <Reveal>
+              <div className="card p-3 mb-4 flex items-center gap-2 border-clay-500/50">
+                <AlertIcon className="w-5 h-5 text-clay-500 shrink-0" />
+                <p className="text-sm font-medium text-clay-500">
+                  {outCount} producto{outCount > 1 ? 's' : ''} agotado{outCount > 1 ? 's' : ''}: hace falta reponer.
+                </p>
+              </div>
+            </Reveal>
           )}
-        </div>
-        <button
-          className="btn-primary text-sm shrink-0"
-          onClick={() => {
-            setEditing(null)
-            setShowForm((s) => !s)
-          }}
-        >
-          {showForm && !editing ? 'Cancelar' : '+ Producto'}
-        </button>
-      </div>
+
+          {(showForm || editing) && (
+            <ItemForm
+              initial={editing}
+              onCancel={() => {
+                setShowForm(false)
+                setEditing(null)
+              }}
+              onSubmit={handleFormSubmit}
+            />
+          )}
+
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+            {sortedItems.map((item, i) => (
+              <Reveal key={item.id} delay={i * 40}>
+                <ShoppingCard
+                  item={item}
+                  onEdit={() => {
+                    setEditing(item)
+                    setShowForm(false)
+                  }}
+                  onDelete={() => removeShoppingItem(item.id)}
+                  onSetStock={(level) => setItemStock(item.id, level)}
+                  onPurchase={(payload) =>
+                    markItemPurchased(item.id, payload).then(() => showToast(`${item.name} marcado como comprado`, 'success'))
+                  }
+                />
+              </Reveal>
+            ))}
+            {sortedItems.length === 0 && (
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50 col-span-full">
+                Todavía no hay productos en la lista. Agrega el primero con "+ Producto".
+              </p>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <button type="button" className="flex items-center justify-between w-full" onClick={() => setShowHistory((s) => !s)}>
+              <h3 className="font-display font-semibold">Historial de compras</h3>
+              <span className="text-xs font-semibold text-violet-500">{showHistory ? 'Ocultar' : 'Ver'}</span>
+            </button>
+            {showHistory &&
+              (history.length === 0 ? (
+                <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">Todavía no se ha comprado nada.</p>
+              ) : (
+                <ul className="flex flex-col gap-1 mt-3 max-h-72 overflow-y-auto">
+                  {history.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex justify-between text-sm py-1.5 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15"
+                    >
+                      <span>
+                        <strong>{memberById[p.userId]?.name || 'Alguien'}</strong> compró {p.itemName}
+                      </span>
+                      <span className="text-ink-900/40 dark:text-cream-100/40 text-xs shrink-0 ml-2">
+                        {p.price ? `${p.price}€ · ` : ''}
+                        {format(new Date(p.createdAt), "d MMM, HH:mm", { locale: es })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+          </div>
+        </>
+      )}
+    </AppLayout>
+  )
+}
+
+function BackButton({ onBack }) {
+  return (
+    <button type="button" onClick={onBack} className="flex items-center gap-1 text-sm font-semibold text-violet-500 hover:underline mb-4">
+      ‹ Compras
+    </button>
+  )
+}
+
+/** Pantalla de entrada: elegir la intención antes de mostrar nada más
+ * (comprar / organizar la lista / chequear qué queda) — en vez de mezclar
+ * las tres cosas en cada tarjeta como antes. */
+function MenuScreen({ pendingCount, outCount, totalCount, onSelect }) {
+  return (
+    <div>
+      <h2 className="font-display text-lg font-bold mb-1">Compras</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-5">¿Qué necesitas hacer?</p>
 
       {outCount > 0 && (
         <Reveal>
@@ -123,69 +269,320 @@ export default function Shopping() {
         </Reveal>
       )}
 
-      {(showForm || editing) && (
-        <ItemForm
-          initial={editing}
-          onCancel={() => {
-            setShowForm(false)
-            setEditing(null)
-          }}
-          onSubmit={handleFormSubmit}
-        />
-      )}
+      <div className="flex flex-col gap-4">
+        <Reveal delay={0}>
+          <MenuCard
+            tone="coral"
+            icon={CartIcon}
+            title="Hacer la compra"
+            subtitle={pendingCount > 0 ? `${pendingCount} producto${pendingCount > 1 ? 's' : ''} por comprar` : 'Todo al día'}
+            onClick={() => onSelect('buy')}
+          />
+        </Reveal>
+        <Reveal delay={60}>
+          <MenuCard
+            tone="violet"
+            icon={EditIcon}
+            title="Preparar lista de compras"
+            subtitle={`${totalCount} producto${totalCount === 1 ? '' : 's'} en la lista`}
+            onClick={() => onSelect('edit')}
+          />
+        </Reveal>
+        <Reveal delay={120}>
+          <MenuCard
+            tone="sage"
+            icon={StampIcon}
+            title="Status de productos"
+            subtitle="Actualiza qué queda en casa"
+            onClick={() => onSelect('status')}
+          />
+        </Reveal>
+      </div>
+    </div>
+  )
+}
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
-        {sortedItems.map((item, i) => (
-          <Reveal key={item.id} delay={i * 40}>
-            <ShoppingCard
-              item={item}
-              onEdit={() => {
-                setEditing(item)
-                setShowForm(false)
-              }}
-              onDelete={() => removeShoppingItem(item.id)}
-              onSetStock={(level) => setItemStock(item.id, level)}
-              onPurchase={(payload) =>
-                markItemPurchased(item.id, payload).then(() => showToast(`${item.name} marcado como comprado`, 'success'))
-              }
-            />
-          </Reveal>
+const MENU_TONE_CLASSES = {
+  coral: 'bg-gradient-to-br from-coral-500 to-[#E24322] text-white',
+  violet: 'bg-gradient-to-br from-violet-500 to-[#4C36AD] text-white',
+  sage: 'bg-gradient-to-br from-sage-500 to-[#2E8552] text-white'
+}
+
+function MenuCard({ tone, icon: Icon, title, subtitle, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left rounded-2xl p-5 flex items-center gap-4 border-2 border-ink-900 dark:border-cream-100/40 transition-transform active:scale-[0.98] ${MENU_TONE_CLASSES[tone]}`}
+    >
+      <div className="w-12 h-12 rounded-xl border-2 border-white/50 bg-white/20 flex items-center justify-center shrink-0">
+        <Icon className="w-6 h-6" />
+      </div>
+      <div className="min-w-0">
+        <p className="font-display font-bold text-lg">{title}</p>
+        <p className="text-sm opacity-85">{subtitle}</p>
+      </div>
+    </button>
+  )
+}
+
+/** "Status de productos": solo los 3 chips de stock, sin editar/borrar/
+ * comprar — para que cualquier roomie actualice qué queda en casa sin
+ * pasar por el flujo de compra. */
+function StatusScreen({ items, onSetStock, onBack }) {
+  return (
+    <div>
+      <BackButton onBack={onBack} />
+      <h2 className="font-display text-lg font-bold mb-1">Status de productos</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">Marca cómo está cada producto en casa ahora mismo.</p>
+
+      <div className="flex flex-col gap-2">
+        {items.map((item) => (
+          <div key={item.id} className="card p-3 flex items-center justify-between gap-2 flex-wrap">
+            <p className="font-display font-semibold">{item.name}</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {Object.entries(STOCK_META).map(([level, m]) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => onSetStock(item.id, level)}
+                  className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full transition-transform active:scale-95 ${
+                    item.stockLevel === level ? m.chip : 'text-ink-900/40 dark:text-cream-100/40 hover:bg-cream-200 dark:hover:bg-ink-700'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${item.stockLevel === level ? m.dot : 'bg-ink-900/20 dark:bg-cream-100/20'}`} />
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
-        {sortedItems.length === 0 && (
-          <p className="text-sm text-ink-900/50 dark:text-cream-100/50 col-span-full">
-            Todavía no hay productos en la lista. Agrega el primero con "+ Producto".
-          </p>
+        {items.length === 0 && (
+          <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Todavía no hay productos en la lista.</p>
         )}
       </div>
+    </div>
+  )
+}
 
-      <div className="card p-5">
-        <button type="button" className="flex items-center justify-between w-full" onClick={() => setShowHistory((s) => !s)}>
-          <h3 className="font-display font-semibold">Historial de compras</h3>
-          <span className="text-xs font-semibold text-violet-500">{showHistory ? 'Ocultar' : 'Ver'}</span>
-        </button>
-        {showHistory &&
-          (history.length === 0 ? (
-            <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">Todavía no se ha comprado nada.</p>
-          ) : (
-            <ul className="flex flex-col gap-1 mt-3 max-h-72 overflow-y-auto">
-              {history.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex justify-between text-sm py-1.5 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15"
-                >
-                  <span>
-                    <strong>{memberById[p.userId]?.name || 'Alguien'}</strong> compró {p.itemName}
-                  </span>
-                  <span className="text-ink-900/40 dark:text-cream-100/40 text-xs shrink-0 ml-2">
-                    {p.price ? `${p.price}€ · ` : ''}
-                    {format(new Date(p.createdAt), "d MMM, HH:mm", { locale: es })}
-                  </span>
-                </li>
-              ))}
-            </ul>
+/** "Hacer la compra": lo agotado + por acabarse, con un contador de
+ * cantidad por producto (en vez de checkbox), agregar algo no listado
+ * sobre la marcha, un monto total del viaje y una foto de ticket
+ * opcional — todo en un solo "Confirmar compra". */
+function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
+  const { showToast } = useToast()
+  const [quantities, setQuantities] = useState({})
+  const [expanded, setExpanded] = useState(() => new Set())
+  const [adHocItems, setAdHocItems] = useState([])
+  const [addingNew, setAddingNew] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [totalAmount, setTotalAmount] = useState('')
+  const [receiptFile, setReceiptFile] = useState(null)
+  const [receiptPreview, setReceiptPreview] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const allItems = [...items, ...adHocItems]
+
+  function inc(id) {
+    setQuantities((q) => ({ ...q, [id]: (q[id] || 0) + 1 }))
+  }
+  function dec(id) {
+    setQuantities((q) => ({ ...q, [id]: Math.max(0, (q[id] || 0) - 1) }))
+  }
+  function toggleInfo(id) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function handleAddNew(e) {
+    e.preventDefault()
+    const name = newName.trim()
+    if (!name) return
+    const created = await onAddItem(name)
+    if (created) {
+      setAdHocItems((list) => [...list, created])
+      setQuantities((q) => ({ ...q, [created.id]: 1 }))
+    }
+    setNewName('')
+    setAddingNew(false)
+  }
+
+  function handleReceiptChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setReceiptFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setReceiptPreview(reader.result)
+    reader.readAsDataURL(file)
+  }
+
+  const selectedIds = Object.entries(quantities)
+    .filter(([, qty]) => qty > 0)
+    .map(([id]) => id)
+
+  async function handleConfirm() {
+    if (selectedIds.length === 0) {
+      showToast('Marca al menos un producto como comprado', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await onConfirm({ itemIds: selectedIds, totalAmount, receiptFile })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div>
+      <BackButton onBack={onBack} />
+      <h2 className="font-display text-lg font-bold mb-1">Hacer la compra</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">Marca lo que vayas metiendo al carrito.</p>
+
+      {allItems.length === 0 ? (
+        <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mb-4">No hay nada agotado ni por acabarse ahora mismo.</p>
+      ) : (
+        <div className="flex flex-col gap-2 mb-4">
+          {allItems.map((item) => (
+            <BuyItemRow
+              key={item.id}
+              item={item}
+              qty={quantities[item.id] || 0}
+              onInc={() => inc(item.id)}
+              onDec={() => dec(item.id)}
+              expanded={expanded.has(item.id)}
+              onToggleInfo={() => toggleInfo(item.id)}
+            />
           ))}
+        </div>
+      )}
+
+      {addingNew ? (
+        <form onSubmit={handleAddNew} className="flex gap-2 mb-5">
+          <input
+            className="input text-sm flex-1"
+            autoFocus
+            placeholder="Nombre del producto"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+          <button type="submit" className="btn-primary text-sm shrink-0">
+            Agregar
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingNew(true)}
+          className="btn-secondary text-sm w-full mb-5 flex items-center justify-center gap-1.5"
+        >
+          <PlusIcon className="w-3.5 h-3.5" /> Agregar producto no listado
+        </button>
+      )}
+
+      <div className="card p-4 flex flex-col gap-4 mb-5">
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 block mb-1">
+            Monto a pagar
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            className="input"
+            placeholder="€"
+            value={totalAmount}
+            onChange={(e) => setTotalAmount(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 block mb-1">
+            Foto del ticket (opcional)
+          </label>
+          {receiptPreview && (
+            <img
+              src={receiptPreview}
+              alt=""
+              className="w-full max-h-40 object-cover rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 mb-2"
+            />
+          )}
+          <label className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
+            <CameraIcon className="w-4 h-4" /> {receiptPreview ? 'Cambiar foto' : 'Montar ticket'}
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReceiptChange} />
+          </label>
+        </div>
       </div>
-    </AppLayout>
+
+      <button type="button" className="btn-primary w-full" onClick={handleConfirm} disabled={submitting}>
+        {submitting ? 'Guardando…' : 'Confirmar compra'}
+      </button>
+    </div>
+  )
+}
+
+function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo }) {
+  const meta = STOCK_META[item.stockLevel]
+  return (
+    <div className="card p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className={`font-display font-semibold truncate ${qty > 0 ? 'line-through text-ink-900/40 dark:text-cream-100/40' : ''}`}>
+              {item.name}
+            </p>
+            {meta && item.stockLevel !== 'ok' && (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${meta.chip}`}>{meta.label}</span>
+            )}
+          </div>
+          {(item.note || item.linkUrl) && (
+            <button type="button" onClick={onToggleInfo} className="text-xs font-semibold text-violet-500 hover:underline mt-0.5">
+              {expanded ? 'Ocultar info' : 'Más info'}
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {qty > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={onDec}
+                aria-label="Restar"
+                className="w-7 h-7 rounded-full border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center"
+              >
+                <MinusIcon className="w-3 h-3" />
+              </button>
+              <span className="w-5 text-center font-bold text-sm">{qty}</span>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={onInc}
+            aria-label="Sumar"
+            className="w-8 h-8 rounded-full bg-coral-500 border-2 border-ink-900 text-white flex items-center justify-center active:scale-90 transition-transform"
+          >
+            <PlusIcon className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="mt-2 pt-2 border-t border-ink-900/10 dark:border-cream-100/15 flex flex-col gap-1">
+          {item.note && <p className="text-xs text-ink-900/60 dark:text-cream-100/60">{item.note}</p>}
+          {item.linkUrl && (
+            <a
+              href={item.linkUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex items-center gap-1 text-xs font-semibold text-violet-500 hover:underline w-fit"
+            >
+              <LinkIcon className="w-3.5 h-3.5" /> Ver producto
+            </a>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

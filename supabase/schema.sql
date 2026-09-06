@@ -240,10 +240,27 @@ create table if not exists shopping_purchases (
   user_id uuid not null references profiles(id) on delete cascade,
   price numeric,
   pot_contribution_id uuid references pot_contributions(id) on delete set null,
+  session_id uuid, -- se agrega la FK real más abajo, después de crear purchase_sessions
   created_at timestamptz not null default now()
 );
 
 create index if not exists shopping_purchases_floor_idx on shopping_purchases (floor_id);
+
+-- Agrupa varias filas de shopping_purchases de un mismo "viaje" de
+-- compra (modo "Hacer la compra"): el monto total y la foto del ticket
+-- NO se duplican aquí, viven en la fila de pot_contributions que ya crea
+-- addPotExpense — esta tabla solo agrupa qué productos fueron parte de
+-- esa compra.
+create table if not exists purchase_sessions (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  pot_contribution_id uuid references pot_contributions(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table shopping_purchases add constraint shopping_purchases_session_id_fkey
+  foreign key (session_id) references purchase_sessions(id) on delete set null;
 
 -- Solicitudes de "estar fuera del piso" (ausencia temporal con fechas,
 -- aprobada o rechazada por un admin). Al aprobarse, excluye a la persona
@@ -461,6 +478,11 @@ create policy "delete floor shopping items" on shopping_items for delete using (
 create policy "select floor shopping purchases" on shopping_purchases for select using (is_active_member(floor_id));
 create policy "insert floor shopping purchases" on shopping_purchases for insert with check (is_active_member(floor_id));
 
+-- purchase_sessions: mismo modelo que shopping_purchases — ledger, solo select/insert.
+alter table purchase_sessions enable row level security;
+create policy "select floor purchase sessions" on purchase_sessions for select using (is_active_member(floor_id));
+create policy "insert floor purchase sessions" on purchase_sessions for insert with check (is_active_member(floor_id));
+
 -- absence_requests: cualquier miembro ve las solicitudes del piso (para
 -- saber quién está fuera); cada quien crea la suya; un admin la decide;
 -- el autor puede cancelarla mientras siga pendiente.
@@ -492,6 +514,7 @@ alter publication supabase_realtime add table floor_memberships;
 alter publication supabase_realtime add table pot_contributions;
 alter publication supabase_realtime add table shopping_items;
 alter publication supabase_realtime add table shopping_purchases;
+alter publication supabase_realtime add table purchase_sessions;
 alter publication supabase_realtime add table absence_requests;
 alter publication supabase_realtime add table room_partners;
 

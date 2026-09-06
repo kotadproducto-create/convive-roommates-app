@@ -115,6 +115,7 @@ export default function Timeline() {
                 const assignee = task ? memberById[task.assignedUserId] : null
                 const today = isSameDay(date, new Date())
                 const isFuture = date.getTime() > Date.now()
+                const isMinePending = assignee?.id === user?.id && task && !task.completed
                 return (
                   <div
                     key={date.toISOString()}
@@ -129,18 +130,20 @@ export default function Timeline() {
                         type="button"
                         disabled={isFuture || !task}
                         onClick={() => handleStamp(task, type)}
-                        title={`${type.label} · ${assignee?.name || 'Sin asignar'}`}
+                        title={`${type.label} · ${assignee?.name || 'Sin asignar'}${isMinePending ? ' — te toca a ti' : ''}`}
                         className="stamp-btn relative mt-1 disabled:cursor-not-allowed"
                       >
                         <div
                           className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold border-2 transition-colors ${
                             task?.completed
                               ? 'bg-gold-400 border-ink-900 text-ink-900 shadow-[0_3px_0_0_theme(colors.ink.900)]'
-                              : `bg-cream-100 dark:bg-ink-700 border-dashed text-ink-900/40 dark:text-cream-100/40 ${
-                                  isFuture
-                                    ? 'border-ink-900/10 dark:border-cream-100/10 opacity-50'
-                                    : 'border-ink-900/30 dark:border-cream-100/30 shadow-[0_3px_0_0_theme(colors.ink.900/20%)]'
-                                }`
+                              : isMinePending
+                                ? 'bg-coral-500 border-ink-900 text-white shadow-[0_3px_0_0_theme(colors.ink.900)] ring-2 ring-coral-500/40'
+                                : `bg-cream-100 dark:bg-ink-700 border-dashed text-ink-900/40 dark:text-cream-100/40 ${
+                                    isFuture
+                                      ? 'border-ink-900/10 dark:border-cream-100/10 opacity-50'
+                                      : 'border-ink-900/30 dark:border-cream-100/30 shadow-[0_3px_0_0_theme(colors.ink.900/20%)]'
+                                  }`
                           }`}
                         >
                           {assignee?.name?.[0]?.toUpperCase() || '?'}

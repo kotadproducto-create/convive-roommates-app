@@ -79,6 +79,7 @@ export default function Dashboard() {
           shoppingPurchases={shoppingPurchases}
           shoppingItems={shoppingItems}
           notifications={notifications}
+          currentUserId={user?.id}
         />
       </Reveal>
 

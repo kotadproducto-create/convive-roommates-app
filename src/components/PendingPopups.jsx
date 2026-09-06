@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { TASK_TYPES } from '../lib/rotation'
 import { CartIcon, SparkleIcon, CloseIcon } from './icons'
 
@@ -60,8 +61,11 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
           key: 'compras',
           icon: CartIcon,
           tone: 'coral',
+          urgent: true,
           title: 'Tienes que comprar estos artículos',
-          items: missing.map((i) => i.name)
+          items: missing.map((i) => i.name),
+          linkTo: '/compras',
+          linkLabel: 'Ir a lista de compras'
         })
       }
     }
@@ -104,7 +108,11 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
       onClick={handleClose}
     >
       <div
-        className="w-full sm:max-w-sm bg-white dark:bg-ink-800 border-2 border-ink-900 dark:border-cream-100/40 rounded-2xl p-5 relative toast-pop"
+        className={`w-full sm:max-w-sm bg-white dark:bg-ink-800 rounded-2xl p-5 relative toast-pop ${
+          current.urgent
+            ? 'border-[3px] border-clay-500 shadow-[0_0_0_4px_theme(colors.clay.100)] dark:shadow-[0_0_0_4px_theme(colors.clay.500/20%)]'
+            : 'border-2 border-ink-900 dark:border-cream-100/40'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -116,11 +124,19 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
           <CloseIcon className="w-4 h-4" />
         </button>
 
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${TONE_BADGE[current.tone]}`}>
-          <Icon className="w-6 h-6 text-white" />
+        {current.urgent && (
+          <p className="text-xs font-extrabold uppercase tracking-wide text-clay-500 mb-1.5">¡Atención!</p>
+        )}
+
+        <div
+          className={`rounded-2xl flex items-center justify-center mb-3 ${
+            current.urgent ? 'w-16 h-16 bg-clay-500 animate-pulse' : `w-12 h-12 ${TONE_BADGE[current.tone]}`
+          }`}
+        >
+          <Icon className={current.urgent ? 'w-8 h-8 text-white' : 'w-6 h-6 text-white'} />
         </div>
 
-        <h3 className="font-display text-lg font-bold tracking-tight pr-6">{current.title}</h3>
+        <h3 className={`font-display font-bold tracking-tight pr-6 ${current.urgent ? 'text-xl' : 'text-lg'}`}>{current.title}</h3>
 
         {current.bigNumber != null && (
           <p className="font-display text-4xl font-extrabold mt-1 mb-2">{current.bigNumber}</p>
@@ -129,13 +145,18 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
         <ul className="flex flex-col gap-1.5 text-sm text-ink-900/70 dark:text-cream-100/70 mt-2 mb-5">
           {current.items.map((item, i) => (
             <li key={i} className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-ink-900/30 dark:bg-cream-100/30 shrink-0" />
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${current.urgent ? 'bg-clay-500' : 'bg-ink-900/30 dark:bg-cream-100/30'}`} />
               {item}
             </li>
           ))}
         </ul>
 
-        <button type="button" onClick={handleClose} className="btn-primary w-full">
+        {current.linkTo && (
+          <Link to={current.linkTo} onClick={handleClose} className="btn-danger w-full mb-2">
+            {current.linkLabel}
+          </Link>
+        )}
+        <button type="button" onClick={handleClose} className={current.linkTo ? 'btn-secondary w-full' : 'btn-primary w-full'}>
           Entendido
         </button>
 

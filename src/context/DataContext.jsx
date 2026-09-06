@@ -37,6 +37,7 @@ export function DataProvider({ children }) {
   const [pendingJoinRequests, setPendingJoinRequests] = useState([])
   const [shoppingItems, setShoppingItems] = useState([])
   const [shoppingPurchases, setShoppingPurchases] = useState([])
+  const [purchaseSessions, setPurchaseSessions] = useState([])
   const [absenceRequests, setAbsenceRequests] = useState([])
   const [roomPartners, setRoomPartners] = useState([])
 
@@ -125,6 +126,14 @@ export function DataProvider({ children }) {
       return
     }
     return subscribeTable('shopping_purchases', { floorId }, setShoppingPurchases)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setPurchaseSessions([])
+      return
+    }
+    return subscribeTable('purchase_sessions', { floorId }, setPurchaseSessions)
   }, [floorId])
 
   useEffect(() => {
@@ -626,7 +635,7 @@ export function DataProvider({ children }) {
       if (item.imageFile) {
         imageUrl = await uploadShoppingItemImage(item.imageFile, currentFloor.id)
       }
-      await create('shopping_items', {
+      return create('shopping_items', {
         floorId: currentFloor.id,
         name: item.name,
         store: item.store || null,
@@ -709,6 +718,55 @@ export function DataProvider({ children }) {
     [currentFloor, user, shoppingItems, addPotExpense]
   )
 
+  // "Hacer la compra": registra de una vez varios productos comprados
+  // en un mismo viaje. A diferencia de markItemPurchased (precio por
+  // producto), aquí el monto es del viaje completo — se registra una
+  // sola vez en el pote (reutilizando addPotExpense, con foto de
+  // ticket si se adjunta) y purchase_sessions agrupa qué productos
+  // fueron parte de esa compra. Si la tarea semanal "Compras del piso"
+  // existe y sigue pendiente, se marca completada de una vez (cuenta
+  // para la racha y las recompensas, sin tener que ir aparte al
+  // Calendario a marcarla).
+  const recordPurchaseSession = useCallback(
+    async ({ itemIds, totalAmount, receiptFile }) => {
+      if (!currentFloor || !user) return
+
+      let potContributionId = null
+      const amount = Number(totalAmount) || 0
+      if (amount > 0) {
+        const contribution = await addPotExpense(amount, { note: 'Compra del piso', receiptFile })
+        potContributionId = contribution?.id || null
+      }
+
+      const session = await create('purchase_sessions', {
+        floorId: currentFloor.id,
+        userId: user.id,
+        potContributionId
+      })
+
+      for (const itemId of itemIds) {
+        const item = shoppingItems.find((i) => i.id === itemId)
+        if (!item) continue
+        await update('shopping_items', itemId, { stockLevel: 'ok' })
+        await create('shopping_purchases', {
+          floorId: currentFloor.id,
+          itemId,
+          itemName: item.name,
+          userId: user.id,
+          price: null,
+          potContributionId,
+          sessionId: session.id
+        })
+      }
+
+      const comprasTask = tasks.find((t) => t.type === 'compras' && !t.completed)
+      if (comprasTask) {
+        await completeTask(comprasTask.id)
+      }
+    },
+    [currentFloor, user, shoppingItems, tasks, addPotExpense, completeTask]
+  )
+
   const redeemReward = useCallback(
     async (rewardKey) => {
       const reward = REWARD_CATALOG.find((r) => r.key === rewardKey)
@@ -750,6 +808,8 @@ export function DataProvider({ children }) {
     rejectJoinRequest,
     shoppingItems,
     shoppingPurchases,
+    purchaseSessions,
+    recordPurchaseSession,
     addShoppingItem,
     updateShoppingItem,
     removeShoppingItem,

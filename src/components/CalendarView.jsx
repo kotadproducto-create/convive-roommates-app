@@ -44,7 +44,8 @@ export default function CalendarView({
   potContributions = [],
   shoppingPurchases = [],
   shoppingItems = [],
-  notifications = []
+  notifications = [],
+  currentUserId
 }) {
   const [view, setView] = useState('month')
   const [cursor, setCursor] = useState(() => new Date())
@@ -63,7 +64,8 @@ export default function CalendarView({
       ? tasks.find((t) => t.type === type.key)?.assignedUserId
       : whoIsAssigned(floor.rotationOrder, wk, type.offset)
     const task = isCurrentWeek ? tasks.find((t) => t.type === type.key) : null
-    return { type, assignee: memberById[assignedUserId], task, isCurrentWeek }
+    const isMine = Boolean(currentUserId) && assignedUserId === currentUserId
+    return { type, assignee: memberById[assignedUserId], task, isCurrentWeek, isMine }
   }
 
   const title = useMemo(() => {
@@ -155,9 +157,10 @@ function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask }) {
       </div>
       <div className="grid grid-cols-7 gap-1">
         {days.map((date) => {
-          const { type, assignee, task } = dayInfo(date)
+          const { type, assignee, task, isMine } = dayInfo(date)
           const Icon = type ? TASK_ICONS[type.icon] : null
           const inMonth = isSameMonth(date, cursor)
+          const mineePending = isMine && !task?.completed
           return (
             <div
               key={date.toISOString()}
@@ -171,11 +174,13 @@ function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask }) {
                   className={`w-5 h-5 rounded-full flex items-center justify-center border ${
                     task?.completed
                       ? 'bg-gold-400 border-ink-900'
-                      : 'bg-violet-100 dark:bg-violet-700/25 border-violet-200 dark:border-violet-600/40'
+                      : mineePending
+                        ? 'bg-coral-500 border-ink-900'
+                        : 'bg-violet-100 dark:bg-violet-700/25 border-violet-200 dark:border-violet-600/40'
                   }`}
-                  title={`${type.label} · ${assignee?.name || 'Sin asignar'}`}
+                  title={`${type.label} · ${assignee?.name || 'Sin asignar'}${mineePending ? ' (te toca a ti)' : ''}`}
                 >
-                  {Icon && <Icon className="w-3 h-3 text-violet-600 dark:text-violet-100" />}
+                  {Icon && <Icon className={`w-3 h-3 ${mineePending ? 'text-white' : 'text-violet-600 dark:text-violet-100'}`} />}
                 </div>
               )}
             </div>
@@ -195,8 +200,9 @@ function WeekStrip({ cursor, dayInfo }) {
   return (
     <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
       {days.map((date) => {
-        const { type, assignee, task, isCurrentWeek } = dayInfo(date)
+        const { type, assignee, task, isCurrentWeek, isMine } = dayInfo(date)
         const Icon = type ? TASK_ICONS[type.icon] : null
+        const minePending = isMine && !task?.completed
         return (
           <div
             key={date.toISOString()}
@@ -209,16 +215,24 @@ function WeekStrip({ cursor, dayInfo }) {
                 className={`w-9 h-9 rounded-full flex items-center justify-center border-2 mt-1 ${
                   task?.completed
                     ? 'bg-gold-400 border-ink-900'
-                    : 'bg-cream-100 dark:bg-ink-700 border-dashed border-ink-900/30 dark:border-cream-100/30'
+                    : minePending
+                      ? 'bg-coral-500 border-ink-900 ring-2 ring-coral-500/40'
+                      : 'bg-cream-100 dark:bg-ink-700 border-dashed border-ink-900/30 dark:border-cream-100/30'
                 }`}
-                title={`${type.label} · ${assignee?.name || 'Sin asignar'}${!isCurrentWeek ? ' (previsto)' : ''}`}
+                title={`${type.label} · ${assignee?.name || 'Sin asignar'}${!isCurrentWeek ? ' (previsto)' : ''}${minePending ? ' — te toca a ti' : ''}`}
               >
-                {Icon && <Icon className="w-4 h-4 text-ink-900/70 dark:text-cream-100/70" />}
+                {Icon && <Icon className={`w-4 h-4 ${minePending ? 'text-white' : 'text-ink-900/70 dark:text-cream-100/70'}`} />}
               </div>
             ) : (
               <div className="w-9 h-9 mt-1" />
             )}
-            <span className="text-[10px] text-ink-900/50 dark:text-cream-100/50 text-center leading-tight">{assignee?.name?.split(' ')[0] || ''}</span>
+            <span
+              className={`text-[10px] text-center leading-tight ${
+                minePending ? 'font-bold text-coral-600 dark:text-coral-400' : 'text-ink-900/50 dark:text-cream-100/50'
+              }`}
+            >
+              {minePending ? 'Tu turno' : assignee?.name?.split(' ')[0] || ''}
+            </span>
           </div>
         )
       })}
@@ -306,9 +320,13 @@ function DayDetail({
   shoppingItems,
   notifications
 }) {
-  const { type, assignee, task, isCurrentWeek } = dayInfo(cursor)
+  const { type, assignee, task, isCurrentWeek, isMine } = dayInfo(cursor)
   const Icon = type ? TASK_ICONS[type.icon] : null
-  const toneClass = TASK_TONE_CLASSES[type?.key] || 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
+  const minePending = isMine && !task?.completed
+  const toneClass = minePending
+    ? 'bg-coral-500 text-white'
+    : TASK_TONE_CLASSES[type?.key] || 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
+  const badgeBorderClass = minePending ? 'border-coral-600' : 'border-ink-900/70 dark:border-cream-100/30'
   const { showToast } = useToast()
   const events = useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications)
 
@@ -328,15 +346,13 @@ function DayDetail({
           {type.key === 'compras' ? (
             <Link
               to="/compras"
-              className={`w-14 h-14 rounded-2xl border-2 border-ink-900/70 dark:border-cream-100/30 ${toneClass} flex items-center justify-center shrink-0 hover:opacity-80`}
+              className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0 hover:opacity-80`}
               title="Ir a la lista de compras"
             >
               {Icon && <Icon className="w-7 h-7" />}
             </Link>
           ) : (
-            <div
-              className={`w-14 h-14 rounded-2xl border-2 border-ink-900/70 dark:border-cream-100/30 ${toneClass} flex items-center justify-center shrink-0`}
-            >
+            <div className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0`}>
               {Icon && <Icon className="w-7 h-7" />}
             </div>
           )}
@@ -349,7 +365,8 @@ function DayDetail({
               <p className="font-display font-semibold">{type.label}</p>
             )}
             <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-              {assignee?.name || 'Sin asignar'} · +{type.points} recompensas
+              {minePending ? <span className="font-bold text-coral-600 dark:text-coral-400">Te toca a ti</span> : assignee?.name || 'Sin asignar'} · +
+              {type.points} recompensas
               {isCurrentWeek && task && <span className={task.completed ? 'text-sage-500' : 'text-gold-500'}> · {task.completed ? 'Hecha' : 'Pendiente'}</span>}
             </p>
             {!isCurrentWeek && (

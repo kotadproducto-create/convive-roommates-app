@@ -144,7 +144,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; transition: none; }
-  .toast-pop, .celebrate-pop { animation: none; }
+  .toast-pop, .celebrate-pop, .animate-pulse { animation: none; }
 }
 
 /* Balanceo suave de la mascota (ver components/Mascot.jsx) */
