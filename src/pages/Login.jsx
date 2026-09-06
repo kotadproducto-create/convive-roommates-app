@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Mascot from '../components/Mascot'
+import PasswordInput from '../components/PasswordInput'
 
 export default function Login() {
   const { login } = useAuth()
@@ -34,7 +35,7 @@ export default function Login() {
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input className="input" type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <PasswordInput placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <Link to="/olvide-contrasena" className="text-xs font-semibold text-violet-500 hover:underline -mt-1 self-end">
           ¿Has olvidado tu contraseña?
         </Link>

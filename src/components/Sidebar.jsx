@@ -28,25 +28,28 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Escritorio: barra lateral fija */}
-      <aside className="hidden md:flex md:flex-col md:w-60 shrink-0 border-r border-ink-900/10 dark:border-cream-100/15 h-screen sticky top-0 p-5">
+      {/* Escritorio: barra lateral fija (también aparece en celular
+          horizontal ancho, ya que "md" es por ancho — con overflow-y-auto
+          por si la pantalla queda muy baja y no entran las 9 pestañas) */}
+      <aside className="hidden md:flex md:flex-col md:w-60 shrink-0 border-r border-ink-900/10 dark:border-cream-100/15 h-screen sticky top-0 overflow-y-auto p-5 landscape-sm:p-3">
         <Brand />
-        <nav className="mt-8 flex flex-col gap-1">
+        <nav className="mt-8 landscape-sm:mt-3 flex flex-col gap-1">
           {NAV_ITEMS.map((item) => (
             <NavItem key={item.to} {...item} />
           ))}
         </nav>
       </aside>
 
-      {/* Móvil: barra inferior con 4 fijas + "Más" */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-ink-800/95 backdrop-blur border-t-[2.5px] border-ink-900 dark:border-cream-100/40 flex justify-around py-2">
+      {/* Móvil: barra inferior con 4 fijas + "Más" — más compacta en
+          celular horizontal bajo, para no comerse media pantalla */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-ink-800/95 backdrop-blur border-t-[2.5px] border-ink-900 dark:border-cream-100/40 flex justify-around py-2 landscape-sm:py-1">
         {primaryItems.map(({ to, label, Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
+              `flex flex-col items-center gap-0.5 px-3 py-1 landscape-sm:px-2 landscape-sm:py-0.5 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
                 isActive ? 'text-ink-900 dark:text-cream-100' : 'text-ink-900/60 dark:text-cream-100/60'
               }`
             }
@@ -54,13 +57,13 @@ export default function Sidebar() {
             {({ isActive }) => (
               <>
                 <span
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                  className={`w-8 h-8 landscape-sm:w-6 landscape-sm:h-6 rounded-xl flex items-center justify-center ${
                     isActive ? 'bg-gold-100 dark:bg-gold-400/25 border-2 border-ink-900 dark:border-cream-100/50' : ''
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-5 h-5 landscape-sm:w-4 landscape-sm:h-4" />
                 </span>
-                {label}
+                <span className="landscape-sm:hidden">{label}</span>
               </>
             )}
           </NavLink>
@@ -68,18 +71,18 @@ export default function Sidebar() {
         <button
           type="button"
           onClick={() => setShowMore(true)}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 landscape-sm:px-2 landscape-sm:py-0.5 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
             isMoreActive ? 'text-ink-900 dark:text-cream-100' : 'text-ink-900/60 dark:text-cream-100/60'
           }`}
         >
           <span
-            className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+            className={`w-8 h-8 landscape-sm:w-6 landscape-sm:h-6 rounded-xl flex items-center justify-center ${
               isMoreActive ? 'bg-gold-100 dark:bg-gold-400/25 border-2 border-ink-900 dark:border-cream-100/50' : ''
             }`}
           >
-            <MoreIcon className="w-5 h-5" />
+            <MoreIcon className="w-5 h-5 landscape-sm:w-4 landscape-sm:h-4" />
           </span>
-          Más
+          <span className="landscape-sm:hidden">Más</span>
         </button>
       </nav>
 

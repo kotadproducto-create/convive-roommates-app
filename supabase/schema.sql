@@ -279,6 +279,20 @@ create table if not exists room_partners (
   decided_at timestamptz
 );
 
+-- Registro interno de la Edge Function send-recovery-code: solo para
+-- limitar cuántas veces se puede pedir un código por email en poco
+-- tiempo (protección propia contra abuso, ya que este flujo no pasa por
+-- /auth/v1/recover y por lo tanto no hereda el rate limit de Supabase).
+-- Solo la propia función la toca (con la service_role key, que ignora
+-- RLS) — RLS queda habilitado sin políticas para que nadie más, ni con
+-- el anon key, pueda leer ni escribir aquí.
+create table if not exists password_reset_attempts (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  requested_at timestamptz not null default now()
+);
+create index if not exists password_reset_attempts_email_idx on password_reset_attempts (email, requested_at desc);
+
 -- =========================================================
 -- Funciones auxiliares para RLS (security definer: pueden leer
 -- floor_memberships sin quedar atrapadas por sus propias políticas)
@@ -462,6 +476,8 @@ create policy "requester create room_partner" on room_partners for insert with c
 create policy "partner decide room_partner" on room_partners for update using (partner_id = auth.uid() and status = 'pending') with check (partner_id = auth.uid());
 create policy "requester cancel own pending room_partner" on room_partners for update using (requester_id = auth.uid() and status = 'pending') with check (requester_id = auth.uid());
 create policy "either side unlink accepted room_partner" on room_partners for update using ((requester_id = auth.uid() or partner_id = auth.uid()) and status = 'accepted') with check (requester_id = auth.uid() or partner_id = auth.uid());
+
+alter table password_reset_attempts enable row level security;
 
 -- =========================================================
 -- Realtime: para que la app reciba cambios en vivo

@@ -3,6 +3,20 @@ export default {
   darkMode: 'class',
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
+    // Variante propia para celular en horizontal con poca altura (la
+    // mayoría de celulares modernos, al rotar, superan los 768px de
+    // ancho de "md" y ya reciben el layout de escritorio — esta variante
+    // es para afinar espaciados en esa situación de poca altura, sea
+    // cual sea el ancho). Se usa como cualquier prefijo de Tailwind:
+    // landscape-sm:py-1, landscape-sm:hidden, etc.
+    screens: {
+      'landscape-sm': { raw: '(orientation: landscape) and (max-height: 500px)' },
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1536px'
+    },
     extend: {
       fontFamily: {
         display: ['"Propilen"', '"Baloo 2"', 'sans-serif'],

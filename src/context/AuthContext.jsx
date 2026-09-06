@@ -227,16 +227,19 @@ export function AuthProvider({ children }) {
     if (error) throw new Error(traduceErrorAuth(error))
   }
 
-  // Envía el email de recuperación de contraseña. No revela si el email
-  // existe o no en la respuesta (Supabase no da error por email
-  // desconocido), así que la pantalla siempre debe mostrar el mismo
-  // mensaje de éxito, evitando que alguien use este formulario para
+  // Envía el código de recuperación de contraseña. Usa nuestra propia
+  // Edge Function (send-recovery-code) en vez de
+  // supabase.auth.resetPasswordForEmail(): el mailer integrado de
+  // Supabase en este proyecto no logra conectar con el SMTP
+  // personalizado (ver ticket de soporte SU-459895), así que la función
+  // genera el código con la API de administrador y lo manda ella misma
+  // por Resend. No revela si el email existe o no (la función siempre
+  // responde éxito genérico), así que la pantalla siempre debe mostrar
+  // el mismo mensaje, evitando que alguien use este formulario para
   // averiguar qué emails están registrados.
   async function requestPasswordReset(email) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/restablecer-contrasena`
-    })
-    if (error) throw new Error(traduceErrorAuth(error))
+    const { error } = await supabase.functions.invoke('send-recovery-code', { body: { email } })
+    if (error) throw new Error('No se pudo enviar el código. Inténtalo de nuevo en un momento.')
   }
 
   // Se llama desde la pantalla que abre el enlace del correo: Supabase ya
@@ -245,6 +248,21 @@ export function AuthProvider({ children }) {
   async function updatePasswordWithRecovery(newPassword) {
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     if (error) throw new Error(traduceErrorAuth(error))
+  }
+
+  // Camino alternativo al enlace del correo: el mismo email de
+  // recuperación trae también un código de 6 dígitos (ver plantilla de
+  // Supabase). Escribirlo a mano evita el problema de que un escáner de
+  // seguridad del proveedor de correo "abra" el enlace antes que la
+  // persona y deje el token ya usado. Verifica el código (crea la misma
+  // sesión temporal de recuperación que daría el enlace) y de una vez
+  // guarda la contraseña nueva.
+  async function confirmPasswordResetWithCode(email, code, newPassword) {
+    const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'recovery' })
+    if (error) throw new Error(traduceErrorAuth(error))
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+    if (updateError) throw new Error(traduceErrorAuth(updateError))
+    await loadProfileAndFloor(data.user?.id)
   }
 
   return (
@@ -264,6 +282,7 @@ export function AuthProvider({ children }) {
         changePassword,
         requestPasswordReset,
         updatePasswordWithRecovery,
+        confirmPasswordResetWithCode,
         logout,
         refresh
       }}
@@ -283,6 +302,9 @@ function traduceErrorAuth(error) {
   }
   if (msg.includes('Password should be at least')) {
     return 'La contraseña debe tener al menos 6 caracteres.'
+  }
+  if (msg.includes('Token has expired') || msg.includes('invalid or has expired') || msg.includes('Invalid token')) {
+    return 'Ese código no es válido o ya caducó. Pide uno nuevo.'
   }
   return msg || 'Ha ocurrido un error inesperado.'
 }

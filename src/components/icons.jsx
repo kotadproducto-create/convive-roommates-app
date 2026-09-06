@@ -311,6 +311,33 @@ export function LinkIcon(props) {
   )
 }
 
+export function EyeIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M2 10S5 4.5 10 4.5 18 10 18 10s-3 5.5-8 5.5S2 10 2 10Z" />
+      <circle cx="10" cy="10" r="2.6" />
+    </IconBase>
+  )
+}
+
+export function EyeOffIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M2 10S5 4.5 10 4.5 18 10 18 10s-3 5.5-8 5.5S2 10 2 10Z" opacity="0.5" />
+      <circle cx="10" cy="10" r="2.6" opacity="0.5" />
+      <path d="M3.5 3.5l13 13" />
+    </IconBase>
+  )
+}
+
+export function FlameIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M10 2.5c1.2 2 .3 3.4-.6 4.6-1 1.3-1.9 2.6-1.1 4.4a3.4 3.4 0 0 0 3 2 3 3 0 0 0 3-3.2c1.6 1.3 2.2 3.2 1.4 5A5.7 5.7 0 0 1 10 18.5a5.8 5.8 0 0 1-5.7-6c.2-3.4 2.4-5.2 3.9-7A9 9 0 0 0 10 2.5Z" />
+    </IconBase>
+  )
+}
+
 export const TASK_ICONS = {
   cart: CartIcon,
   trash: TrashIcon,

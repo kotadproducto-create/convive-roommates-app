@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import PasswordInput from '../components/PasswordInput'
 import { AuthShell } from './Login'
 
 export default function Register() {
@@ -60,9 +61,7 @@ export default function Register() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <input className="input" placeholder="Tu nombre" value={name} onChange={(e) => setName(e.target.value)} required />
         <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input
-          className="input"
-          type="password"
+        <PasswordInput
           placeholder="Contraseña"
           value={password}
           onChange={(e) => setPassword(e.target.value)}

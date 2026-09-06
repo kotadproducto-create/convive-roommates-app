@@ -21,17 +21,25 @@ export default function Topbar({ title, subheader }) {
 
   return (
     <header className="sticky top-0 bg-cream-100/90 dark:bg-ink-900/90 backdrop-blur z-20 border-b border-ink-900/10 dark:border-cream-100/15">
-      <div className={`flex items-center justify-between px-5 ${subheader ? 'pt-4 pb-2.5' : 'py-4'}`}>
+      <div
+        className={`flex items-center justify-between px-5 landscape-sm:px-3 ${
+          subheader ? 'pt-4 pb-2.5 landscape-sm:pt-2 landscape-sm:pb-1.5' : 'py-4 landscape-sm:py-2'
+        }`}
+      >
         <div>
-          <h1 className="font-display text-xl font-bold tracking-tight">{title}</h1>
-          {floor && <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{floor.name} · código {floor.inviteCode}</p>}
+          <h1 className="font-display text-xl landscape-sm:text-base font-bold tracking-tight">{title}</h1>
+          {floor && (
+            <p className="text-xs text-ink-900/50 dark:text-cream-100/50 landscape-sm:hidden">
+              {floor.name} · código {floor.inviteCode}
+            </p>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 landscape-sm:gap-1">
         <button
           onClick={toggleTheme}
           aria-label="Cambiar tema"
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
+          className="w-10 h-10 landscape-sm:w-8 landscape-sm:h-8 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
         >
           {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
         </button>
@@ -40,7 +48,7 @@ export default function Topbar({ title, subheader }) {
           <button
             onClick={() => setOpen((o) => !o)}
             aria-label="Notificaciones"
-            className="relative w-10 h-10 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
+            className="relative w-10 h-10 landscape-sm:w-8 landscape-sm:h-8 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
           >
             <BellIcon className="w-5 h-5" />
             {unreadCount > 0 && (

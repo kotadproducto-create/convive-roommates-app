@@ -30,9 +30,47 @@ export function getWeekKey(date = new Date()) {
 }
 
 /** Índice monotónico de semana (para calcular el turno por rotación) */
-function weekIndexFromKey(weekKey) {
+export function weekIndexFromKey(weekKey) {
   const [year, week] = weekKey.split('-W').map(Number)
   return year * 53 + week
+}
+
+/**
+ * Racha de semanas seguidas con las 3 tareas completadas. Cuenta la
+ * semana actual si ya está completa (aunque no haya terminado), y sigue
+ * hacia atrás por semanas ANTERIORES consecutivas y 100% completadas;
+ * se corta en la primera semana pasada incompleta o de la que no haya
+ * registro (piso nuevo, o semana sin tareas generadas).
+ */
+export function computeWeekStreak(tasks, currentWeekKey) {
+  const byWeek = new Map()
+  for (const t of tasks) {
+    if (!byWeek.has(t.weekKey)) byWeek.set(t.weekKey, [])
+    byWeek.get(t.weekKey).push(t)
+  }
+
+  let streak = 0
+  let index = weekIndexFromKey(currentWeekKey)
+  let isCurrentWeek = true
+
+  while (true) {
+    const weekKey = [...byWeek.keys()].find((k) => weekIndexFromKey(k) === index)
+    if (!weekKey) break
+    const weekTasks = byWeek.get(weekKey)
+    const allDone = weekTasks.length > 0 && weekTasks.every((t) => t.completed)
+
+    if (isCurrentWeek) {
+      isCurrentWeek = false
+      if (allDone) streak++
+      index--
+      continue
+    }
+    if (!allDone) break
+    streak++
+    index--
+  }
+
+  return streak
 }
 
 export function getMondayOfWeek(weekKey) {

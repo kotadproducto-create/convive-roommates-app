@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
-import { TASK_TYPES, TASK_DAY_OFFSET, getMondayOfWeek } from '../lib/rotation'
-import { StampIcon, DropletIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon } from '../components/icons'
+import { TASK_TYPES, TASK_DAY_OFFSET, getMondayOfWeek, computeWeekStreak } from '../lib/rotation'
+import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon } from '../components/icons'
 import { potAmountColorClass } from '../lib/pot'
 import { getTimeGreeting } from '../lib/greeting'
 import { useToast } from '../context/ToastContext'
@@ -44,11 +44,10 @@ export default function Timeline() {
     })
   }, [monday, tasks])
 
-  const hygieneTasks = tasks.filter((t) => t.type === 'basura' || t.type === 'lavadora')
-  const hygieneDone = hygieneTasks.filter((t) => t.completed).length
   const outOfStockCount = shoppingItems.filter((i) => i.stockLevel === 'out').length
   const pendingShoppingCount = shoppingItems.filter((i) => i.stockLevel !== 'ok').length
   const weekDone = tasks.filter((t) => t.completed).length
+  const weekStreak = computeWeekStreak(tasks, weekKey)
   const greeting = getTimeGreeting()
   const GreetingIcon = greeting.icon === 'moon' ? MoonIcon : SunIcon
 
@@ -57,11 +56,11 @@ export default function Timeline() {
       title="Inicio"
       subheader={
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-5 pb-3">
-          <Chip to="/calendario" tone="sage" icon={StampIcon} value={`${weekDone}/${tasks.length}`} label="Racha" />
+          <Chip to="/calendario" tone="sky" icon={StampIcon} value={`${weekDone}/${tasks.length}`} label="Actividades" />
           <Chip to="/recompensas" tone="gold" icon={CoinIcon} value={user?.points || 0} label="Puntos" />
           <Chip
             to="/pote"
-            tone="violet"
+            tone="gold"
             icon={JarIcon}
             value={`${floor?.potAmount ?? 0}€`}
             label="Pote"
@@ -72,8 +71,8 @@ export default function Timeline() {
       }
     >
       {/* Perfil + saludo: sin caja, flotando sobre el fondo */}
-      <div className="flex items-center gap-4 mb-6 mt-1">
-        <div className="w-16 h-16 rounded-full bg-gold-400 border-2 border-ink-900 text-ink-900 flex items-center justify-center text-2xl font-bold shrink-0">
+      <div className="flex items-center gap-4 landscape-sm:gap-3 mb-6 landscape-sm:mb-3 mt-1">
+        <div className="w-16 h-16 landscape-sm:w-11 landscape-sm:h-11 rounded-full bg-gold-400 border-2 border-ink-900 text-ink-900 flex items-center justify-center text-2xl landscape-sm:text-base font-bold shrink-0">
           {user?.name?.[0]?.toUpperCase()}
         </div>
         <div className="min-w-0">
@@ -91,7 +90,15 @@ export default function Timeline() {
       <div className="grid lg:grid-cols-3 gap-5 items-start mb-8">
         {/* Calendario de racha */}
         <section className="lg:col-span-2">
-          <h3 className="font-display text-lg font-bold mb-3">Racha de la semana</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-display text-lg font-bold">Racha de la semana</h3>
+            {weekStreak > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-gold-600 dark:text-gold-300">
+                <FlameIcon className="w-4 h-4" />
+                {weekStreak} {weekStreak === 1 ? 'semana' : 'semanas'}
+              </span>
+            )}
+          </div>
           <div className="card p-4">
             <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
               {days.map(({ date, type, task }) => {
@@ -204,7 +211,13 @@ export default function Timeline() {
         <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mb-3 sm:hidden">Desliza una tarjeta para ir más rápido.</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Reveal delay={0}>
-            <ThemeCard to="/calendario" icon={DropletIcon} tone="violet" label="Higiene" stat={`${hygieneDone}/${hygieneTasks.length} hecho`} />
+            <ThemeCard
+              to="/convives"
+              icon={UsersIcon}
+              tone="violet"
+              label="Convives"
+              stat={`${members.length} en el piso`}
+            />
           </Reveal>
           <Reveal delay={60}>
             <ThemeCard
@@ -220,7 +233,7 @@ export default function Timeline() {
             <ThemeCard to="/pote" icon={JarIcon} tone="gold" label="Pote de dinero" stat={`${floor?.potAmount ?? 0}€ disponibles`} />
           </Reveal>
           <Reveal delay={180}>
-            <ThemeCard icon={SparkleIcon} tone="sky" label="Actividades" stat="Próximamente" soon />
+            <ThemeCard to="/calendario" icon={SparkleIcon} tone="sky" label="Actividades" stat={`${weekDone}/${tasks.length} hecho`} />
           </Reveal>
         </div>
       </section>
@@ -232,7 +245,8 @@ const CHIP_TONE_CLASSES = {
   sage: { bg: 'bg-sage-100 dark:bg-sage-500/15', badge: 'bg-sage-500' },
   gold: { bg: 'bg-gold-100 dark:bg-gold-400/15', badge: 'bg-gold-500' },
   violet: { bg: 'bg-violet-100 dark:bg-violet-700/20', badge: 'bg-violet-500' },
-  coral: { bg: 'bg-coral-100 dark:bg-coral-500/15', badge: 'bg-coral-500' }
+  coral: { bg: 'bg-coral-100 dark:bg-coral-500/15', badge: 'bg-coral-500' },
+  sky: { bg: 'bg-sky-100 dark:bg-sky-500/15', badge: 'bg-sky-500' }
 }
 
 // Botón de acceso rápido de la cabecera de Inicio (racha, recompensas,
