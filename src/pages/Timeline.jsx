@@ -9,6 +9,7 @@ import { potAmountColorClass } from '../lib/pot'
 import { getTimeGreeting } from '../lib/greeting'
 import { useToast } from '../context/ToastContext'
 import Reveal from '../components/Reveal'
+import PendingPopups from '../components/PendingPopups'
 import { format, formatDistanceToNow, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -52,11 +53,20 @@ export default function Timeline() {
   const GreetingIcon = greeting.icon === 'moon' ? MoonIcon : SunIcon
 
   return (
-    <AppLayout
-      title="Inicio"
-      subheader={
+    <>
+      <PendingPopups user={user} floor={floor} tasks={tasks} shoppingItems={shoppingItems} />
+      <AppLayout
+        title="Inicio"
+        subheader={
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-5 pb-3">
-          <Chip to="/calendario" tone="sky" icon={StampIcon} value={`${weekDone}/${tasks.length}`} label="Actividades" />
+          <Chip
+            to="/calendario"
+            tone="sky"
+            icon={StampIcon}
+            value={`${weekDone}/${tasks.length}`}
+            label="Actividades"
+            streak={weekStreak}
+          />
           <Chip to="/recompensas" tone="gold" icon={CoinIcon} value={user?.points || 0} label="Puntos" />
           <Chip
             to="/pote"
@@ -211,13 +221,7 @@ export default function Timeline() {
         <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mb-3 sm:hidden">Desliza una tarjeta para ir más rápido.</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Reveal delay={0}>
-            <ThemeCard
-              to="/convives"
-              icon={UsersIcon}
-              tone="violet"
-              label="Convives"
-              stat={`${members.length} en el piso`}
-            />
+            <ThemeCard to="/calendario" icon={SparkleIcon} tone="sky" label="Actividades" stat={`${weekDone}/${tasks.length} hecho`} />
           </Reveal>
           <Reveal delay={60}>
             <ThemeCard
@@ -233,11 +237,18 @@ export default function Timeline() {
             <ThemeCard to="/pote" icon={JarIcon} tone="gold" label="Pote de dinero" stat={`${floor?.potAmount ?? 0}€ disponibles`} />
           </Reveal>
           <Reveal delay={180}>
-            <ThemeCard to="/calendario" icon={SparkleIcon} tone="sky" label="Actividades" stat={`${weekDone}/${tasks.length} hecho`} />
+            <ThemeCard
+              to="/convives"
+              icon={UsersIcon}
+              tone="violet"
+              label="Convives"
+              stat={`${members.length} en el piso`}
+            />
           </Reveal>
         </div>
       </section>
-    </AppLayout>
+      </AppLayout>
+    </>
   )
 }
 
@@ -251,16 +262,30 @@ const CHIP_TONE_CLASSES = {
 
 // Botón de acceso rápido de la cabecera de Inicio (racha, recompensas,
 // pote, compras): icono en una burbuja de color sólido + valor/etiqueta,
-// y lleva directo a su apartado.
-function Chip({ to, tone, icon: Icon, value, label, valueClassName }) {
+// y lleva directo a su apartado. `streak` (opcional) agrega el fueguito
+// con el número de semanas seguidas completadas, en la esquina del
+// icono — dorado y un poco más grande a partir de 7, para dar la
+// sensación de "racha larga".
+function Chip({ to, tone, icon: Icon, value, label, valueClassName, streak }) {
   const t = CHIP_TONE_CLASSES[tone]
+  const isLongStreak = streak >= 7
   return (
     <Link
       to={to}
       className={`shrink-0 inline-flex items-center gap-1.5 border-2 border-ink-900/70 dark:border-cream-100/30 rounded-full pl-1 pr-2.5 py-1 ${t.bg} shadow-[0_2px_0_0_theme(colors.ink.900/20%)] dark:shadow-[0_2px_0_0_theme(colors.cream.100/15%)] transition-transform active:translate-y-0.5 active:shadow-none`}
     >
-      <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${t.badge}`}>
+      <span className={`relative w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${t.badge}`}>
         <Icon className="w-3 h-3 text-white" />
+        {streak > 0 && (
+          <span
+            className={`absolute -top-1.5 -right-1.5 flex items-center gap-0.5 pl-0.5 pr-1 h-3.5 rounded-full border border-cream-100 dark:border-ink-900 ${
+              isLongStreak ? 'bg-gold-500 scale-110' : 'bg-coral-500'
+            }`}
+          >
+            <FlameIcon className="w-2 h-2 text-white shrink-0" />
+            <span className="text-[8px] font-extrabold text-white leading-none">{streak}</span>
+          </span>
+        )}
       </span>
       <span className="leading-tight whitespace-nowrap">
         <span className={`block text-xs font-bold ${valueClassName || 'text-ink-900 dark:text-cream-100'}`}>{value}</span>

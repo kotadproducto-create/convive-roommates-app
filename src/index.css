@@ -40,7 +40,9 @@ html, body, #root {
 }
 
 body {
-  @apply bg-cream-100 text-ink-900 font-body antialiased;
+  /* Prueba: fondo blanco en vez de crema (bg-cream-100) — el resto de
+     la paleta no cambió. Para volver al crema, solo cambiar esta clase. */
+  @apply bg-white text-ink-900 font-body antialiased;
 }
 
 .dark body {

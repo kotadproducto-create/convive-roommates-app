@@ -53,7 +53,7 @@ export default function Login() {
 
 export function AuthShell({ children }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-cream-100 dark:bg-ink-900 px-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-ink-900 px-4 relative overflow-hidden">
       <div className="dot-grid absolute inset-0 text-ink-900/[0.06] dark:text-cream-100/[0.05] pointer-events-none" />
       <div className="relative w-full max-w-sm">
         <div className="flex flex-col items-center gap-1 mb-7">

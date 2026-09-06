@@ -20,7 +20,7 @@ export default function Topbar({ title, subheader }) {
   const visibleNotifications = showAll ? notifications : unread
 
   return (
-    <header className="sticky top-0 bg-cream-100/90 dark:bg-ink-900/90 backdrop-blur z-20 border-b border-ink-900/10 dark:border-cream-100/15">
+    <header className="sticky top-0 bg-white/90 dark:bg-ink-900/90 backdrop-blur z-20 border-b border-ink-900/10 dark:border-cream-100/15">
       <div
         className={`flex items-center justify-between px-5 landscape-sm:px-3 ${
           subheader ? 'pt-4 pb-2.5 landscape-sm:pt-2 landscape-sm:pb-1.5' : 'py-4 landscape-sm:py-2'

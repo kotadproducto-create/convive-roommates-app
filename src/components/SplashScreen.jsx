@@ -10,7 +10,7 @@ import Mascot from './Mascot'
  */
 export default function SplashScreen() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-cream-100 dark:bg-ink-900 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-ink-900 overflow-hidden">
       <div className="dot-grid absolute inset-0 text-ink-900/[0.06] dark:text-cream-100/[0.05] pointer-events-none" />
       <div className="relative flex flex-col items-center gap-3">
         <Mascot className="w-20 h-20 mb-1" />
