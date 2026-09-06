@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
 import { PASSWORD_RULE, PASSWORD_RULE_MESSAGE } from '../lib/validation'
 import { AuthShell } from './Login'
 
 export default function ResetPassword() {
   const { user, loading, updatePasswordWithRecovery } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -21,7 +23,7 @@ export default function ResetPassword() {
       return
     }
     if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden.')
+      setError(t('auth.reset.passwordMismatch'))
       return
     }
     setSubmitting(true)
@@ -39,9 +41,9 @@ export default function ResetPassword() {
   if (done) {
     return (
       <AuthShell>
-        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">Contraseña actualizada</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.reset.updatedTitle')}</h1>
         <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-          Ya puedes usarla la próxima vez que entres. Te llevamos dentro…
+          {t('auth.reset.updatedBody')}
         </p>
       </AuthShell>
     )
@@ -55,13 +57,12 @@ export default function ResetPassword() {
   if (!user) {
     return (
       <AuthShell>
-        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">Enlace no válido</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.reset.invalidTitle')}</h1>
         <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-6">
-          Este enlace de recuperación no es válido o ya caducó — a veces pasa porque el propio correo lo abre antes que
-          tú, por seguridad. El mismo email trae también un código de 6 dígitos que puedes escribir a mano.
+          {t('auth.reset.invalidBody')}
         </p>
         <Link to="/olvide-contrasena" className="btn-primary w-full text-center block">
-          Usar el código del correo
+          {t('auth.reset.useCodeLink')}
         </Link>
       </AuthShell>
     )
@@ -69,13 +70,13 @@ export default function ResetPassword() {
 
   return (
     <AuthShell>
-      <h1 className="font-display text-2xl font-bold tracking-tight mb-1">Elige una nueva contraseña</h1>
-      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-6">Mínimo 8 caracteres, con una mayúscula y un número.</p>
+      <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.reset.title')}</h1>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-6">{t('auth.reset.subtitle')}</p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <input
           className="input"
           type="password"
-          placeholder="Nueva contraseña"
+          placeholder={t('auth.reset.newPasswordPlaceholder')}
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           required
@@ -83,14 +84,14 @@ export default function ResetPassword() {
         <input
           className="input"
           type="password"
-          placeholder="Confirmar nueva contraseña"
+          placeholder={t('auth.reset.confirmPasswordPlaceholder')}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
         />
         {error && <p className="text-sm font-medium text-clay-500">{error}</p>}
         <button className="btn-primary mt-2" type="submit" disabled={submitting}>
-          {submitting ? 'Guardando…' : 'Guardar contraseña'}
+          {submitting ? t('auth.reset.saving') : t('auth.reset.save')}
         </button>
       </form>
     </AuthShell>

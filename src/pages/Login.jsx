@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
 import Mascot from '../components/Mascot'
 import PasswordInput from '../components/PasswordInput'
 
 export default function Login() {
   const { login } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,29 +31,30 @@ export default function Login() {
 
   return (
     <AuthShell>
-      <h1 className="font-display text-2xl font-bold tracking-tight mb-1">Bienvenido de nuevo</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.login.title')}</h1>
       <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-6">
-        Entra para ver las tareas de tu piso.
+        {t('auth.login.subtitle')}
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <PasswordInput placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <input className="input" type="email" placeholder={t('auth.login.emailPlaceholder')} value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <PasswordInput placeholder={t('auth.login.passwordPlaceholder')} value={password} onChange={(e) => setPassword(e.target.value)} required />
         <Link to="/olvide-contrasena" className="text-xs font-semibold text-violet-500 hover:underline -mt-1 self-end">
-          ¿Has olvidado tu contraseña?
+          {t('auth.login.forgotPassword')}
         </Link>
         {error && <p className="text-sm font-medium text-clay-500">{error}</p>}
         <button className="btn-primary mt-2" type="submit" disabled={submitting}>
-          {submitting ? 'Entrando…' : 'Entrar'}
+          {submitting ? t('auth.login.submitting') : t('auth.login.submit')}
         </button>
       </form>
       <p className="text-sm mt-5 text-center text-ink-900/60 dark:text-cream-100/60">
-        ¿No tienes cuenta? <Link to="/register" className="text-violet-500 font-semibold hover:underline">Regístrate</Link>
+        {t('auth.login.noAccount')} <Link to="/register" className="text-violet-500 font-semibold hover:underline">{t('auth.login.registerLink')}</Link>
       </p>
     </AuthShell>
   )
 }
 
 export function AuthShell({ children }) {
+  const { t } = useLanguage()
   return (
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-ink-900 px-4 relative overflow-hidden">
       <div className="dot-grid absolute inset-0 text-ink-900/[0.06] dark:text-cream-100/[0.05] pointer-events-none" />
@@ -68,7 +71,7 @@ export function AuthShell({ children }) {
             </svg>
             <span className="font-display font-bold text-2xl tracking-tight">Convive</span>
           </div>
-          <p className="text-xs font-medium text-ink-900/50 dark:text-cream-100/50 uppercase tracking-wide">Organizar el piso, sin dramas</p>
+          <p className="text-xs font-medium text-ink-900/50 dark:text-cream-100/50 uppercase tracking-wide">{t('auth.tagline')}</p>
         </div>
         <div className="card p-7">{children}</div>
       </div>

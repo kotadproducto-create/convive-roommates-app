@@ -1,4 +1,5 @@
 import Mascot from './Mascot'
+import { useLanguage } from '../context/LanguageContext'
 
 /**
  * Pantalla de carga inicial: se ve mientras se resuelve la sesión (ver
@@ -9,6 +10,7 @@ import Mascot from './Mascot'
  * dos apps distintas.
  */
 export default function SplashScreen() {
+  const { t } = useLanguage()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-ink-900 overflow-hidden">
       <div className="dot-grid absolute inset-0 text-ink-900/[0.06] dark:text-cream-100/[0.05] pointer-events-none" />
@@ -24,7 +26,7 @@ export default function SplashScreen() {
           </svg>
           <span className="font-display font-bold text-2xl tracking-tight text-ink-900 dark:text-cream-100">Convive</span>
         </div>
-        <div className="flex items-center gap-1.5 mt-1" role="status" aria-label="Cargando">
+        <div className="flex items-center gap-1.5 mt-1" role="status" aria-label={t('splash.loading')}>
           <span className="w-2 h-2 rounded-full bg-violet-500 splash-dot" style={{ animationDelay: '0ms' }} />
           <span className="w-2 h-2 rounded-full bg-coral-400 splash-dot" style={{ animationDelay: '160ms' }} />
           <span className="w-2 h-2 rounded-full bg-gold-400 splash-dot" style={{ animationDelay: '320ms' }} />

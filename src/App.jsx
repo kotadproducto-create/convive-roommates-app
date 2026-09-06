@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { LanguageProvider } from './context/LanguageContext'
 import { ToastProvider } from './context/ToastContext'
 import { PushProvider } from './context/PushContext'
 import { DataProvider } from './context/DataContext'
@@ -28,6 +29,7 @@ function AuthedData({ children }) {
 export default function App() {
   return (
     <ThemeProvider>
+    <LanguageProvider>
       <ToastProvider>
       <PushProvider>
       <AuthProvider>
@@ -132,6 +134,7 @@ export default function App() {
       </AuthProvider>
       </PushProvider>
       </ToastProvider>
+    </LanguageProvider>
     </ThemeProvider>
   )
 }

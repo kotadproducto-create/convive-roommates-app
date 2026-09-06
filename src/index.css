@@ -131,6 +131,19 @@ body {
   animation: toast-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Pop-up de pendientes en Inicio (PendingPopups): cae suave desde
+   arriba, sin rebote — se re-dispara en cada aviso porque el componente
+   le pone key={current.key}, así que un aviso en secuencia detrás de
+   otro también se siente como una entrada nueva, no un cambio brusco
+   de contenido en el mismo cuadro. */
+@keyframes popup-drop {
+  from { opacity: 0; transform: translateY(-48px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.popup-drop {
+  animation: popup-drop 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* "Reacción" al completar una tarea: un pequeño pop de celebración */
 @keyframes celebrate-pop {
   0% { transform: scale(1) rotate(0deg); }
@@ -144,7 +157,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; transition: none; }
-  .toast-pop, .celebrate-pop, .animate-pulse { animation: none; }
+  .toast-pop, .celebrate-pop, .animate-pulse, .popup-drop { animation: none; }
 }
 
 /* Balanceo suave de la mascota (ver components/Mascot.jsx) */

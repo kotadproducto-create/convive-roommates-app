@@ -4,19 +4,20 @@ import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { TASK_TYPES, TASK_DAY_OFFSET, getMondayOfWeek, computeWeekStreak } from '../lib/rotation'
-import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon } from '../components/icons'
+import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon, BellIcon } from '../components/icons'
 import { potAmountColorClass } from '../lib/pot'
 import { getTimeGreeting } from '../lib/greeting'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
 import PendingPopups from '../components/PendingPopups'
 import { format, formatDistanceToNow, isSameDay } from 'date-fns'
-import { es } from 'date-fns/locale'
 
 export default function Timeline() {
   const { user } = useAuth()
   const { floor, members, tasks, notifications, shoppingItems, completeTask, uncompleteTask, weekKey, markAllNotificationsRead } = useData()
   const { showToast } = useToast()
+  const { t, dateLocale } = useLanguage()
   const [showAllNotifications, setShowAllNotifications] = useState(false)
 
   const monday = getMondayOfWeek(weekKey)
@@ -56,7 +57,7 @@ export default function Timeline() {
     <>
       <PendingPopups user={user} floor={floor} tasks={tasks} shoppingItems={shoppingItems} />
       <AppLayout
-        title="Inicio"
+        title={t('nav.inicio')}
         subheader={
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-5 pb-3">
           <Chip
@@ -64,19 +65,19 @@ export default function Timeline() {
             tone="sky"
             icon={StampIcon}
             value={`${weekDone}/${tasks.length}`}
-            label="Actividades"
+            label={t('timeline.chips.activities')}
             streak={weekStreak}
           />
-          <Chip to="/recompensas" tone="gold" icon={CoinIcon} value={user?.points || 0} label="Puntos" />
+          <Chip to="/recompensas" tone="gold" icon={CoinIcon} value={user?.points || 0} label={t('timeline.chips.points')} />
           <Chip
             to="/pote"
             tone="gold"
             icon={JarIcon}
             value={`${floor?.potAmount ?? 0}€`}
-            label="Pote"
+            label={t('timeline.chips.pot')}
             valueClassName={potAmountColorClass(floor?.potAmount ?? 0)}
           />
-          <Chip to="/compras" tone="coral" icon={CartIcon} value={pendingShoppingCount} label="Compras" />
+          <Chip to="/compras" tone="coral" icon={CartIcon} value={pendingShoppingCount} label={t('timeline.chips.shopping')} />
         </div>
       }
     >
@@ -88,11 +89,11 @@ export default function Timeline() {
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-violet-500 dark:text-violet-300">
             <GreetingIcon className="w-3.5 h-3.5" />
-            {greeting.label}
+            {t(`greeting.${greeting.key}`)}
           </p>
           <h2 className="font-display text-2xl font-bold tracking-tight -mt-0.5">{user?.name?.split(' ')[0]}</h2>
           <p className="font-display text-sm font-medium text-ink-900/60 dark:text-cream-100/60">
-            Esto es lo que pasa en {floor?.name}.
+            {t('timeline.subtitle', { floorName: floor?.name })}
           </p>
         </div>
       </div>
@@ -101,11 +102,11 @@ export default function Timeline() {
         {/* Calendario de racha */}
         <section className="lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display text-lg font-bold">Racha de la semana</h3>
+            <h3 className="font-display text-lg font-bold">{t('timeline.streakTitle')}</h3>
             {weekStreak > 0 && (
               <span className="inline-flex items-center gap-1 text-xs font-bold text-gold-600 dark:text-gold-300">
                 <FlameIcon className="w-4 h-4" />
-                {weekStreak} {weekStreak === 1 ? 'semana' : 'semanas'}
+                {weekStreak} {weekStreak === 1 ? t('timeline.streakWeek') : t('timeline.streakWeeks')}
               </span>
             )}
           </div>
@@ -122,7 +123,7 @@ export default function Timeline() {
                     className={`flex flex-col items-center gap-1.5 rounded-xl py-2.5 px-1 ${today ? 'bg-violet-50 dark:bg-violet-700/20' : ''}`}
                   >
                     <span className="text-[10px] font-bold uppercase text-ink-900/40 dark:text-cream-100/40">
-                      {format(date, 'EEEEE', { locale: es })}
+                      {format(date, 'EEEEE', { locale: dateLocale })}
                     </span>
                     <span className="text-xs font-bold">{format(date, 'd')}</span>
                     {type ? (
@@ -170,28 +171,31 @@ export default function Timeline() {
                 <JarIcon className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">Pote de dinero</p>
-                <p className={`text-xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{floor?.potAmount ?? 0}€ disponibles</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('timeline.potCardLabel')}</p>
+                <p className={`text-xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{t('timeline.potAvailable', { amount: floor?.potAmount ?? 0 })}</p>
               </div>
             </div>
             <Link to="/pote" className="btn-secondary text-sm w-full">
-              Ver detalles
+              {t('timeline.viewDetails')}
             </Link>
           </div>
 
           {/* Notificaciones recientes */}
           <div className="card p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-base font-bold">Notificaciones</h3>
+              <h3 className="font-display text-base font-bold flex items-center gap-1.5">
+                <BellIcon className="w-4 h-4" />
+                {t('timeline.notifications')}
+              </h3>
               {unreadNotifications.length > 0 && (
                 <button onClick={markAllNotificationsRead} className="text-xs font-semibold text-violet-500 hover:underline">
-                  Marcar leídas
+                  {t('timeline.markRead')}
                 </button>
               )}
             </div>
             {visibleNotifications.length === 0 ? (
               <p className="text-sm text-ink-900/50 dark:text-cream-100/50">
-                {showAllNotifications ? 'Sin notificaciones todavía.' : 'Sin notificaciones nuevas.'}
+                {showAllNotifications ? t('timeline.noNotificationsYet') : t('timeline.noNewNotifications')}
               </p>
             ) : (
               <ul className="flex flex-col gap-2.5">
@@ -199,7 +203,7 @@ export default function Timeline() {
                   <li key={n.id} className="text-sm">
                     <p className={n.read ? '' : 'font-semibold'}>{n.message}</p>
                     <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
-                      {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: es })}
+                      {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: dateLocale })}
                     </p>
                   </li>
                 ))}
@@ -211,7 +215,7 @@ export default function Timeline() {
                 onClick={() => setShowAllNotifications((s) => !s)}
                 className="w-full text-center text-xs font-semibold text-violet-500 hover:underline pt-3 mt-3 border-t border-ink-900/10 dark:border-cream-100/15"
               >
-                {showAllNotifications ? 'Ocultar anteriores' : 'Ver notificaciones anteriores'}
+                {showAllNotifications ? t('timeline.hidePrevious') : t('timeline.showPrevious')}
               </button>
             )}
           </div>
@@ -220,32 +224,42 @@ export default function Timeline() {
 
       {/* Temas */}
       <section>
-        <h3 className="font-display text-lg font-bold mb-3">Temas</h3>
-        <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mb-3 sm:hidden">Desliza una tarjeta para ir más rápido.</p>
+        <h3 className="font-display text-lg font-bold mb-3">{t('timeline.themesTitle')}</h3>
+        <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mb-3 sm:hidden">{t('timeline.swipeHint')}</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Reveal delay={0}>
-            <ThemeCard to="/calendario" icon={SparkleIcon} tone="sky" label="Actividades" stat={`${weekDone}/${tasks.length} hecho`} />
+            <ThemeCard
+              to="/calendario"
+              icon={SparkleIcon}
+              tone="sky"
+              label={t('timeline.themeActivities')}
+              stat={t('timeline.themeActivitiesStat', { done: weekDone, total: tasks.length })}
+            />
           </Reveal>
           <Reveal delay={60}>
             <ThemeCard
               to="/compras"
               icon={CartIcon}
               tone="coral"
-              label="Compras"
-              stat={outOfStockCount > 0 ? `${outOfStockCount} agotado${outOfStockCount > 1 ? 's' : ''}` : `${shoppingItems.length} en la lista`}
+              label={t('timeline.themeShopping')}
+              stat={
+                outOfStockCount > 0
+                  ? t('timeline.outOfStock', { count: outOfStockCount, plural: outOfStockCount > 1 ? 's' : '' })
+                  : t('timeline.inList', { count: shoppingItems.length })
+              }
               warn={outOfStockCount > 0}
             />
           </Reveal>
           <Reveal delay={120}>
-            <ThemeCard to="/pote" icon={JarIcon} tone="gold" label="Pote de dinero" stat={`${floor?.potAmount ?? 0}€ disponibles`} />
+            <ThemeCard to="/pote" icon={JarIcon} tone="gold" label={t('timeline.themePot')} stat={t('timeline.themePotStat', { amount: floor?.potAmount ?? 0 })} />
           </Reveal>
           <Reveal delay={180}>
             <ThemeCard
               to="/convives"
               icon={UsersIcon}
               tone="violet"
-              label="Convives"
-              stat={`${members.length} en el piso`}
+              label={t('timeline.themeConvives')}
+              stat={t('timeline.themeConvivesStat', { count: members.length })}
             />
           </Reveal>
         </div>
@@ -324,6 +338,7 @@ const SWIPE_REVEAL = 64
 // directo "Ir" detrás — sigue siendo un <Link> normal por debajo, así
 // que tocarla (sin arrastrar) navega igual que antes.
 function ThemeCard({ icon: Icon, label, stat, tone, warn, soon, to }) {
+  const { t } = useLanguage()
   const [dragX, setDragX] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const drag = useRef({ startX: 0, active: false, moved: false })
@@ -383,7 +398,7 @@ function ThemeCard({ icon: Icon, label, stat, tone, warn, soon, to }) {
         <Link
           to={to}
           className="w-10 h-10 rounded-full border-2 border-cream-100 bg-cream-100 text-ink-900 flex items-center justify-center text-lg font-bold shrink-0"
-          aria-label={`Ir a ${label}`}
+          aria-label={t('timeline.goTo', { label })}
         >
           →
         </Link>

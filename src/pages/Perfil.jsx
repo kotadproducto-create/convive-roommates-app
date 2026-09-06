@@ -31,6 +31,15 @@ export default function Perfil() {
   } = useData()
   const { showToast } = useToast()
 
+  // React Router no hace scroll nativo a #anclas (eso solo pasa en
+  // navegación de página completa) — el menú de Ajustes enlaza a
+  // /perfil#preferencias, así que hay que moverlo a mano.
+  useEffect(() => {
+    if (!window.location.hash) return
+    const el = document.getElementById(window.location.hash.slice(1))
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   if (!user) return null
 
   return (
@@ -568,7 +577,7 @@ function PreferencesCard() {
   const { supported, subscribed, needsInstall, optIn, optOut } = usePush()
 
   return (
-    <div className="card p-5">
+    <div id="preferencias" className="card p-5 scroll-mt-24">
       <h2 className="font-display font-semibold mb-3">Preferencias</h2>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">

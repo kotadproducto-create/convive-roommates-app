@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TASK_TYPES } from '../lib/rotation'
+import { useLanguage } from '../context/LanguageContext'
 import { CartIcon, SparkleIcon, CloseIcon } from './icons'
 
 const TASK_LABEL = Object.fromEntries(TASK_TYPES.map((t) => [t.key, t.label]))
@@ -46,6 +47,8 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
   // no hay riesgo de quedarse con un estado viejo mientras tasks/
   // shoppingItems todavía están cargando.
   const [, bump] = useState(0)
+  const [showQueue, setShowQueue] = useState(false)
+  const { t, language } = useLanguage()
 
   const keyFor = (category) => (user && floor ? `convive_popup_${floor.id}_${user.id}_${category}` : null)
 
@@ -62,10 +65,10 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
           icon: CartIcon,
           tone: 'coral',
           urgent: true,
-          title: 'Tienes que comprar estos artículos',
+          title: t('pendingPopups.shoppingTitle'),
           items: missing.map((i) => i.name),
           linkTo: '/compras',
-          linkLabel: 'Ir a lista de compras'
+          linkLabel: t('pendingPopups.goToShopping')
         })
       }
     }
@@ -78,14 +81,15 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
         key: 'actividades',
         icon: SparkleIcon,
         tone: 'sky',
-        title: 'Debes realizar estas actividades',
+        title: t('pendingPopups.activitiesTitle'),
         bigNumber: pendingActivities.length,
         items: pendingActivities.map((t) => TASK_LABEL[t.type] || t.type)
       })
     }
 
     return list
-  }, [user, tasks, shoppingItems])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, tasks, shoppingItems, language])
 
   // Cerrar una categoría la saca de `popups` (queda marcada en
   // localStorage), y la siguiente pendiente pasa a ser la primera
@@ -99,8 +103,11 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
 
   function handleClose() {
     markDismissedToday(keyFor(current.key))
+    setShowQueue(false)
     bump((n) => n + 1)
   }
+
+  const restOfQueue = popups.slice(1)
 
   return (
     <div
@@ -108,7 +115,8 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
       onClick={handleClose}
     >
       <div
-        className={`w-full sm:max-w-sm bg-white dark:bg-ink-800 rounded-2xl p-5 relative toast-pop ${
+        key={current.key}
+        className={`w-full sm:max-w-sm bg-white dark:bg-ink-800 rounded-2xl p-5 relative popup-drop ${
           current.urgent
             ? 'border-[3px] border-clay-500 shadow-[0_0_0_4px_theme(colors.clay.100)] dark:shadow-[0_0_0_4px_theme(colors.clay.500/20%)]'
             : 'border-2 border-ink-900 dark:border-cream-100/40'
@@ -118,14 +126,14 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
         <button
           type="button"
           onClick={handleClose}
-          aria-label="Cerrar"
+          aria-label={t('pendingPopups.close')}
           className="absolute top-3 right-3 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
         >
           <CloseIcon className="w-4 h-4" />
         </button>
 
         {current.urgent && (
-          <p className="text-xs font-extrabold uppercase tracking-wide text-clay-500 mb-1.5">¡Atención!</p>
+          <p className="text-xs font-extrabold uppercase tracking-wide text-clay-500 mb-1.5">{t('pendingPopups.attention')}</p>
         )}
 
         <div
@@ -157,13 +165,40 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
           </Link>
         )}
         <button type="button" onClick={handleClose} className={current.linkTo ? 'btn-secondary w-full' : 'btn-primary w-full'}>
-          Entendido
+          {t('pendingPopups.understood')}
         </button>
 
-        {popups.length > 1 && (
-          <p className="text-center text-xs text-ink-900/40 dark:text-cream-100/40 mt-2">
-            Queda{popups.length > 2 ? 'n' : ''} {popups.length - 1} más
-          </p>
+        {restOfQueue.length > 0 && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => setShowQueue((s) => !s)}
+              className="w-full text-center text-xs font-semibold text-violet-500 hover:underline"
+            >
+              {showQueue
+                ? t('pendingPopups.hideQueue')
+                : t(restOfQueue.length > 1 ? 'pendingPopups.queueMorePlural' : 'pendingPopups.queueMoreSingular', {
+                    count: restOfQueue.length
+                  })}
+            </button>
+            {showQueue && (
+              <div className="mt-2 pt-2 border-t border-ink-900/10 dark:border-cream-100/15 flex flex-col gap-2">
+                {restOfQueue.map((p) => (
+                  <div key={p.key}>
+                    <p className="text-xs font-bold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{p.title}</p>
+                    <ul className="flex flex-col gap-1 text-sm text-ink-900/70 dark:text-cream-100/70">
+                      {p.items.map((item, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <span className="w-1 h-1 rounded-full bg-ink-900/30 dark:bg-cream-100/30 shrink-0" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

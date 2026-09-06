@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
 import { PASSWORD_RULE, PASSWORD_RULE_MESSAGE } from '../lib/validation'
 import { AuthShell } from './Login'
 
 export default function ForgotPassword() {
   const { requestPasswordReset, confirmPasswordResetWithCode } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
@@ -49,7 +51,7 @@ export default function ForgotPassword() {
     e.preventDefault()
     setCodeError('')
     if (!/^\d{6}$/.test(code.trim())) {
-      setCodeError('El código son 6 números — revisa el correo que te enviamos.')
+      setCodeError(t('auth.forgot.codeErrorFormat'))
       return
     }
     if (!PASSWORD_RULE.test(newPassword)) {
@@ -57,7 +59,7 @@ export default function ForgotPassword() {
       return
     }
     if (newPassword !== confirmPassword) {
-      setCodeError('Las contraseñas no coinciden.')
+      setCodeError(t('auth.forgot.passwordMismatch'))
       return
     }
     setConfirmingCode(true)
@@ -75,9 +77,9 @@ export default function ForgotPassword() {
   if (done) {
     return (
       <AuthShell>
-        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">Contraseña actualizada</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.forgot.updatedTitle')}</h1>
         <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-          Ya puedes usarla la próxima vez que entres. Te llevamos dentro…
+          {t('auth.forgot.updatedBody')}
         </p>
       </AuthShell>
     )
@@ -86,10 +88,18 @@ export default function ForgotPassword() {
   if (sent) {
     return (
       <AuthShell>
-        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">Revisa tu correo</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.forgot.checkEmailTitle')}</h1>
         <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-6">
-          Le enviamos a <strong>{email}</strong> un código de 6 dígitos. Escríbelo aquí junto con tu nueva contraseña —
-          puede tardar unos minutos en llegar, revisa también la carpeta de spam.
+          {(() => {
+            const [before, after] = t('auth.forgot.checkEmailBody').split('{{email}}')
+            return (
+              <>
+                {before}
+                <strong>{email}</strong>
+                {after}
+              </>
+            )
+          })()}
         </p>
         <form onSubmit={handleConfirm} className="flex flex-col gap-3">
           <input
@@ -98,7 +108,7 @@ export default function ForgotPassword() {
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={6}
-            placeholder="000000"
+            placeholder={t('auth.forgot.codePlaceholder')}
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
             required
@@ -106,7 +116,7 @@ export default function ForgotPassword() {
           <input
             className="input"
             type="password"
-            placeholder="Nueva contraseña"
+            placeholder={t('auth.forgot.newPasswordPlaceholder')}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
@@ -114,22 +124,22 @@ export default function ForgotPassword() {
           <input
             className="input"
             type="password"
-            placeholder="Confirmar nueva contraseña"
+            placeholder={t('auth.forgot.confirmPasswordPlaceholder')}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
           />
           {codeError && <p className="text-sm font-medium text-clay-500">{codeError}</p>}
           <button className="btn-primary mt-2" type="submit" disabled={confirmingCode}>
-            {confirmingCode ? 'Comprobando…' : 'Cambiar contraseña'}
+            {confirmingCode ? t('auth.forgot.checking') : t('auth.forgot.changePassword')}
           </button>
         </form>
         <div className="text-sm mt-5 text-center text-ink-900/60 dark:text-cream-100/60">
           {resent ? (
-            'Te mandamos otro código — el anterior ya no sirve.'
+            t('auth.forgot.resent')
           ) : (
             <button type="button" onClick={handleResend} className="text-violet-500 font-semibold hover:underline">
-              ¿No te llegó? Reenviar código
+              {t('auth.forgot.resendPrompt')}
             </button>
           )}
         </div>
@@ -139,27 +149,27 @@ export default function ForgotPassword() {
 
   return (
     <AuthShell>
-      <h1 className="font-display text-2xl font-bold tracking-tight mb-1">¿Olvidaste tu contraseña?</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.forgot.title')}</h1>
       <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-6">
-        Escribe el email de tu cuenta y te enviaremos un código para restablecerla.
+        {t('auth.forgot.subtitle')}
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <input
           className="input"
           type="email"
-          placeholder="Email"
+          placeholder={t('auth.forgot.emailPlaceholder')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
         {error && <p className="text-sm font-medium text-clay-500">{error}</p>}
         <button className="btn-primary mt-2" type="submit" disabled={submitting}>
-          {submitting ? 'Enviando…' : 'Enviar código'}
+          {submitting ? t('auth.forgot.sending') : t('auth.forgot.submit')}
         </button>
       </form>
       <p className="text-sm mt-5 text-center text-ink-900/60 dark:text-cream-100/60">
         <Link to="/login" className="text-violet-500 font-semibold hover:underline">
-          Volver a entrar
+          {t('auth.forgot.backToLogin')}
         </Link>
       </p>
     </AuthShell>
