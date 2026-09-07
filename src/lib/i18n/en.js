@@ -120,6 +120,7 @@ export default {
       pot: 'Pot',
       shopping: 'Shopping'
     },
+    roomiesTitle: 'Your floor',
     streakTitle: 'Week streak',
     streakWeek: 'week',
     streakWeeks: 'weeks',

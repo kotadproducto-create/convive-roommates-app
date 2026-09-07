@@ -243,6 +243,28 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* Círculo de "luces" de los roomies en Inicio (ver RoomieOrb.jsx): un
+   punto difuminado por persona, cada uno con su propio recorrido (las
+   variables --dx1/--dy1 etc. y --dur/--delay las pone cada instancia
+   por style inline, ver lib/roomieColors.js). */
+@keyframes orb-float {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(var(--dx1), var(--dy1)); }
+  50% { transform: translate(var(--dx2), var(--dy2)); }
+  75% { transform: translate(var(--dx3), var(--dy3)); }
+  100% { transform: translate(0, 0); }
+}
+.orb-dot {
+  position: absolute;
+  border-radius: 9999px;
+  animation: orb-float var(--dur, 10s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb-dot { animation: none; }
+}
+
 /* Puntitos de carga de la pantalla de splash (ver SplashScreen.jsx):
    rebote secuencial, mismo timing "tecla" que el resto de la app. */
 .splash-dot {

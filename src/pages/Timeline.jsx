@@ -11,6 +11,7 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
 import PendingPopups from '../components/PendingPopups'
+import RoomieOrb from '../components/RoomieOrb'
 import { format, formatDistanceToNow, isSameDay } from 'date-fns'
 
 export default function Timeline() {
@@ -97,6 +98,11 @@ export default function Timeline() {
           </p>
         </div>
       </div>
+
+      <section className="mb-8">
+        <h3 className="font-display text-lg font-bold mb-3 text-center sm:text-left">{t('timeline.roomiesTitle')}</h3>
+        <RoomieOrb members={members} />
+      </section>
 
       <div className="grid lg:grid-cols-3 gap-5 items-start mb-8">
         {/* Calendario de racha */}

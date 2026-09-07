@@ -121,6 +121,7 @@ export default {
       pot: 'Pote',
       shopping: 'Compras'
     },
+    roomiesTitle: 'Tu piso',
     streakTitle: 'Racha de la semana',
     streakWeek: 'semana',
     streakWeeks: 'semanas',

@@ -8,6 +8,7 @@ import { useTheme } from '../context/ThemeContext'
 import { usePush } from '../context/PushContext'
 import { useToast } from '../context/ToastContext'
 import { getFloorHistory } from '../lib/db'
+import { getMemberColor } from '../lib/roomieColors'
 import { CameraIcon, LockIcon, MoonIcon, SunIcon, AlertIcon, BellIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -217,6 +218,23 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
   const [interests, setInterests] = useState(user.interests || '')
   const [bio, setBio] = useState(user.presentationMessage || '')
   const [saving, setSaving] = useState(false)
+  const [color, setColor] = useState(getMemberColor(user))
+  const [savingColor, setSavingColor] = useState(false)
+
+  async function handleColorChange(e) {
+    const next = e.target.value
+    setColor(next)
+    setSavingColor(true)
+    try {
+      await updateProfile(user.id, { color: next })
+      await onSaved()
+      showToast('Color actualizado', 'success')
+    } catch (err) {
+      showToast('No se pudo guardar el color: ' + err.message, 'default')
+    } finally {
+      setSavingColor(false)
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -248,6 +266,28 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
       <p className="text-xs text-ink-900/50 dark:text-cream-100/50 -mt-2 mb-1">
         Esto es lo que ven tus compañeros de piso en tu tarjeta de Convives.
       </p>
+
+      <div className="flex items-center gap-3">
+        <div className="relative shrink-0">
+          <span
+            className="block w-9 h-9 rounded-full border-2 border-ink-900 dark:border-cream-100/40"
+            style={{ backgroundColor: color }}
+          />
+          <input
+            type="color"
+            value={color}
+            onChange={handleColorChange}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            aria-label="Tu color"
+          />
+        </div>
+        <div className="text-sm">
+          <p className="font-medium">Tu color</p>
+          <p className="text-xs text-ink-900/50 dark:text-cream-100/50">
+            {savingColor ? 'Guardando…' : 'Te identifica en el círculo de Inicio'}
+          </p>
+        </div>
+      </div>
 
       <label className="text-sm">
         Nombre completo
