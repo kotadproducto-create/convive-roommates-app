@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { TASK_TYPES } from '../lib/rotation'
+import { TASK_LABEL } from '../lib/rotation'
 import { useLanguage } from '../context/LanguageContext'
 import { CartIcon, SparkleIcon, CloseIcon } from './icons'
-
-const TASK_LABEL = Object.fromEntries(TASK_TYPES.map((t) => [t.key, t.label]))
 
 function todayKey() {
   const d = new Date()
@@ -181,23 +179,29 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
                     count: restOfQueue.length
                   })}
             </button>
-            {showQueue && (
-              <div className="mt-2 pt-2 border-t border-ink-900/10 dark:border-cream-100/15 flex flex-col gap-2">
-                {restOfQueue.map((p) => (
-                  <div key={p.key}>
-                    <p className="text-xs font-bold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{p.title}</p>
-                    <ul className="flex flex-col gap-1 text-sm text-ink-900/70 dark:text-cream-100/70">
-                      {p.items.map((item, i) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <span className="w-1 h-1 rounded-full bg-ink-900/30 dark:bg-cream-100/30 shrink-0" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+            <div
+              className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                showQueue ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+              }`}
+            >
+              <div className="overflow-hidden">
+                <div className="mt-2 pt-2 border-t border-ink-900/10 dark:border-cream-100/15 flex flex-col gap-2">
+                  {restOfQueue.map((p) => (
+                    <div key={p.key}>
+                      <p className="text-xs font-bold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{p.title}</p>
+                      <ul className="flex flex-col gap-1 text-sm text-ink-900/70 dark:text-cream-100/70">
+                        {p.items.map((item, i) => (
+                          <li key={i} className="flex items-center gap-2">
+                            <span className="w-1 h-1 rounded-full bg-ink-900/30 dark:bg-cream-100/30 shrink-0" />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
+            </div>
           </div>
         )}
       </div>

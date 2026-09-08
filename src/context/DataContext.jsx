@@ -13,6 +13,7 @@ import {
   subscribePendingRequests
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation } from '../lib/rotation'
+import { ensureActivityPeriods, currentPeriodKey } from '../lib/activities'
 import { useAuth } from './AuthContext'
 
 const DataContext = createContext(null)
@@ -40,6 +41,8 @@ export function DataProvider({ children }) {
   const [purchaseSessions, setPurchaseSessions] = useState([])
   const [absenceRequests, setAbsenceRequests] = useState([])
   const [roomPartners, setRoomPartners] = useState([])
+  const [activities, setActivities] = useState([])
+  const [activityCompletions, setActivityCompletions] = useState([])
 
   const weekKey = getWeekKey()
 
@@ -152,6 +155,22 @@ export function DataProvider({ children }) {
     return subscribeTable('room_partners', { floorId }, setRoomPartners)
   }, [floorId])
 
+  useEffect(() => {
+    if (!floorId) {
+      setActivities([])
+      return
+    }
+    return subscribeTable('activities', { floorId }, setActivities)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setActivityCompletions([])
+      return
+    }
+    return subscribeTable('activity_completions', { floorId }, setActivityCompletions)
+  }, [floorId])
+
   // IDs de quienes tienen una ausencia aprobada que cubre hoy — se
   // excluyen de la generación de tareas de la semana (whoIsAssigned salta
   // a la siguiente persona en rotationOrder). Solo afecta a la semana que
@@ -228,6 +247,17 @@ export function DataProvider({ children }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFloor?.id, currentFloor?.rotationOrder?.length, currentFloor?.potAmount, weekKey, awayUserIds])
+
+  // Igual que arriba pero para el gestor de actividades propias: arma
+  // (idempotente) la fila de activity_completions del período actual de
+  // cada actividad recurrente. Las 'once' no pasan por acá — su única
+  // fila se crea al crear la actividad (ver addActivity).
+  useEffect(() => {
+    if (!currentFloor) return
+    const effectiveRotationOrder = (currentFloor.rotationOrder || []).filter((id) => !awayUserIds.has(id))
+    ensureActivityPeriods(activities, effectiveRotationOrder, weekKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFloor?.id, currentFloor?.rotationOrder?.length, weekKey, activities.length, awayUserIds])
 
   const floorTasks = useMemo(() => tasks.filter((t) => t.weekKey === weekKey), [tasks, weekKey])
 
@@ -789,6 +819,58 @@ export function DataProvider({ children }) {
     [user, currentFloor, refreshAuth]
   )
 
+  // Actividad nueva del gestor propio (ver src/lib/activities.js). Si es
+  // un evento único ('once'), de una vez crea también su única fila de
+  // activity_completions — no pasa por el efecto de arriba porque ese
+  // solo cubre recurrentes.
+  const addActivity = useCallback(
+    async (input) => {
+      if (!currentFloor || !user) return
+      const activity = await create('activities', {
+        floorId: currentFloor.id,
+        title: input.title,
+        frequencyType: input.frequencyType,
+        timesPerWeek: input.frequencyType === 'weekly' ? input.timesPerWeek || 1 : null,
+        specificDate: input.frequencyType === 'once' ? input.specificDate : null,
+        assignmentMode: input.frequencyType === 'once' ? 'manual' : input.assignmentMode,
+        assignedUserId: input.assignmentMode === 'manual' || input.frequencyType === 'once' ? input.assignedUserId : null,
+        createdBy: user.id
+      })
+      if (activity.frequencyType === 'once') {
+        await create('activity_completions', {
+          activityId: activity.id,
+          floorId: currentFloor.id,
+          periodKey: currentPeriodKey(activity, weekKey),
+          assignedUserId: activity.assignedUserId,
+          timesDone: 0,
+          completed: false
+        })
+      }
+      return activity
+    },
+    [currentFloor, user, weekKey]
+  )
+
+  const updateActivity = useCallback((activityId, patch) => update('activities', activityId, patch), [])
+  const removeActivity = useCallback((activityId) => remove('activities', activityId), [])
+
+  // Progreso del período actual de una actividad: para timesPerWeek=1 (o
+  // mensual/evento único) es un simple hecho/deshecho; si tiene varias
+  // veces por semana, delta suma/resta contra el objetivo.
+  const setActivityProgress = useCallback(
+    async (completion, delta) => {
+      const activity = activities.find((a) => a.id === completion.activityId)
+      const target = activity?.timesPerWeek || 1
+      const timesDone = Math.min(target, Math.max(0, (completion.timesDone || 0) + delta))
+      await update('activity_completions', completion.id, {
+        timesDone,
+        completed: timesDone >= target,
+        completedAt: timesDone >= target ? new Date().toISOString() : null
+      })
+    },
+    [activities]
+  )
+
   const leaderboard = useMemo(() => [...members].sort((a, b) => (b.points || 0) - (a.points || 0)), [members])
 
   const value = {
@@ -827,6 +909,12 @@ export function DataProvider({ children }) {
     acceptRoomPartner,
     rejectRoomPartner,
     cancelRoomPartner,
+    activities,
+    activityCompletions,
+    addActivity,
+    updateActivity,
+    removeActivity,
+    setActivityProgress,
     completeTask,
     uncompleteTask,
     reorderRotation,

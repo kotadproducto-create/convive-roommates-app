@@ -50,6 +50,7 @@ function ConviveCard({ member, currentUserId, isAdmin }) {
   const isActive = member.activeStatus !== false
   const showAge = member.age && (isSelf || member.agePublic !== false)
   const showPhone = member.phone && (isSelf || member.phonePublic !== false)
+  const showOccupation = member.occupation && (isSelf || member.occupationPublic !== false)
 
   function toggleVacation() {
     setMemberPotActive(member.membershipId, onVacation)
@@ -71,6 +72,9 @@ function ConviveCard({ member, currentUserId, isAdmin }) {
             </p>
             {member.nickname && (
               <p className="text-xs text-ink-900/50 dark:text-cream-100/50 truncate">@{member.nickname}</p>
+            )}
+            {showOccupation && (
+              <p className="text-xs font-medium text-violet-500 dark:text-violet-300 truncate">{member.occupation}</p>
             )}
           </div>
         </div>

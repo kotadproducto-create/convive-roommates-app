@@ -131,17 +131,19 @@ body {
   animation: toast-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Pop-up de pendientes en Inicio (PendingPopups): cae suave desde
-   arriba, sin rebote — se re-dispara en cada aviso porque el componente
-   le pone key={current.key}, así que un aviso en secuencia detrás de
-   otro también se siente como una entrada nueva, no un cambio brusco
-   de contenido en el mismo cuadro. */
+/* Pop-up de pendientes en Inicio (PendingPopups): cae desde arriba con
+   un ligero rebote al asentarse — se re-dispara en cada aviso porque
+   el componente le pone key={current.key}, así que un aviso en
+   secuencia detrás de otro también se siente claramente como una
+   entrada nueva, no un cambio brusco de contenido en el mismo cuadro. */
 @keyframes popup-drop {
-  from { opacity: 0; transform: translateY(-48px); }
-  to { opacity: 1; transform: translateY(0); }
+  0% { opacity: 0; transform: translateY(-64px); }
+  65% { opacity: 1; transform: translateY(6px); }
+  85% { transform: translateY(-3px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 .popup-drop {
-  animation: popup-drop 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: popup-drop 0.46s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* "Reacción" al completar una tarea: un pequeño pop de celebración */
@@ -257,12 +259,31 @@ body {
 .orb-dot {
   position: absolute;
   border-radius: 9999px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
   animation: orb-float var(--dur, 10s) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
   will-change: transform;
 }
+/* Quien tiene algo pendiente esta semana, además de flotar, "respira"
+   un poco más brillante — el círculo comunica el estado del piso de
+   un vistazo, sin necesidad de tocar nada (ver RoomieOrb.jsx). Se
+   suma una segunda animación sobre `opacity` (nunca sobre `transform`,
+   que ya lo usa orb-float) para que ambas convivan sin pisarse. */
+@keyframes orb-glow-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.orb-dot.orb-dot--pending {
+  animation: orb-float var(--dur, 10s) ease-in-out infinite, orb-glow-pulse 2.4s ease-in-out infinite;
+  animation-delay: var(--delay, 0s), 0s;
+}
 @media (prefers-reduced-motion: reduce) {
-  .orb-dot { animation: none; }
+  .orb-dot,
+  .orb-dot.orb-dot--pending {
+    animation: none;
+  }
 }
 
 /* Puntitos de carga de la pantalla de splash (ver SplashScreen.jsx):

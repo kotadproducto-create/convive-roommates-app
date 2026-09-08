@@ -20,13 +20,24 @@ export default function Register() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // Mismo motivo que en Login: un gestor de contraseñas puede rellenar
+    // email/contraseña escribiendo directo en el DOM sin disparar los
+    // eventos de React, así que se leen los valores reales del
+    // formulario en vez de confiar solo en el estado.
+    const form = e.currentTarget
+    const nameValue = form.name.value
+    const emailValue = form.email.value
+    const passwordValue = form.password.value
+    setName(nameValue)
+    setEmail(emailValue)
+    setPassword(passwordValue)
     setError('')
     setSubmitting(true)
     try {
       if (mode === 'create') {
-        await registerAndCreateFloor({ name, email, password, floorName })
+        await registerAndCreateFloor({ name: nameValue, email: emailValue, password: passwordValue, floorName })
       } else {
-        await registerAndRequestJoin({ name, email, password, inviteCode })
+        await registerAndRequestJoin({ name: nameValue, email: emailValue, password: passwordValue, inviteCode })
       }
       navigate('/')
     } catch (err) {
@@ -61,9 +72,11 @@ export default function Register() {
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <input className="input" placeholder={t('auth.register.namePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} required />
-        <input className="input" type="email" placeholder={t('auth.register.emailPlaceholder')} value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input className="input" name="name" autoComplete="name" placeholder={t('auth.register.namePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} required />
+        <input className="input" type="email" name="email" autoComplete="email" placeholder={t('auth.register.emailPlaceholder')} value={email} onChange={(e) => setEmail(e.target.value)} required />
         <PasswordInput
+          name="password"
+          autoComplete="new-password"
           placeholder={t('auth.register.passwordPlaceholder')}
           value={password}
           onChange={(e) => setPassword(e.target.value)}

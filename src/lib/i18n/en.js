@@ -7,6 +7,7 @@
 export default {
   nav: {
     inicio: 'Home',
+    actividades: 'Activities',
     calendario: 'Calendar',
     compras: 'Shopping',
     muro: 'Wall',
@@ -145,6 +146,13 @@ export default {
     themeConvives: 'Roommates',
     themeConvivesStat: '{{count}} on the floor',
     goTo: 'Go to {{label}}'
+  },
+  roomieOrb: {
+    doneThisWeek: '{{done}}/{{total}} done this week',
+    allDone: 'All caught up!',
+    noTasks: 'No tasks assigned this week',
+    pending: 'Pending',
+    close: 'Close'
   },
   pendingPopups: {
     attention: 'Heads up!',

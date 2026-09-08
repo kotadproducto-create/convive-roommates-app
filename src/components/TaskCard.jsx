@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { TASK_ICONS, CoinIcon } from './icons'
+import { TASK_ICONS, CoinIcon, FlameIcon } from './icons'
 import { useToast } from '../context/ToastContext'
+import { getMemberColor } from '../lib/roomieColors'
 
 // Cada tipo de tarea, su propio bloque pastel — así el ojo distingue
 // "compras" de "basura" de "lavadora" antes incluso de leer el texto.
@@ -65,7 +66,11 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
           </div>
         )}
         {isMine && !task.completed && (
-          <span className="text-[10px] uppercase tracking-wide bg-gold-100 dark:bg-gold-400/20 text-gold-500 border-2 border-ink-900/70 dark:border-cream-100/30 px-2 py-1 rounded-full font-bold">
+          <span
+            className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-white border-2 border-ink-900 px-2.5 py-1 rounded-full font-extrabold shadow-[0_2px_0_0_theme(colors.ink.900)] animate-pulse shrink-0"
+            style={{ backgroundColor: getMemberColor(assignee) }}
+          >
+            <FlameIcon className="w-3 h-3 shrink-0" />
             Tu turno
           </span>
         )}

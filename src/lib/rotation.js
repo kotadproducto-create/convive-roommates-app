@@ -12,6 +12,11 @@ export const TASK_TYPES = [
   { key: 'lavadora', label: 'Lavadora (lencería de baño)', offset: 2, icon: 'washer', points: 10 }
 ]
 
+/** Etiqueta legible de cada tipo de tarea, por clave — usado donde se
+ * lista el nombre de una tarea a partir de `task.type` (PendingPopups,
+ * RoomieOrb). */
+export const TASK_LABEL = Object.fromEntries(TASK_TYPES.map((t) => [t.key, t.label]))
+
 /**
  * Día de la semana (0=lunes..6=domingo) en el que se muestra cada tipo de
  * tarea en las vistas de calendario. Es solo de presentación — la

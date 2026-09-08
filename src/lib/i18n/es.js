@@ -8,6 +8,7 @@
 export default {
   nav: {
     inicio: 'Inicio',
+    actividades: 'Actividades',
     calendario: 'Calendario',
     compras: 'Compras',
     muro: 'Muro',
@@ -146,6 +147,13 @@ export default {
     themeConvives: 'Convives',
     themeConvivesStat: '{{count}} en el piso',
     goTo: 'Ir a {{label}}'
+  },
+  roomieOrb: {
+    doneThisWeek: '{{done}}/{{total}} completado esta semana',
+    allDone: '¡Todo al día!',
+    noTasks: 'Sin tareas asignadas esta semana',
+    pending: 'Pendiente',
+    close: 'Cerrar'
   },
   pendingPopups: {
     attention: '¡Atención!',

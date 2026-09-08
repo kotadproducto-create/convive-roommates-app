@@ -164,12 +164,7 @@ export default function Shopping() {
 
           {outCount > 0 && (
             <Reveal>
-              <div className="card p-3 mb-4 flex items-center gap-2 border-clay-500/50">
-                <AlertIcon className="w-5 h-5 text-clay-500 shrink-0" />
-                <p className="text-sm font-medium text-clay-500">
-                  {outCount} producto{outCount > 1 ? 's' : ''} agotado{outCount > 1 ? 's' : ''}: hace falta reponer.
-                </p>
-              </div>
+              <OutOfStockBanner outCount={outCount} />
             </Reveal>
           )}
 
@@ -241,6 +236,22 @@ export default function Shopping() {
   )
 }
 
+/** Aviso de agotados: mismo lenguaje visual "urgente" que ya usa el
+ * pop-up de compras pendientes de Inicio (borde grueso + halo de color
+ * + insignia con pulso) — para que nadie lo pase por alto. */
+function OutOfStockBanner({ outCount }) {
+  return (
+    <div className="card p-3.5 mb-4 flex items-center gap-3 border-[3px] border-clay-500 shadow-[0_0_0_4px_theme(colors.clay.100)] dark:shadow-[0_0_0_4px_theme(colors.clay.500/20%)]">
+      <div className="w-10 h-10 rounded-full bg-clay-500 flex items-center justify-center shrink-0 animate-pulse">
+        <AlertIcon className="w-5 h-5 text-white" />
+      </div>
+      <p className="text-sm sm:text-base font-extrabold text-clay-500">
+        {outCount} producto{outCount > 1 ? 's' : ''} agotado{outCount > 1 ? 's' : ''}: hace falta reponer.
+      </p>
+    </div>
+  )
+}
+
 function BackButton({ onBack }) {
   return (
     <button type="button" onClick={onBack} className="flex items-center gap-1 text-sm font-semibold text-violet-500 hover:underline mb-4">
@@ -260,12 +271,7 @@ function MenuScreen({ pendingCount, outCount, totalCount, onSelect }) {
 
       {outCount > 0 && (
         <Reveal>
-          <div className="card p-3 mb-4 flex items-center gap-2 border-clay-500/50">
-            <AlertIcon className="w-5 h-5 text-clay-500 shrink-0" />
-            <p className="text-sm font-medium text-clay-500">
-              {outCount} producto{outCount > 1 ? 's' : ''} agotado{outCount > 1 ? 's' : ''}: hace falta reponer.
-            </p>
-          </div>
+          <OutOfStockBanner outCount={outCount} />
         </Reveal>
       )}
 
@@ -313,7 +319,7 @@ function MenuCard({ tone, icon: Icon, title, subtitle, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`text-left rounded-2xl p-5 flex items-center gap-4 border-2 border-ink-900 dark:border-cream-100/40 transition-transform active:scale-[0.98] ${MENU_TONE_CLASSES[tone]}`}
+      className={`w-full text-left rounded-2xl p-5 flex items-center gap-4 border-2 border-ink-900 dark:border-cream-100/40 transition-transform active:scale-[0.98] ${MENU_TONE_CLASSES[tone]}`}
     >
       <div className="w-12 h-12 rounded-xl border-2 border-white/50 bg-white/20 flex items-center justify-center shrink-0">
         <Icon className="w-6 h-6" />

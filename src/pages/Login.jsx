@@ -17,10 +17,21 @@ export default function Login() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // Algunos gestores de contraseñas rellenan el formulario escribiendo
+    // directo en el DOM sin disparar los eventos que React escucha para
+    // actualizar `email`/`password` — si confiáramos solo en ese estado,
+    // este primer submit iría con los campos vacíos (y habría que
+    // reintentar). Por eso se leen los valores reales del formulario en
+    // vez del estado, y de paso se sincroniza el estado con ellos.
+    const form = e.currentTarget
+    const emailValue = form.email.value
+    const passwordValue = form.password.value
+    setEmail(emailValue)
+    setPassword(passwordValue)
     setError('')
     setSubmitting(true)
     try {
-      await login(email, password)
+      await login(emailValue, passwordValue)
       navigate('/')
     } catch (err) {
       setError(err.message)
@@ -36,8 +47,24 @@ export default function Login() {
         {t('auth.login.subtitle')}
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <input className="input" type="email" placeholder={t('auth.login.emailPlaceholder')} value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <PasswordInput placeholder={t('auth.login.passwordPlaceholder')} value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <input
+          className="input"
+          type="email"
+          name="email"
+          autoComplete="email"
+          placeholder={t('auth.login.emailPlaceholder')}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <PasswordInput
+          name="password"
+          autoComplete="current-password"
+          placeholder={t('auth.login.passwordPlaceholder')}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
         <Link to="/olvide-contrasena" className="text-xs font-semibold text-violet-500 hover:underline -mt-1 self-end">
           {t('auth.login.forgotPassword')}
         </Link>

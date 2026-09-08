@@ -216,6 +216,8 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
   const [phone, setPhone] = useState(user.phone || '')
   const [phonePublic, setPhonePublic] = useState(user.phonePublic !== false)
   const [interests, setInterests] = useState(user.interests || '')
+  const [occupation, setOccupation] = useState(user.occupation || '')
+  const [occupationPublic, setOccupationPublic] = useState(user.occupationPublic !== false)
   const [bio, setBio] = useState(user.presentationMessage || '')
   const [saving, setSaving] = useState(false)
   const [color, setColor] = useState(getMemberColor(user))
@@ -249,6 +251,8 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
         phone: phone.trim() || null,
         phonePublic,
         interests: interests.trim() || null,
+        occupation: occupation.trim() || null,
+        occupationPublic,
         presentationMessage: bio.trim() || null
       })
       await onSaved()
@@ -326,6 +330,22 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
         Gustos / intereses
         <input className="input mt-1" value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="Ej. Música, cine, deporte" />
       </label>
+
+      <div>
+        <label className="text-sm block">
+          A qué te dedicas
+          <input
+            className="input mt-1"
+            value={occupation}
+            onChange={(e) => setOccupation(e.target.value)}
+            placeholder="Ej. Estudiante, arquitecta, diseñador"
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-ink-900/50 dark:text-cream-100/50 mt-1.5">
+          <input type="checkbox" checked={occupationPublic} onChange={(e) => setOccupationPublic(e.target.checked)} />
+          Visible para otros
+        </label>
+      </div>
 
       <label className="text-sm">
         Biografía

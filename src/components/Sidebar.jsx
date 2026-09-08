@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useLanguage } from '../context/LanguageContext'
-import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon, UsersIcon, CartIcon, MoreIcon, CloseIcon, PersonIcon } from './icons'
+import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon, UsersIcon, CartIcon, SparkleIcon, MoreIcon, CloseIcon, PersonIcon } from './icons'
 
 // `labelKey` en vez de texto fijo — se traduce con t() en el propio
 // componente (ver src/lib/i18n/{es,en}.js, namespace `nav`).
 const NAV_ITEMS = [
   { to: '/', labelKey: 'nav.inicio', Icon: StampIcon, end: true },
+  { to: '/actividades', labelKey: 'nav.actividades', Icon: SparkleIcon },
   { to: '/calendario', labelKey: 'nav.calendario', Icon: CalendarIcon },
   { to: '/compras', labelKey: 'nav.compras', Icon: CartIcon },
   { to: '/incidencias', labelKey: 'nav.muro', Icon: PinIcon },

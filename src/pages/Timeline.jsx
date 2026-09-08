@@ -62,7 +62,7 @@ export default function Timeline() {
         subheader={
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-5 pb-3">
           <Chip
-            to="/calendario"
+            to="/actividades"
             tone="sky"
             icon={StampIcon}
             value={`${weekDone}/${tasks.length}`}
@@ -101,7 +101,7 @@ export default function Timeline() {
 
       <section className="mb-8">
         <h3 className="font-display text-lg font-bold mb-3 text-center sm:text-left">{t('timeline.roomiesTitle')}</h3>
-        <RoomieOrb members={members} />
+        <RoomieOrb members={members} tasks={tasks} />
       </section>
 
       <div className="grid lg:grid-cols-3 gap-5 items-start mb-8">
@@ -235,7 +235,7 @@ export default function Timeline() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Reveal delay={0}>
             <ThemeCard
-              to="/calendario"
+              to="/actividades"
               icon={SparkleIcon}
               tone="sky"
               label={t('timeline.themeActivities')}

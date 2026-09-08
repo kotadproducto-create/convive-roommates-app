@@ -34,10 +34,12 @@ create table if not exists profiles (
   age integer check (age is null or (age > 0 and age < 130)),
   phone text,
   interests text, -- gustos/intereses, tarjeta de Convives y Perfil
+  occupation text, -- "a qué se dedica" (opcional), tarjeta de Convives y Perfil
   avatar_url text,
   color text, -- color de identidad elegido en Perfil (círculo de roomies en Inicio); si es null, la app usa un color de respaldo derivado del id
   age_public boolean not null default true, -- privacidad de presentación (no RLS): oculta la edad a otros en Convives
   phone_public boolean not null default true, -- ídem para el teléfono
+  occupation_public boolean not null default true, -- ídem para la ocupación
   points integer not null default 0,
   reputation_score numeric not null default 0, -- automática, no transferible, calculada desde el historial de tareas en todos los pisos (sin lógica todavía, Fase 1+)
   presentation_message text check (char_length(presentation_message) <= 240), -- Bio de la tarjeta de "Convives"; único de perfil, se reutiliza al unirse a cualquier piso
@@ -297,6 +299,43 @@ create table if not exists room_partners (
   decided_at timestamptz
 );
 
+-- Gestor de actividades del piso: aparte del sistema fijo de
+-- Compras/Basura/Lavadora (tasks + rotation.js, que no se toca), esto
+-- permite crear actividades propias con frecuencia flexible (semanal
+-- con N veces, mensual, o evento único con fecha) y asignación manual
+-- o por rotación automática (mismo rotationOrder del piso). Ver
+-- src/lib/activities.js.
+create table if not exists activities (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  title text not null,
+  frequency_type text not null check (frequency_type in ('weekly','monthly','once')),
+  times_per_week integer check (times_per_week is null or (times_per_week between 1 and 7)),
+  specific_date date, -- solo si frequency_type = 'once'
+  assignment_mode text not null default 'manual' check (assignment_mode in ('manual','rotation')),
+  assigned_user_id uuid references profiles(id) on delete set null, -- fijo, solo si assignment_mode = 'manual'
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- Registro de cumplimiento por período (semana/mes/fecha única) de
+-- cada actividad — mismo espíritu que "tasks" para el sistema fijo.
+create table if not exists activity_completions (
+  id uuid primary key default gen_random_uuid(),
+  activity_id uuid not null references activities(id) on delete cascade,
+  floor_id uuid not null references floors(id) on delete cascade,
+  period_key text not null,
+  assigned_user_id uuid references profiles(id) on delete set null, -- responsable de ESTE período (fijo en manual; va rotando en 'rotation')
+  times_done integer not null default 0,
+  completed boolean not null default false,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (activity_id, period_key)
+);
+create index if not exists activities_floor_idx on activities (floor_id);
+create index if not exists activity_completions_floor_idx on activity_completions (floor_id);
+create index if not exists activity_completions_activity_idx on activity_completions (activity_id);
+
 -- Registro interno de la Edge Function send-recovery-code: solo para
 -- limitar cuántas veces se puede pedir un código por email en poco
 -- tiempo (protección propia contra abuso, ya que este flujo no pasa por
@@ -502,6 +541,19 @@ create policy "either side unlink accepted room_partner" on room_partners for up
 
 alter table password_reset_attempts enable row level security;
 
+-- activities/activity_completions: mismo modelo colaborativo que
+-- shopping_items — cualquier miembro activo del piso puede ver, crear,
+-- editar y borrar.
+alter table activities enable row level security;
+alter table activity_completions enable row level security;
+create policy "select floor activities" on activities for select using (is_active_member(floor_id));
+create policy "insert floor activities" on activities for insert with check (is_active_member(floor_id));
+create policy "update floor activities" on activities for update using (is_active_member(floor_id));
+create policy "delete floor activities" on activities for delete using (is_active_member(floor_id));
+create policy "select floor activity_completions" on activity_completions for select using (is_active_member(floor_id));
+create policy "insert floor activity_completions" on activity_completions for insert with check (is_active_member(floor_id));
+create policy "update floor activity_completions" on activity_completions for update using (is_active_member(floor_id));
+
 -- =========================================================
 -- Realtime: para que la app reciba cambios en vivo
 -- =========================================================
@@ -518,6 +570,8 @@ alter publication supabase_realtime add table shopping_purchases;
 alter publication supabase_realtime add table purchase_sessions;
 alter publication supabase_realtime add table absence_requests;
 alter publication supabase_realtime add table room_partners;
+alter publication supabase_realtime add table activities;
+alter publication supabase_realtime add table activity_completions;
 
 -- =========================================================
 -- Storage: fotos de incidencias y facturas del pote comparten un único
