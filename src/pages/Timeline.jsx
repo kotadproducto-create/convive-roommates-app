@@ -12,6 +12,7 @@ import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
 import PendingPopups from '../components/PendingPopups'
 import RoomieOrb from '../components/RoomieOrb'
+import Avatar from '../components/Avatar'
 import { format, formatDistanceToNow, isSameDay } from 'date-fns'
 
 export default function Timeline() {
@@ -84,9 +85,12 @@ export default function Timeline() {
     >
       {/* Perfil + saludo: sin caja, flotando sobre el fondo */}
       <div className="flex items-center gap-4 landscape-sm:gap-3 mb-6 landscape-sm:mb-3 mt-1">
-        <div className="w-16 h-16 landscape-sm:w-11 landscape-sm:h-11 rounded-full bg-gold-400 border-2 border-ink-900 text-ink-900 flex items-center justify-center text-2xl landscape-sm:text-base font-bold shrink-0">
-          {user?.name?.[0]?.toUpperCase()}
-        </div>
+        <Avatar
+          url={user?.avatarUrl}
+          name={user?.name}
+          size="w-16 h-16 landscape-sm:w-11 landscape-sm:h-11"
+          textSize="text-2xl landscape-sm:text-base"
+        />
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-violet-500 dark:text-violet-300">
             <GreetingIcon className="w-3.5 h-3.5" />

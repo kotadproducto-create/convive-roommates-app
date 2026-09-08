@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale'
 import { TASK_ICONS, CoinIcon, FlameIcon } from './icons'
 import { useToast } from '../context/ToastContext'
 import { getMemberColor } from '../lib/roomieColors'
+import Avatar from './Avatar'
 
 // Cada tipo de tarea, su propio bloque pastel — así el ojo distingue
 // "compras" de "basura" de "lavadora" antes incluso de leer el texto.
@@ -77,9 +78,7 @@ export default function TaskCard({ task, typeInfo, assignee, currentUserId, onTo
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center text-xs font-bold">
-          {assignee?.name?.[0]?.toUpperCase() || '?'}
-        </div>
+        <Avatar url={assignee?.avatarUrl} name={assignee?.name} size="w-7 h-7" textSize="text-xs" />
         <span className="text-sm font-medium">{assignee ? assignee.name : 'Sin asignar'}</span>
         {task.reassigned && (
           <span className="text-[10px] text-ink-900/40 dark:text-cream-100/40">(reasignada)</span>
