@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { TASK_LABEL } from '../lib/rotation'
 import { useLanguage } from '../context/LanguageContext'
 import { CartIcon, SparkleIcon, CloseIcon } from './icons'
 
@@ -81,7 +80,7 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
         tone: 'sky',
         title: t('pendingPopups.activitiesTitle'),
         bigNumber: pendingActivities.length,
-        items: pendingActivities.map((t) => TASK_LABEL[t.type] || t.type)
+        items: pendingActivities.map((task) => t(`taskTypes.${task.type}`))
       })
     }
 

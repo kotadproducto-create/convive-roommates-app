@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import Avatar from './Avatar'
 import { getMemberColor, getOrbMotion } from '../lib/roomieColors'
-import { TASK_LABEL } from '../lib/rotation'
 import { useLanguage } from '../context/LanguageContext'
 import { CloseIcon } from './icons'
 
@@ -128,7 +127,7 @@ function RoomieCard({ member, tasks, t, onClose }) {
               {pendingTasks.map((task) => (
                 <li key={task.id} className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-coral-500 shrink-0" />
-                  {TASK_LABEL[task.type] || task.type}
+                  {t(`taskTypes.${task.type}`)}
                 </li>
               ))}
             </ul>
