@@ -6,13 +6,29 @@ import Avatar from '../components/Avatar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
+import { TASK_LABEL } from '../lib/rotation'
+import { currentPeriodKey } from '../lib/activities'
 import { CoinIcon, SunIcon, HomeIcon, PhoneIcon, EditIcon, PlusIcon, MinusIcon } from '../components/icons'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export default function Convives() {
   const { user, membership } = useAuth()
-  const { members } = useData()
+  const {
+    members,
+    tasks,
+    weekKey,
+    activities,
+    activityCompletions,
+    completeTask,
+    setActivityProgress,
+    incomingSwapRequests,
+    outgoingSwapRequests,
+    requestSwap,
+    acceptSwap,
+    declineSwap,
+    cancelSwap
+  } = useData()
   const isAdmin = membership?.role === 'admin'
 
   return (
@@ -24,14 +40,168 @@ export default function Convives() {
         </p>
       </div>
 
+      {(incomingSwapRequests.length > 0 || outgoingSwapRequests.length > 0) && (
+        <Reveal>
+          <SwapRequestsBanner
+            incoming={incomingSwapRequests}
+            outgoing={outgoingSwapRequests}
+            acceptSwap={acceptSwap}
+            declineSwap={declineSwap}
+            cancelSwap={cancelSwap}
+          />
+        </Reveal>
+      )}
+
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {members.map((m, i) => (
           <Reveal key={m.id} delay={i * 60}>
-            <ConviveCard member={m} currentUserId={user.id} isAdmin={isAdmin} />
+            <ConviveCard
+              member={m}
+              currentUserId={user.id}
+              isAdmin={isAdmin}
+              members={members}
+              tasks={tasks}
+              weekKey={weekKey}
+              activities={activities}
+              activityCompletions={activityCompletions}
+              completeTask={completeTask}
+              setActivityProgress={setActivityProgress}
+              requestSwap={requestSwap}
+              outgoingSwapRequests={outgoingSwapRequests}
+            />
           </Reveal>
         ))}
       </div>
     </AppLayout>
+  )
+}
+
+/** Pendientes de esta semana/período para un miembro: junta las 3
+ * tareas fijas (tasks) con el período actual de cada actividad propia
+ * (activityCompletions), ambas sin completar — una sola lista, con lo
+ * necesario para poder marcar hecho o proponer un intercambio sobre
+ * cada ítem (mismo target_type/target_id que espera requestSwap). */
+function getPendingItems(memberId, tasks, activities, activityCompletions, weekKey) {
+  const fixed = tasks
+    .filter((t) => t.assignedUserId === memberId && !t.completed)
+    .map((t) => ({ targetType: 'task', targetId: t.id, title: TASK_LABEL[t.type] || t.type, completion: t, activity: null }))
+
+  const custom = activities
+    .map((a) => {
+      const period = currentPeriodKey(a, weekKey)
+      const completion = activityCompletions.find((c) => c.activityId === a.id && c.periodKey === period)
+      if (!completion || completion.assignedUserId !== memberId || completion.completed) return null
+      return { targetType: 'activity_completion', targetId: completion.id, title: a.title, completion, activity: a }
+    })
+    .filter(Boolean)
+
+  return [...fixed, ...custom]
+}
+
+/** Una fila de "Esta semana": título del turno + Marcar hecho +
+ * Intercambiar (con un <select> de compañeros que se abre al tocar,
+ * mismo patrón que el picker de compañero de habitación en Perfil). */
+function PendingItemRow({ item, members, currentUserId, completeTask, setActivityProgress, requestSwap, hasOutgoingSwap }) {
+  const { showToast } = useToast()
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [selected, setSelected] = useState('')
+  const otherMembers = members.filter((m) => m.id !== currentUserId)
+
+  const isStepped = item.activity?.frequencyType === 'weekly' && (item.activity.timesPerWeek || 1) > 1
+
+  function handleDone() {
+    if (item.targetType === 'task') completeTask(item.targetId)
+    else setActivityProgress(item.completion, 1)
+  }
+
+  async function handleSwap() {
+    if (!selected) return
+    await requestSwap({ targetType: item.targetType, targetId: item.targetId, toUserId: selected, title: item.title })
+    showToast('Solicitud de intercambio enviada', 'success')
+    setPickerOpen(false)
+    setSelected('')
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 px-3 py-2 rounded-xl bg-cream-100 dark:bg-ink-700">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium min-w-0 truncate">{item.title}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button type="button" onClick={handleDone} className="text-xs font-semibold text-sage-500 hover:underline">
+            {isStepped ? `+1 (${item.completion.timesDone || 0}/${item.activity.timesPerWeek})` : 'Marcar hecho'}
+          </button>
+          {!hasOutgoingSwap && otherMembers.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setPickerOpen((s) => !s)}
+              className="text-xs font-semibold text-violet-500 hover:underline"
+            >
+              Intercambiar
+            </button>
+          )}
+        </div>
+      </div>
+      {hasOutgoingSwap && <p className="text-xs text-ink-900/40 dark:text-cream-100/40">Esperando confirmación del intercambio.</p>}
+      {pickerOpen && (
+        <div className="flex gap-2">
+          <select className="input text-sm" value={selected} onChange={(e) => setSelected(e.target.value)}>
+            <option value="">¿Con quién?</option>
+            {otherMembers.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="btn-primary text-xs px-3" onClick={handleSwap} disabled={!selected}>
+            Proponer
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SwapRequestsBanner({ incoming, outgoing, acceptSwap, declineSwap, cancelSwap }) {
+  const { showToast } = useToast()
+
+  async function handleAccept(req) {
+    const result = await acceptSwap(req.id)
+    if (result?.ok === false) {
+      showToast(result.message, 'default')
+    } else {
+      showToast(`Intercambiaste "${req.title}" con ${req.fromMember?.name || 'tu compañero'}`, 'success')
+    }
+  }
+
+  return (
+    <div className="card p-4 mb-5 flex flex-col gap-2">
+      <h3 className="font-display font-semibold text-sm">Solicitudes de intercambio</h3>
+      {incoming.map((r) => (
+        <div key={r.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-gold-100 dark:bg-gold-400/15">
+          <span className="text-sm min-w-0">
+            <strong>{r.fromMember?.name || 'Alguien'}</strong> te propone intercambiar <strong>"{r.title}"</strong>
+          </span>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => declineSwap(r.id)} className="btn-danger text-xs px-3 py-1.5">
+              Rechazar
+            </button>
+            <button onClick={() => handleAccept(r)} className="btn-primary text-xs px-3 py-1.5">
+              Aceptar
+            </button>
+          </div>
+        </div>
+      ))}
+      {outgoing.map((r) => (
+        <div key={r.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+          <span className="text-sm min-w-0">
+            Esperando que <strong>{r.toMember?.name || 'tu compañero'}</strong> confirme "{r.title}"
+          </span>
+          <button onClick={() => cancelSwap(r.id)} className="text-xs font-semibold text-violet-500 hover:underline shrink-0">
+            Anular
+          </button>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -40,11 +210,25 @@ function timeInFloor(joinedAt) {
   return formatDistanceToNowStrict(new Date(joinedAt), { locale: es })
 }
 
-function ConviveCard({ member, currentUserId, isAdmin }) {
+function ConviveCard({
+  member,
+  currentUserId,
+  isAdmin,
+  members,
+  tasks,
+  weekKey,
+  activities,
+  activityCompletions,
+  completeTask,
+  setActivityProgress,
+  requestSwap,
+  outgoingSwapRequests
+}) {
   const { setMemberPotActive, setMemberActiveStatus } = useData()
   const [adjusting, setAdjusting] = useState(false)
 
   const isSelf = member.id === currentUserId
+  const pendingItems = isSelf ? getPendingItems(member.id, tasks, activities, activityCompletions, weekKey) : []
   const canManage = isSelf || isAdmin
   const onVacation = member.potActive === false
   const isActive = member.activeStatus !== false
@@ -128,6 +312,24 @@ function ConviveCard({ member, currentUserId, isAdmin }) {
           {onVacation ? 'De vacaciones' : 'En el piso'}
         </button>
       </div>
+
+      {isSelf && pendingItems.length > 0 && (
+        <div className="flex flex-col gap-2 pt-1 border-t border-ink-900/10 dark:border-cream-100/15 pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">Esta semana</p>
+          {pendingItems.map((item) => (
+            <PendingItemRow
+              key={`${item.targetType}-${item.targetId}`}
+              item={item}
+              members={members}
+              currentUserId={currentUserId}
+              completeTask={completeTask}
+              setActivityProgress={setActivityProgress}
+              requestSwap={requestSwap}
+              hasOutgoingSwap={outgoingSwapRequests.some((r) => r.targetId === item.targetId)}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center justify-between text-xs text-ink-900/50 dark:text-cream-100/50 border-t border-ink-900/10 dark:border-cream-100/15 pt-3">
         <div className="flex flex-col gap-1">

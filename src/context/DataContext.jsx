@@ -12,7 +12,7 @@ import {
   claimPendingJoinRequests,
   subscribePendingRequests
 } from '../lib/db'
-import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation } from '../lib/rotation'
+import { TASK_TYPES, TASK_LABEL, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation } from '../lib/rotation'
 import { ensureActivityPeriods, currentPeriodKey } from '../lib/activities'
 import { useAuth } from './AuthContext'
 
@@ -43,6 +43,7 @@ export function DataProvider({ children }) {
   const [roomPartners, setRoomPartners] = useState([])
   const [activities, setActivities] = useState([])
   const [activityCompletions, setActivityCompletions] = useState([])
+  const [swapRequests, setSwapRequests] = useState([])
 
   const weekKey = getWeekKey()
 
@@ -169,6 +170,14 @@ export function DataProvider({ children }) {
       return
     }
     return subscribeTable('activity_completions', { floorId }, setActivityCompletions)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setSwapRequests([])
+      return
+    }
+    return subscribeTable('swap_requests', { floorId }, setSwapRequests)
   }, [floorId])
 
   // IDs de quienes tienen una ausencia aprobada que cubre hoy — se
@@ -301,6 +310,41 @@ export function DataProvider({ children }) {
     [roomPartners, user]
   )
 
+  // Título legible del turno al que apunta una solicitud de intercambio
+  // (una tarea fija o una actividad propia), para mostrarlo en la
+  // solicitud sin que quien la ve tenga que ir a buscarlo.
+  const describeSwapTarget = useCallback(
+    (req) => {
+      if (req.targetType === 'task') {
+        const task = tasks.find((t) => t.id === req.targetId)
+        return task ? TASK_LABEL[task.type] || task.type : 'una tarea'
+      }
+      const completion = activityCompletions.find((c) => c.id === req.targetId)
+      const activity = completion ? activities.find((a) => a.id === completion.activityId) : null
+      return activity?.title || 'una actividad'
+    },
+    [tasks, activities, activityCompletions]
+  )
+
+  // Solicitudes de intercambio de turno que me llegaron a mí (para
+  // Aceptar/Rechazar) y las mías propias esperando que la otra persona
+  // decida (para poder Anular) — resueltas con nombre de la otra
+  // persona y el título del turno.
+  const incomingSwapRequests = useMemo(
+    () =>
+      swapRequests
+        .filter((r) => r.status === 'pending' && r.toUserId === user?.id)
+        .map((r) => ({ ...r, fromMember: members.find((m) => m.id === r.fromUserId), title: describeSwapTarget(r) })),
+    [swapRequests, user, members, describeSwapTarget]
+  )
+  const outgoingSwapRequests = useMemo(
+    () =>
+      swapRequests
+        .filter((r) => r.status === 'pending' && r.fromUserId === user?.id)
+        .map((r) => ({ ...r, toMember: members.find((m) => m.id === r.toUserId), title: describeSwapTarget(r) })),
+    [swapRequests, user, members, describeSwapTarget]
+  )
+
   // --- Acciones ---
 
   // Crea una notificación para userId y, si tiene una pareja de
@@ -356,6 +400,65 @@ export function DataProvider({ children }) {
   )
 
   const cancelRoomPartner = useCallback((requestId) => update('room_partners', requestId, { status: 'cancelled' }), [])
+
+  // Intercambiar turno (Convives): no es instantáneo, se propone y la
+  // otra persona acepta/rechaza — mismo espíritu que room_partners.
+  // target puede ser una tarea fija ('task') o el período actual de
+  // una actividad propia ('activity_completion'); target_id/type son
+  // polimórficos, se resuelven contra la tabla correcta a mano.
+  const requestSwap = useCallback(
+    async ({ targetType, targetId, toUserId, title }) => {
+      if (!currentFloor || !user) return
+      await create('swap_requests', {
+        floorId: currentFloor.id,
+        targetType,
+        targetId,
+        fromUserId: user.id,
+        toUserId
+      })
+      await notifyUser(currentFloor.id, toUserId, 'swap', `${user.name} te propone intercambiar "${title}" contigo`)
+    },
+    [currentFloor, user, notifyUser]
+  )
+
+  const acceptSwap = useCallback(
+    async (requestId) => {
+      const request = swapRequests.find((r) => r.id === requestId)
+      if (!request || !currentFloor) return
+      // Revalida que el turno siga siendo de quien propuso — pudo haber
+      // cambiado de manos mientras la solicitud esperaba respuesta (otra
+      // rotación, otro intercambio ya aceptado, etc.).
+      const table = request.targetType === 'task' ? 'tasks' : 'activity_completions'
+      const current =
+        request.targetType === 'task'
+          ? tasks.find((t) => t.id === request.targetId)
+          : activityCompletions.find((c) => c.id === request.targetId)
+      if (!current || current.assignedUserId !== request.fromUserId) {
+        await update('swap_requests', requestId, { status: 'declined', decidedAt: new Date().toISOString() })
+        return { ok: false, message: 'Ese turno ya no le corresponde a quien lo propuso.' }
+      }
+      await update(table, request.targetId, { assignedUserId: request.toUserId })
+      await update('swap_requests', requestId, { status: 'accepted', decidedAt: new Date().toISOString() })
+      const toName = members.find((m) => m.id === request.toUserId)?.name || 'Alguien'
+      await notifyUser(currentFloor.id, request.fromUserId, 'swap', `${toName} aceptó tu intercambio de turno`)
+      return { ok: true }
+    },
+    [swapRequests, currentFloor, tasks, activityCompletions, members, notifyUser]
+  )
+
+  const declineSwap = useCallback(
+    async (requestId) => {
+      const request = swapRequests.find((r) => r.id === requestId)
+      await update('swap_requests', requestId, { status: 'declined', decidedAt: new Date().toISOString() })
+      if (request && currentFloor) {
+        const fromName = members.find((m) => m.id === request.toUserId)?.name || 'Alguien'
+        await notifyUser(currentFloor.id, request.fromUserId, 'swap', `${fromName} no pudo aceptar tu intercambio de turno`)
+      }
+    },
+    [swapRequests, currentFloor, members, notifyUser]
+  )
+
+  const cancelSwap = useCallback((requestId) => update('swap_requests', requestId, { status: 'cancelled' }), [])
 
   const completeTask = useCallback(
     async (taskId) => {
@@ -909,6 +1012,12 @@ export function DataProvider({ children }) {
     acceptRoomPartner,
     rejectRoomPartner,
     cancelRoomPartner,
+    incomingSwapRequests,
+    outgoingSwapRequests,
+    requestSwap,
+    acceptSwap,
+    declineSwap,
+    cancelSwap,
     activities,
     activityCompletions,
     addActivity,

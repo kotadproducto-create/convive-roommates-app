@@ -340,6 +340,25 @@ create index if not exists activities_floor_idx on activities (floor_id);
 create index if not exists activity_completions_floor_idx on activity_completions (floor_id);
 create index if not exists activity_completions_activity_idx on activity_completions (activity_id);
 
+-- "Intercambiar turno" (Convives): target_type/target_id son
+-- polimórficos (apuntan a una fila de tasks o de activity_completions
+-- según el caso) — sin FK cruzada, se valida en la app. No es
+-- instantáneo: se propone y la otra persona acepta/rechaza, mismo
+-- espíritu que room_partners.
+create table if not exists swap_requests (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  target_type text not null check (target_type in ('task','activity_completion')),
+  target_id uuid not null,
+  from_user_id uuid not null references profiles(id) on delete cascade,
+  to_user_id uuid not null references profiles(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending','accepted','declined','cancelled')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz
+);
+create index if not exists swap_requests_floor_idx on swap_requests (floor_id);
+create index if not exists swap_requests_target_idx on swap_requests (target_type, target_id);
+
 -- Registro interno de la Edge Function send-recovery-code: solo para
 -- limitar cuántas veces se puede pedir un código por email en poco
 -- tiempo (protección propia contra abuso, ya que este flujo no pasa por
@@ -558,6 +577,15 @@ create policy "select floor activity_completions" on activity_completions for se
 create policy "insert floor activity_completions" on activity_completions for insert with check (is_active_member(floor_id));
 create policy "update floor activity_completions" on activity_completions for update using (is_active_member(floor_id));
 
+-- swap_requests: cualquier miembro ve las del piso; solo quien
+-- propone crea; quien recibe decide (aceptar/rechazar) mientras siga
+-- pendiente; quien propuso puede cancelar su propia pendiente.
+alter table swap_requests enable row level security;
+create policy "select floor swap_requests" on swap_requests for select using (is_active_member(floor_id));
+create policy "from user create swap_requests" on swap_requests for insert with check (from_user_id = auth.uid() and is_active_member(floor_id));
+create policy "to user decide swap_requests" on swap_requests for update using (to_user_id = auth.uid() and status = 'pending') with check (to_user_id = auth.uid());
+create policy "from user cancel own pending swap_requests" on swap_requests for update using (from_user_id = auth.uid() and status = 'pending') with check (from_user_id = auth.uid());
+
 -- =========================================================
 -- Realtime: para que la app reciba cambios en vivo
 -- =========================================================
@@ -576,6 +604,7 @@ alter publication supabase_realtime add table absence_requests;
 alter publication supabase_realtime add table room_partners;
 alter publication supabase_realtime add table activities;
 alter publication supabase_realtime add table activity_completions;
+alter publication supabase_realtime add table swap_requests;
 
 -- =========================================================
 -- Storage: fotos de incidencias y facturas del pote comparten un único
