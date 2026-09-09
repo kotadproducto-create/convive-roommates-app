@@ -139,7 +139,8 @@ export function AuthProvider({ children }) {
     await create('profiles', {
       id: signUpData.user.id,
       name,
-      points: 0
+      points: 0,
+      onboardingSeen: false // cuenta nueva: aterriza en /bienvenida tras registrarse (ver Register.jsx)
     })
 
     await create('floor_memberships', {
@@ -173,7 +174,8 @@ export function AuthProvider({ children }) {
     await create('profiles', {
       id: signUpData.user.id,
       name,
-      points: 0
+      points: 0,
+      onboardingSeen: false // cuenta nueva: aterriza en /bienvenida tras registrarse (ver Register.jsx)
     })
 
     await create('floor_memberships', {

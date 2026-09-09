@@ -13,6 +13,7 @@ import ResetPassword from './pages/ResetPassword'
 import Timeline from './pages/Timeline'
 import Dashboard from './pages/Dashboard'
 import Activities from './pages/Activities'
+import Onboarding from './pages/Onboarding'
 import Incidents from './pages/Incidents'
 import Rewards from './pages/Rewards'
 import Wallet from './pages/Wallet'
@@ -56,6 +57,16 @@ export default function App() {
                 <ProtectedRoute>
                   <AuthedData>
                     <Dashboard />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bienvenida"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Onboarding />
                   </AuthedData>
                 </ProtectedRoute>
               }

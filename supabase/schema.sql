@@ -40,6 +40,7 @@ create table if not exists profiles (
   age_public boolean not null default true, -- privacidad de presentación (no RLS): oculta la edad a otros en Convives
   phone_public boolean not null default true, -- ídem para el teléfono
   occupation_public boolean not null default true, -- ídem para la ocupación
+  onboarding_seen boolean not null default true, -- si ya vio /bienvenida; nuevo default true para no afectar cuentas existentes, se pone false explícito al registrarse
   points integer not null default 0,
   reputation_score numeric not null default 0, -- automática, no transferible, calculada desde el historial de tareas en todos los pisos (sin lógica todavía, Fase 1+)
   presentation_message text check (char_length(presentation_message) <= 240), -- Bio de la tarjeta de "Convives"; único de perfil, se reutiliza al unirse a cualquier piso
@@ -55,6 +56,9 @@ create table if not exists floors (
   pot_threshold numeric not null default 30,
   pot_per_person numeric not null default 10,
   whatsapp_group_url text,
+  notes text, -- nota compartida del piso, editable por cualquier miembro (ver /actividades)
+  notes_updated_by uuid references profiles(id) on delete set null,
+  notes_updated_at timestamptz,
   created_at timestamptz not null default now()
 );
 

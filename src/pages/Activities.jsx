@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
 import TaskCard from '../components/TaskCard'
@@ -6,10 +6,11 @@ import Avatar from '../components/Avatar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
+import { update } from '../lib/db'
 import { TASK_TYPES } from '../lib/rotation'
 import { currentPeriodKey } from '../lib/activities'
 import { SparkleIcon, EditIcon, TrashIcon, PlusIcon, MinusIcon } from '../components/icons'
-import { format } from 'date-fns'
+import { format, formatDistanceToNowStrict } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 /**
@@ -24,6 +25,7 @@ import { es } from 'date-fns/locale'
 export default function Activities() {
   const { user } = useAuth()
   const {
+    floor,
     members,
     tasks,
     weekKey,
@@ -76,6 +78,10 @@ export default function Activities() {
         >
           {showForm && !editing ? 'Cancelar' : '+ Nueva actividad'}
         </button>
+      </div>
+
+      <div className="mb-5">
+        <GroupNoteCard floor={floor} memberById={memberById} />
       </div>
 
       {(showForm || editing) && (
@@ -140,6 +146,90 @@ export default function Activities() {
         )}
       </section>
     </AppLayout>
+  )
+}
+
+/** Nota compartida del piso: texto libre, editable por cualquier
+ * miembro (misma policy de "floors" ya vigente — is_active_member),
+ * con quién la editó por última vez y cuándo. Se guarda en floors.notes
+ * directo con update() de db.js, mismo patrón que ya usa
+ * FloorSettings.jsx para el resto de ajustes del piso. */
+function GroupNoteCard({ floor, memberById }) {
+  const { user } = useAuth()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(floor?.notes || '')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!editing) setValue(floor?.notes || '')
+  }, [floor?.notes, editing])
+
+  async function handleSave() {
+    if (!floor || !user) return
+    setSaving(true)
+    try {
+      await update('floors', floor.id, {
+        notes: value.trim() || null,
+        notesUpdatedBy: user.id,
+        notesUpdatedAt: new Date().toISOString()
+      })
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const author = floor?.notesUpdatedBy ? memberById[floor.notesUpdatedBy] : null
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <h3 className="font-display font-semibold text-sm">Nota del piso</h3>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => {
+              setValue(floor?.notes || '')
+              setEditing(true)
+            }}
+            className="text-xs font-semibold text-violet-500 hover:underline shrink-0"
+          >
+            {floor?.notes ? 'Editar' : '+ Agregar nota'}
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="flex flex-col gap-2">
+          <textarea
+            className="input min-h-20"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder='Ej. "Esta semana toca limpieza profunda el sábado" o "Recordar revisar el filtro del agua"'
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button type="button" className="btn-secondary text-sm flex-1" onClick={() => setEditing(false)}>
+              Cancelar
+            </button>
+            <button type="button" className="btn-primary text-sm flex-1" onClick={handleSave} disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      ) : floor?.notes ? (
+        <>
+          <p className="text-sm text-ink-900/80 dark:text-cream-100/80 whitespace-pre-wrap">{floor.notes}</p>
+          {floor.notesUpdatedAt && (
+            <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-2">
+              Editado por {author?.name || 'alguien'} · {formatDistanceToNowStrict(new Date(floor.notesUpdatedAt), { locale: es, addSuffix: true })}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Sin notas todavía — cualquiera del piso puede dejar un recordatorio acá.</p>
+      )}
+    </div>
   )
 }
 

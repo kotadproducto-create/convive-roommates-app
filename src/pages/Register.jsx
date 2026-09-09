@@ -39,7 +39,7 @@ export default function Register() {
       } else {
         await registerAndRequestJoin({ name: nameValue, email: emailValue, password: passwordValue, inviteCode })
       }
-      navigate('/')
+      navigate('/bienvenida')
     } catch (err) {
       setError(err.message)
     } finally {
