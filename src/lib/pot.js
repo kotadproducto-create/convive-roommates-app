@@ -11,10 +11,13 @@ export function potAmountColorClass(amount) {
   return 'text-sage-500'
 }
 
-/** Mensaje corto para el globo de diálogo del pote, a juego con el mismo semáforo. */
-export function potAmountBubbleMessage(amount) {
+/** Mensaje corto para el globo de diálogo del pote, a juego con el mismo
+ * semáforo. Recibe `t` (LanguageContext) para traducirse — si no se pasa,
+ * cae al texto en español fijo (por si algún caller todavía no lo pasa). */
+export function potAmountBubbleMessage(amount, t) {
   const n = Number(amount) || 0
-  if (n < 0) return '¡Toca reponer! 🪫'
-  if (n < 5) return 'Va quedando poco 👀'
-  return '¡Vais bien! 🌿'
+  const tt = t || ((key) => ({ 'pot.needsRefill': '¡Toca reponer! 🪫', 'pot.runningLow': 'Va quedando poco 👀', 'pot.healthy': '¡Vais bien! 🌿' })[key])
+  if (n < 0) return tt('pot.needsRefill')
+  if (n < 5) return tt('pot.runningLow')
+  return tt('pot.healthy')
 }

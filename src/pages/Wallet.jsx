@@ -5,16 +5,17 @@ import PotCalendar from '../components/PotCalendar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 import { JarIcon, EditIcon, TrashIcon } from '../components/icons'
 import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
 import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
 
 export default function Wallet() {
   const { user, membership } = useAuth()
   const { floor, members, potContributions, addPotContribution, addPotExpense, updatePotExpense, deletePotExpense, setMemberPotActive } =
     useData()
   const { showToast } = useToast()
+  const { t, dateLocale } = useLanguage()
   const isAdmin = membership?.role === 'admin'
   const [amount, setAmount] = useState(floor?.potPerPerson || 10)
 
@@ -51,7 +52,7 @@ export default function Wallet() {
 
   async function handleContribute() {
     await addPotContribution(amount)
-    showToast(`¡Aportaste ${amount}€ al pote!`, 'success')
+    showToast(t('wallet.contributedToast', { amount }), 'success')
   }
 
   function handleReceiptChange(e) {
@@ -69,14 +70,14 @@ export default function Wallet() {
     setSubmittingExpense(true)
     try {
       await addPotExpense(expenseAmount, { note: expenseNote.trim() || null, receiptFile })
-      showToast(`Registraste un gasto de ${expenseAmount}€`, 'default')
+      showToast(t('wallet.expenseRecordedToast', { amount: expenseAmount }), 'default')
       setExpenseAmount('')
       setExpenseNote('')
       setReceiptFile(null)
       setReceiptPreview(null)
       setShowExpenseForm(false)
     } catch (err) {
-      showToast('No se pudo registrar el gasto: ' + err.message, 'default')
+      showToast(t('wallet.expenseErrorToast', { error: err.message }), 'default')
     } finally {
       setSubmittingExpense(false)
     }
@@ -95,7 +96,7 @@ export default function Wallet() {
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
 
   return (
-    <AppLayout title="Pote de dinero">
+    <AppLayout title={t('wallet.title')}>
       <Reveal>
         <div className="mb-5">
           <PotCalendar contributions={potContributions} memberById={memberById} />
@@ -106,22 +107,22 @@ export default function Wallet() {
         <div className="card p-5 mb-5 flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
             <div className="flex items-center gap-3 hoverbubble" tabIndex={0}>
-              <div className="bubble">{potAmountBubbleMessage(floor?.potAmount ?? 0)}</div>
+              <div className="bubble">{potAmountBubbleMessage(floor?.potAmount ?? 0, t)}</div>
               <div className="w-12 h-12 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 bg-gold-100 dark:bg-gold-400/20 text-gold-500 flex items-center justify-center shrink-0">
                 <JarIcon className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">Total del pote</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('wallet.totalLabel')}</p>
                 <p className={`text-2xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{floor?.potAmount ?? 0}€</p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <input type="number" className="input w-24" value={amount} min={1} onChange={(e) => setAmount(e.target.value)} />
               <button className="btn-primary text-sm" onClick={handleContribute}>
-                Aportar
+                {t('wallet.contribute')}
               </button>
               <button className="btn-secondary text-sm" onClick={() => setShowExpenseForm((s) => !s)}>
-                {showExpenseForm ? 'Cancelar' : 'Gastos'}
+                {showExpenseForm ? t('wallet.cancel') : t('wallet.expenses')}
               </button>
             </div>
           </div>
@@ -134,25 +135,25 @@ export default function Wallet() {
                   step="0.01"
                   min="0.01"
                   className="input"
-                  placeholder="Monto gastado (€)"
+                  placeholder={t('wallet.amountSpentPlaceholder')}
                   value={expenseAmount}
                   onChange={(e) => setExpenseAmount(e.target.value)}
                   required
                 />
                 <label className="btn-secondary text-sm cursor-pointer justify-self-start">
-                  📷 {receiptFile ? 'Cambiar factura' : 'Añadir factura (opcional)'}
+                  📷 {receiptFile ? t('wallet.changeReceipt') : t('wallet.addReceipt')}
                   <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleReceiptChange} />
                 </label>
               </div>
-              {receiptPreview && <img src={receiptPreview} alt="Factura" className="w-20 h-20 object-cover rounded-lg" />}
+              {receiptPreview && <img src={receiptPreview} alt={t('wallet.receiptAlt')} className="w-20 h-20 object-cover rounded-lg" />}
               <textarea
                 className="input min-h-16"
-                placeholder="Nota (opcional): ej. 2x Leche 1.50€, Pan 1.20€ — o solo el total"
+                placeholder={t('wallet.notePlaceholder')}
                 value={expenseNote}
                 onChange={(e) => setExpenseNote(e.target.value)}
               />
               <button className="btn-danger text-sm self-start" type="submit" disabled={submittingExpense}>
-                {submittingExpense ? 'Guardando…' : 'Registrar gasto'}
+                {submittingExpense ? t('wallet.saving') : t('wallet.logExpense')}
               </button>
             </form>
           )}
@@ -162,10 +163,8 @@ export default function Wallet() {
       <div className="grid md:grid-cols-2 gap-5 mb-5">
         <Reveal delay={80}>
           <section className="card p-5">
-            <h2 className="font-display font-semibold mb-1">Saldo por persona</h2>
-            <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">
-              Verde: aportó de más. Rojo: le falta para llegar a su parte equitativa. Los gastos son del grupo y no afectan este saldo.
-            </p>
+            <h2 className="font-display font-semibold mb-1">{t('wallet.balancePerPersonTitle')}</h2>
+            <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">{t('wallet.balanceLegend')}</p>
             <ul className="flex flex-col gap-2">
               {activeMembers.map((m) => {
                 const b = balances[m.id] || { contributed: 0, balance: 0 }
@@ -178,8 +177,8 @@ export default function Wallet() {
                         {m.name[0].toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{m.name}{m.id === user.id ? ' (tú)' : ''}</p>
-                        <p className="text-xs text-ink-900/40 dark:text-cream-100/40">Aportó {b.contributed.toFixed(2)}€</p>
+                        <p className="text-sm font-medium truncate">{m.name}{m.id === user.id ? t('wallet.you') : ''}</p>
+                        <p className="text-xs text-ink-900/40 dark:text-cream-100/40">{t('wallet.contributed', { amount: b.contributed.toFixed(2) })}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -188,7 +187,7 @@ export default function Wallet() {
                       </span>
                       {canToggle(m) && (
                         <button onClick={() => toggleActive(m)} className="text-xs font-semibold text-violet-500 hover:underline">
-                          De baja
+                          {t('wallet.setInactive')}
                         </button>
                       )}
                     </div>
@@ -199,14 +198,14 @@ export default function Wallet() {
 
             {inactiveMembers.length > 0 && (
               <>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mt-4 mb-2">De baja temporal</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mt-4 mb-2">{t('wallet.temporarilyInactiveTitle')}</p>
                 <ul className="flex flex-col gap-2">
                   {inactiveMembers.map((m) => (
                     <li key={m.id} className="flex items-center justify-between px-2 py-2 rounded-xl opacity-60">
-                      <span className="text-sm">{m.name}{m.id === user.id ? ' (tú)' : ''}</span>
+                      <span className="text-sm">{m.name}{m.id === user.id ? t('wallet.you') : ''}</span>
                       {canToggle(m) && (
                         <button onClick={() => toggleActive(m)} className="text-xs font-semibold text-violet-500 hover:underline">
-                          Reactivar
+                          {t('wallet.reactivate')}
                         </button>
                       )}
                     </li>
@@ -219,19 +218,21 @@ export default function Wallet() {
 
         <Reveal delay={140}>
           <section className="card p-5">
-            <h2 className="font-display font-semibold mb-3">Historial de movimientos</h2>
+            <h2 className="font-display font-semibold mb-3">{t('wallet.historyTitle')}</h2>
             {history.length === 0 ? (
-              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Todavía no se ha registrado ningún movimiento.</p>
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('wallet.noHistoryYet')}</p>
             ) : (
               <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto">
                 {history.map((c) => (
                   <HistoryRow
                     key={c.id}
                     contribution={c}
-                    authorName={memberById[c.userId]?.name || 'Alguien'}
+                    authorName={memberById[c.userId]?.name || t('wallet.someone')}
                     canManage={c.userId === user.id && Number(c.amount) < 0 && Date.now() - new Date(c.createdAt).getTime() < 24 * 60 * 60 * 1000}
                     onUpdate={updatePotExpense}
                     onDelete={deletePotExpense}
+                    t={t}
+                    dateLocale={dateLocale}
                   />
                 ))}
               </ul>
@@ -243,7 +244,7 @@ export default function Wallet() {
   )
 }
 
-function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete }) {
+function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete, t, dateLocale }) {
   const isExpense = Number(c.amount) < 0
   const [editing, setEditing] = useState(false)
   const [amount, setAmount] = useState(Math.abs(Number(c.amount)))
@@ -263,7 +264,7 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
   }
 
   function handleDelete() {
-    if (confirm('¿Eliminar este gasto? El total del pote se ajustará.')) {
+    if (confirm(t('wallet.deleteConfirm'))) {
       onDelete(c.id)
     }
   }
@@ -283,13 +284,13 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
               required
             />
           </div>
-          <input className="input text-sm" placeholder="Nota (opcional)" value={note} onChange={(e) => setNote(e.target.value)} />
+          <input className="input text-sm" placeholder={t('wallet.notePlaceholderShort')} value={note} onChange={(e) => setNote(e.target.value)} />
           <div className="flex gap-2">
             <button type="button" className="btn-secondary text-xs flex-1" onClick={() => setEditing(false)}>
-              Cancelar
+              {t('wallet.cancel')}
             </button>
             <button type="submit" className="btn-primary text-xs flex-1" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar'}
+              {saving ? t('wallet.saving') : t('wallet.save')}
             </button>
           </div>
         </form>
@@ -301,11 +302,11 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
     <li className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
       <div className="flex justify-between text-sm gap-2">
         <span className="min-w-0">
-          <strong>{authorName}</strong> {isExpense ? 'gastó' : 'aportó'}
+          <strong>{authorName}</strong> {isExpense ? t('wallet.spent') : t('wallet.contributedVerb')}
         </span>
         <span className="flex items-center gap-2 shrink-0">
           <span className="text-ink-900/40 dark:text-cream-100/40 text-xs">
-            {format(new Date(c.createdAt), "d MMM, HH:mm", { locale: es })}
+            {format(new Date(c.createdAt), 'd MMM, HH:mm', { locale: dateLocale })}
           </span>
           <span className={`font-semibold ${isExpense ? 'text-clay-500' : 'text-sage-500'}`}>
             {isExpense ? '-' : '+'}
@@ -318,7 +319,7 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
           {c.note && <span className="truncate">{c.note}</span>}
           {c.receiptUrl && (
             <a href={c.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-violet-500 hover:underline shrink-0">
-              Ver factura
+              {t('wallet.viewReceipt')}
             </a>
           )}
         </div>
@@ -327,7 +328,7 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
             <button
               type="button"
               onClick={() => setEditing(true)}
-              title="Editar (disponible 24h)"
+              title={t('wallet.editTitle')}
               className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
             >
               <EditIcon className="w-3.5 h-3.5" />
@@ -335,7 +336,7 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
             <button
               type="button"
               onClick={handleDelete}
-              title="Eliminar (disponible 24h)"
+              title={t('wallet.deleteTitle')}
               className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 text-clay-500"
             >
               <TrashIcon className="w-3.5 h-3.5" />

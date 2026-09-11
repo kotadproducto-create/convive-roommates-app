@@ -14,17 +14,11 @@ import {
   isSameDay,
   isToday
 } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { TASK_TYPES, TASK_DAY_OFFSET, getWeekKey, whoIsAssigned } from '../lib/rotation'
 import { TASK_ICONS, JarIcon, CartIcon, StoreIcon, WasherIcon } from './icons'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 import { TASK_TONE_CLASSES } from './TaskCard'
-
-const VIEW_MODES = [
-  { key: 'month', label: 'Mes' },
-  { key: 'week', label: 'Semana' },
-  { key: 'day', label: 'Día' }
-]
 
 /**
  * Calendario gráfico con vistas mes/semana/día y navegación.
@@ -49,6 +43,13 @@ export default function CalendarView({
 }) {
   const [view, setView] = useState('month')
   const [cursor, setCursor] = useState(() => new Date())
+  const { t, dateLocale } = useLanguage()
+
+  const VIEW_MODES = [
+    { key: 'month', label: t('calendar.viewMonth') },
+    { key: 'week', label: t('calendar.viewWeek') },
+    { key: 'day', label: t('calendar.viewDay') }
+  ]
 
   function shift(dir) {
     setCursor((d) => (view === 'month' ? addMonths(d, dir) : view === 'week' ? addWeeks(d, dir) : addDays(d, dir)))
@@ -69,14 +70,15 @@ export default function CalendarView({
   }
 
   const title = useMemo(() => {
-    if (view === 'month') return format(cursor, "MMMM 'de' yyyy", { locale: es })
+    if (view === 'month') return format(cursor, t('calendar.monthYearFormat'), { locale: dateLocale })
     if (view === 'week') {
       const start = startOfWeek(cursor, { weekStartsOn: 1 })
       const end = endOfWeek(cursor, { weekStartsOn: 1 })
-      return `${format(start, 'd MMM', { locale: es })} – ${format(end, 'd MMM', { locale: es })}`
+      return `${format(start, 'd MMM', { locale: dateLocale })} – ${format(end, 'd MMM', { locale: dateLocale })}`
     }
-    return format(cursor, "EEEE d 'de' MMMM", { locale: es })
-  }, [view, cursor])
+    return format(cursor, t('calendar.dayTitleFormat'), { locale: dateLocale })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, cursor, dateLocale])
 
   return (
     <div className="card p-4">
@@ -85,7 +87,7 @@ export default function CalendarView({
           <button
             type="button"
             onClick={() => shift(-1)}
-            aria-label="Anterior"
+            aria-label={t('calendar.prevAria')}
             className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-90 transition-transform"
           >
             ‹
@@ -94,13 +96,13 @@ export default function CalendarView({
           <button
             type="button"
             onClick={() => shift(1)}
-            aria-label="Siguiente"
+            aria-label={t('calendar.nextAria')}
             className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-90 transition-transform"
           >
             ›
           </button>
           <button type="button" onClick={() => setCursor(new Date())} className="text-xs font-semibold text-violet-500 hover:underline ml-1">
-            Hoy
+            {t('calendar.today')}
           </button>
         </div>
         <div className="flex bg-cream-200 dark:bg-ink-700 rounded-full p-1 text-xs font-semibold">
@@ -119,8 +121,12 @@ export default function CalendarView({
         </div>
       </div>
 
-      {view === 'month' && <MonthGrid cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} />}
-      {view === 'week' && <WeekStrip cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} />}
+      {view === 'month' && (
+        <MonthGrid cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} t={t} dateLocale={dateLocale} />
+      )}
+      {view === 'week' && (
+        <WeekStrip cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} t={t} dateLocale={dateLocale} />
+      )}
       {view === 'day' && (
         <DayDetail
           cursor={cursor}
@@ -132,25 +138,33 @@ export default function CalendarView({
           shoppingPurchases={shoppingPurchases}
           shoppingItems={shoppingItems}
           notifications={notifications}
+          t={t}
+          dateLocale={dateLocale}
         />
       )}
     </div>
   )
 }
 
-const WEEKDAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
-
-function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask }) {
+function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask, t, dateLocale }) {
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(cursor), { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(cursor), { weekStartsOn: 1 })
   })
+  // Iniciales de día de la semana localizadas (en vez de un array fijo
+  // en español) — se toman de una semana cualquiera con el `dateLocale`
+  // activo, mismo formato de una sola letra ('EEEEE') que ya usa WeekStrip.
+  const weekdayLabels = useMemo(() => {
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 })
+    return eachDayOfInterval({ start, end: addDays(start, 6) }).map((d) => format(d, 'EEEEE', { locale: dateLocale }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateLocale])
 
   return (
     <div>
       <div className="grid grid-cols-7 mb-1">
-        {WEEKDAY_LABELS.map((d) => (
-          <p key={d} className="text-[10px] font-bold uppercase text-center text-ink-900/40 dark:text-cream-100/40">
+        {weekdayLabels.map((d, i) => (
+          <p key={i} className="text-[10px] font-bold uppercase text-center text-ink-900/40 dark:text-cream-100/40">
             {d}
           </p>
         ))}
@@ -178,7 +192,7 @@ function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask }) {
                         ? 'bg-coral-500 border-ink-900'
                         : 'bg-violet-100 dark:bg-violet-700/25 border-violet-200 dark:border-violet-600/40'
                   }`}
-                  title={`${type.label} · ${assignee?.name || 'Sin asignar'}${mineePending ? ' (te toca a ti)' : ''}`}
+                  title={`${t(`taskTypes.${type.key}`)} · ${assignee?.name || t('calendar.unassigned')}${mineePending ? t('calendar.yourTurnParen') : ''}`}
                 >
                   {Icon && <Icon className={`w-3 h-3 ${mineePending ? 'text-white' : 'text-violet-600 dark:text-violet-100'}`} />}
                 </div>
@@ -191,7 +205,7 @@ function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask }) {
   )
 }
 
-function WeekStrip({ cursor, dayInfo }) {
+function WeekStrip({ cursor, dayInfo, t, dateLocale }) {
   const days = eachDayOfInterval({
     start: startOfWeek(cursor, { weekStartsOn: 1 }),
     end: endOfWeek(cursor, { weekStartsOn: 1 })
@@ -208,7 +222,7 @@ function WeekStrip({ cursor, dayInfo }) {
             key={date.toISOString()}
             className={`flex flex-col items-center gap-1.5 rounded-xl py-3 px-1 ${isToday(date) ? 'bg-violet-50 dark:bg-violet-700/20' : ''}`}
           >
-            <span className="text-[10px] font-bold uppercase text-ink-900/40 dark:text-cream-100/40">{format(date, 'EEEEE', { locale: es })}</span>
+            <span className="text-[10px] font-bold uppercase text-ink-900/40 dark:text-cream-100/40">{format(date, 'EEEEE', { locale: dateLocale })}</span>
             <span className="text-xs font-bold">{format(date, 'd')}</span>
             {type ? (
               <div
@@ -219,7 +233,7 @@ function WeekStrip({ cursor, dayInfo }) {
                       ? 'bg-coral-500 border-ink-900 ring-2 ring-coral-500/40'
                       : 'bg-cream-100 dark:bg-ink-700 border-dashed border-ink-900/30 dark:border-cream-100/30'
                 }`}
-                title={`${type.label} · ${assignee?.name || 'Sin asignar'}${!isCurrentWeek ? ' (previsto)' : ''}${minePending ? ' — te toca a ti' : ''}`}
+                title={`${t(`taskTypes.${type.key}`)} · ${assignee?.name || t('calendar.unassigned')}${!isCurrentWeek ? t('calendar.plannedParen') : ''}${minePending ? t('calendar.yourTurnDash') : ''}`}
               >
                 {Icon && <Icon className={`w-4 h-4 ${minePending ? 'text-white' : 'text-ink-900/70 dark:text-cream-100/70'}`} />}
               </div>
@@ -231,7 +245,7 @@ function WeekStrip({ cursor, dayInfo }) {
                 minePending ? 'font-bold text-coral-600 dark:text-coral-400' : 'text-ink-900/50 dark:text-cream-100/50'
               }`}
             >
-              {minePending ? 'Tu turno' : assignee?.name?.split(' ')[0] || ''}
+              {minePending ? t('calendar.yourTurn') : assignee?.name?.split(' ')[0] || ''}
             </span>
           </div>
         )
@@ -252,19 +266,20 @@ const EVENT_TONE_CLASSES = {
  * aportes/gastos del pote, compras realizadas, productos agregados a la
  * lista, y avisos de lavadora — ordenado cronológicamente, como un
  * historial resumen del día. */
-function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications) {
+function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t) {
   return useMemo(() => {
     const events = []
 
     for (const c of potContributions) {
       if (!isSameDay(new Date(c.createdAt), cursor)) continue
       const isExpense = Number(c.amount) < 0
+      const name = memberById[c.userId]?.name || t('calendar.someone')
       events.push({
         id: `pot-${c.id}`,
         time: c.createdAt,
         icon: JarIcon,
         tone: isExpense ? 'clay' : 'sage',
-        title: `${memberById[c.userId]?.name || 'Alguien'} ${isExpense ? 'gastó' : 'aportó'} ${Math.abs(Number(c.amount)).toFixed(2)}€ en el pote`,
+        title: t(isExpense ? 'calendar.spentFromPot' : 'calendar.contributedToPot', { name, amount: Math.abs(Number(c.amount)).toFixed(2) }),
         subtitle: c.note || null
       })
     }
@@ -276,7 +291,7 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
         time: p.createdAt,
         icon: CartIcon,
         tone: 'coral',
-        title: `${memberById[p.userId]?.name || 'Alguien'} compró ${p.itemName}`,
+        title: t('shopping.someoneBought', { name: memberById[p.userId]?.name || t('calendar.someone'), item: p.itemName }),
         subtitle: p.price ? `${p.price}€` : null
       })
     }
@@ -288,7 +303,7 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
         time: item.createdAt,
         icon: StoreIcon,
         tone: 'violet',
-        title: `${memberById[item.createdBy]?.name || 'Alguien'} agregó "${item.name}" a la lista de compras`,
+        title: t('calendar.addedToList', { name: memberById[item.createdBy]?.name || t('calendar.someone'), item: item.name }),
         subtitle: null
       })
     }
@@ -306,7 +321,8 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
     }
 
     return events.sort((a, b) => new Date(a.time) - new Date(b.time))
-  }, [cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t])
 }
 
 function DayDetail({
@@ -318,7 +334,8 @@ function DayDetail({
   potContributions,
   shoppingPurchases,
   shoppingItems,
-  notifications
+  notifications,
+  t
 }) {
   const { type, assignee, task, isCurrentWeek, isMine } = dayInfo(cursor)
   const Icon = type ? TASK_ICONS[type.icon] : null
@@ -328,14 +345,15 @@ function DayDetail({
     : TASK_TONE_CLASSES[type?.key] || 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
   const badgeBorderClass = minePending ? 'border-coral-600' : 'border-ink-900/70 dark:border-cream-100/30'
   const { showToast } = useToast()
-  const events = useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications)
+  const events = useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t)
+  const typeLabel = type ? t(`taskTypes.${type.key}`) : ''
 
   function handleToggle() {
     if (task.completed) {
       uncompleteTask(task.id)
     } else {
       completeTask(task.id)
-      showToast(`¡${type.label} completada! +${type.points} recompensas`, 'success')
+      showToast(t('taskCard.completedToast', { label: typeLabel, points: type.points }), 'success')
     }
   }
 
@@ -347,7 +365,7 @@ function DayDetail({
             <Link
               to="/compras"
               className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0 hover:opacity-80`}
-              title="Ir a la lista de compras"
+              title={t('calendar.goToShoppingList')}
             >
               {Icon && <Icon className="w-7 h-7" />}
             </Link>
@@ -359,34 +377,41 @@ function DayDetail({
           <div className="flex-1 min-w-0">
             {type.key === 'compras' ? (
               <Link to="/compras" className="font-display font-semibold underline decoration-dotted underline-offset-2 hover:opacity-80">
-                {type.label}
+                {typeLabel}
               </Link>
             ) : (
-              <p className="font-display font-semibold">{type.label}</p>
+              <p className="font-display font-semibold">{typeLabel}</p>
             )}
             <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-              {minePending ? <span className="font-bold text-coral-600 dark:text-coral-400">Te toca a ti</span> : assignee?.name || 'Sin asignar'} · +
-              {type.points} recompensas
-              {isCurrentWeek && task && <span className={task.completed ? 'text-sage-500' : 'text-gold-500'}> · {task.completed ? 'Hecha' : 'Pendiente'}</span>}
+              {minePending ? (
+                <span className="font-bold text-coral-600 dark:text-coral-400">{t('calendar.yourTurnBold')}</span>
+              ) : (
+                assignee?.name || t('calendar.unassigned')
+              )}{' '}
+              · {t('taskCard.rewards', { points: type.points })}
+              {isCurrentWeek && task && (
+                <span className={task.completed ? 'text-sage-500' : 'text-gold-500'}>
+                  {' '}
+                  · {task.completed ? t('calendar.doneStatus') : t('calendar.pendingStatus')}
+                </span>
+              )}
             </p>
-            {!isCurrentWeek && (
-              <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">Horario previsto, todavía no es la semana en curso.</p>
-            )}
+            {!isCurrentWeek && <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">{t('calendar.plannedHint')}</p>}
           </div>
           {isCurrentWeek && task && (
             <button type="button" onClick={handleToggle} className={task.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}>
-              {task.completed ? 'Deshacer' : 'Marcar como hecha'}
+              {task.completed ? t('calendar.undo') : t('calendar.markDone')}
             </button>
           )}
         </div>
       ) : (
-        <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">Ninguna tarea programada este día.</p>
+        <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">{t('calendar.noTaskToday')}</p>
       )}
 
       <div className="mt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-2">Resumen del día</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-2">{t('calendar.daySummary')}</p>
         {events.length === 0 ? (
-          <p className="text-sm text-ink-900/50 dark:text-cream-100/50 py-2">Sin más actividad registrada este día.</p>
+          <p className="text-sm text-ink-900/50 dark:text-cream-100/50 py-2">{t('calendar.noActivityToday')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {events.map((e) => (

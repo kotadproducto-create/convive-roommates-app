@@ -12,20 +12,25 @@ import {
   claimPendingJoinRequests,
   subscribePendingRequests
 } from '../lib/db'
-import { TASK_TYPES, TASK_LABEL, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation } from '../lib/rotation'
+import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation } from '../lib/rotation'
 import { ensureActivityPeriods, currentPeriodKey } from '../lib/activities'
 import { useAuth } from './AuthContext'
+import { useLanguage } from './LanguageContext'
 
 const DataContext = createContext(null)
 
+// El texto de cada recompensa vive en el diccionario de idioma
+// (rewardCatalog.<key>, ver i18n/es.js y en.js) — acá solo el catálogo
+// con lo que no cambia por idioma (costo, ícono).
 export const REWARD_CATALOG = [
-  { key: 'movie', label: 'Elegir la próxima película', cost: 40, icon: '🎬' },
-  { key: 'skip_minor', label: 'Saltarte una tarea menor (basura o lavadora)', cost: 60, icon: '🙅' },
-  { key: 'lie_in', label: 'Turno de compras cubierto por otro roommate', cost: 90, icon: '🛌' }
+  { key: 'movie', cost: 40, icon: '🎬' },
+  { key: 'skip_minor', cost: 60, icon: '🙅' },
+  { key: 'lie_in', cost: 90, icon: '🛌' }
 ]
 
 export function DataProvider({ children }) {
   const { user, floor, refresh: refreshAuth } = useAuth()
+  const { t } = useLanguage()
   const floorId = floor?.id
 
   const [currentFloor, setCurrentFloor] = useState(floor)
@@ -316,14 +321,14 @@ export function DataProvider({ children }) {
   const describeSwapTarget = useCallback(
     (req) => {
       if (req.targetType === 'task') {
-        const task = tasks.find((t) => t.id === req.targetId)
-        return task ? TASK_LABEL[task.type] || task.type : 'una tarea'
+        const task = tasks.find((ts) => ts.id === req.targetId)
+        return task ? t(`taskTypes.${task.type}`) : t('convives.swapTargetTask')
       }
       const completion = activityCompletions.find((c) => c.id === req.targetId)
       const activity = completion ? activities.find((a) => a.id === completion.activityId) : null
-      return activity?.title || 'una actividad'
+      return activity?.title || t('convives.swapTargetActivity')
     },
-    [tasks, activities, activityCompletions]
+    [tasks, activities, activityCompletions, t]
   )
 
   // Solicitudes de intercambio de turno que me llegaron a mí (para
@@ -903,23 +908,24 @@ export function DataProvider({ children }) {
   const redeemReward = useCallback(
     async (rewardKey) => {
       const reward = REWARD_CATALOG.find((r) => r.key === rewardKey)
-      if (!reward || !user) return { ok: false, message: 'Recompensa no encontrada.' }
+      if (!reward || !user) return { ok: false, message: t('rewards.notFoundToast') }
       if ((user.points || 0) < reward.cost) {
-        return { ok: false, message: 'No tienes puntos suficientes todavía.' }
+        return { ok: false, message: t('rewards.notEnoughPointsToast') }
       }
+      const rewardLabel = t(`rewardCatalog.${reward.key}`)
       await update('profiles', user.id, { points: user.points - reward.cost })
       await create('redemptions', {
         floorId: currentFloor.id,
         userId: user.id,
         userName: user.name,
         rewardKey: reward.key,
-        rewardLabel: reward.label,
+        rewardLabel,
         cost: reward.cost
       })
       refreshAuth()
-      return { ok: true, message: `¡Canjeado! ${reward.label}` }
+      return { ok: true, message: t('rewards.redeemedToast', { label: rewardLabel }) }
     },
-    [user, currentFloor, refreshAuth]
+    [user, currentFloor, refreshAuth, t]
   )
 
   // Actividad nueva del gestor propio (ver src/lib/activities.js). Si es

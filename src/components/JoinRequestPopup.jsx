@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 
 /**
  * Pop-up de admisión: al entrar a la app, intenta "reclamar" las
@@ -13,6 +14,7 @@ import { useToast } from '../context/ToastContext'
 export default function JoinRequestPopup() {
   const { floor, claimJoinRequests, approveJoinRequest, rejectJoinRequest } = useData()
   const { showToast } = useToast()
+  const { t } = useLanguage()
   const [queue, setQueue] = useState([])
   const [deciding, setDeciding] = useState(false)
   const claimedFloorRef = useRef(null)
@@ -41,10 +43,10 @@ export default function JoinRequestPopup() {
     try {
       if (accept) {
         await approveJoinRequest(current.membershipId, current.requesterId, current.requesterName)
-        showToast(`${current.requesterName} se unió al piso`, 'success')
+        showToast(t('joinRequestPopup.approvedToast', { name: current.requesterName }), 'success')
       } else {
         await rejectJoinRequest(current.membershipId)
-        showToast(`Rechazaste la solicitud de ${current.requesterName}`, 'default')
+        showToast(t('joinRequestPopup.rejectedToast', { name: current.requesterName }), 'default')
       }
       setQueue((q) => q.slice(1))
     } finally {
@@ -59,9 +61,9 @@ export default function JoinRequestPopup() {
           {current.requesterName[0]?.toUpperCase()}
         </div>
         <div>
-          <h3 className="font-display font-bold text-lg">Nueva solicitud</h3>
+          <h3 className="font-display font-bold text-lg">{t('joinRequestPopup.title')}</h3>
           <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mt-1">
-            <strong>{current.requesterName}</strong> quiere unirse al piso <strong>{floor?.name}</strong>.
+            {t('joinRequestPopup.wantsToJoin', { name: current.requesterName, floor: floor?.name })}
           </p>
         </div>
         <div className="flex gap-2">
@@ -71,7 +73,7 @@ export default function JoinRequestPopup() {
             onClick={() => handleDecision(false)}
             className="btn-danger text-sm flex-1"
           >
-            Rechazar
+            {t('joinRequestPopup.reject')}
           </button>
           <button
             type="button"
@@ -79,12 +81,12 @@ export default function JoinRequestPopup() {
             onClick={() => handleDecision(true)}
             className="btn-primary text-sm flex-1"
           >
-            Aceptar
+            {t('joinRequestPopup.accept')}
           </button>
         </div>
         {queue.length > 1 && (
           <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
-            +{queue.length - 1} solicitud{queue.length - 1 > 1 ? 'es' : ''} más en espera
+            {t(queue.length - 1 > 1 ? 'joinRequestPopup.moreWaitingPlural' : 'joinRequestPopup.moreWaitingSingular', { count: queue.length - 1 })}
           </p>
         )}
       </div>

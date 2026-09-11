@@ -6,11 +6,11 @@ import CalendarView from '../components/CalendarView'
 import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
+import { useLanguage } from '../context/LanguageContext'
 import { TASK_TYPES, getMondayOfWeek } from '../lib/rotation'
 import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
 import { AlertIcon, ChatIcon } from '../components/icons'
 import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -30,6 +30,7 @@ export default function Dashboard() {
   } = useData()
   const [contribution, setContribution] = useState(floor?.potPerPerson || 10)
   const [washerMsg, setWasherMsg] = useState(false)
+  const { t, dateLocale } = useLanguage()
 
   const monday = getMondayOfWeek(weekKey)
   const sunday = new Date(monday)
@@ -54,20 +55,20 @@ export default function Dashboard() {
   const outOfStockItems = shoppingItems.filter((i) => i.stockLevel === 'out')
 
   return (
-    <AppLayout title="Calendario semanal">
+    <AppLayout title={t('calendar.title')}>
       {outOfStockItems.length > 0 && (
         <Reveal>
           <Link to="/compras" className="card p-3 mb-5 flex items-center gap-2 border-clay-500/50 hover:-translate-y-0.5 transition-transform">
             <AlertIcon className="w-5 h-5 text-clay-500 shrink-0" />
             <p className="text-sm font-medium text-clay-500">
-              Reponer: {outOfStockItems.map((i) => i.name).join(', ')}
+              {t('calendar.restockBanner', { items: outOfStockItems.map((i) => i.name).join(', ') })}
             </p>
           </Link>
         </Reveal>
       )}
 
       <Reveal as="section" className="mb-8">
-        <h2 className="font-display text-lg font-bold mb-3">Calendario</h2>
+        <h2 className="font-display text-lg font-bold mb-3">{t('calendar.calendarHeading')}</h2>
         <CalendarView
           floor={floor}
           memberById={memberById}
@@ -86,10 +87,14 @@ export default function Dashboard() {
       {/* Encabezado: dónde estamos */}
       <Reveal>
         <div className="card bg-violet-100 dark:bg-violet-700/20 p-4 mb-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-200 mb-0.5">Hoy</p>
-          <h2 className="font-display text-2xl font-bold tracking-tight">¡Hola, {user?.name?.split(' ')[0]}!</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-200 mb-0.5">{t('calendar.today')}</p>
+          <h2 className="font-display text-2xl font-bold tracking-tight">{t('calendar.greeting', { name: user?.name?.split(' ')[0] })}</h2>
           <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-            Semana del {format(monday, "d 'de' MMMM", { locale: es })} al {format(sunday, "d 'de' MMMM", { locale: es })} en {floor?.name}
+            {t('calendar.weekOf', {
+              start: format(monday, t('calendar.dayMonthFormat'), { locale: dateLocale }),
+              end: format(sunday, t('calendar.dayMonthFormat'), { locale: dateLocale }),
+              floor: floor?.name
+            })}
           </p>
         </div>
       </Reveal>
@@ -98,9 +103,9 @@ export default function Dashboard() {
         {/* Zona primaria: qué tengo pendiente */}
         <section className="lg:col-span-2">
           <div className="flex items-baseline justify-between mb-3">
-            <h3 className="font-display text-lg font-bold">Tareas de esta semana</h3>
+            <h3 className="font-display text-lg font-bold">{t('calendar.weekTasksTitle')}</h3>
             <span className="text-xs font-semibold text-ink-900/50 dark:text-cream-100/50">
-              {doneCount}/{weekTasks.length} completadas
+              {t('calendar.completedCount', { done: doneCount, total: weekTasks.length })}
             </span>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -122,8 +127,8 @@ export default function Dashboard() {
         <aside className="flex flex-col gap-4">
           <Reveal delay={80}>
           <div className="card hoverbubble p-4" tabIndex={0}>
-            <div className="bubble">{potAmountBubbleMessage(floor?.potAmount ?? 0)}</div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">Pote de compras</p>
+            <div className="bubble">{potAmountBubbleMessage(floor?.potAmount ?? 0, t)}</div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{t('calendar.potLabel')}</p>
             <p className={`text-2xl font-display font-bold mb-3 ${potAmountColorClass(floor?.potAmount ?? 0)}`}>
               {floor?.potAmount ?? 0}€
             </p>
@@ -136,7 +141,7 @@ export default function Dashboard() {
                 onChange={(e) => setContribution(e.target.value)}
               />
               <button className="btn-secondary text-sm flex-1" onClick={() => addPotContribution(contribution)}>
-                Aportar
+                {t('calendar.contribute')}
               </button>
             </div>
           </div>
@@ -144,10 +149,10 @@ export default function Dashboard() {
 
           <Reveal delay={150}>
           <div className="card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">Lavadora</p>
-            <p className="text-sm mb-3">Avisa al grupo si vas a ponerla.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{t('calendar.washerLabel')}</p>
+            <p className="text-sm mb-3">{t('calendar.washerHint')}</p>
             <button className="btn-primary text-sm w-full" onClick={handleWasher}>
-              {washerMsg ? 'Avisado ✓' : 'Voy a usarla'}
+              {washerMsg ? t('calendar.washerNotified') : t('calendar.washerCta')}
             </button>
           </div>
           </Reveal>
@@ -164,8 +169,8 @@ export default function Dashboard() {
                   <ChatIcon className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="font-display font-semibold">Grupo de WhatsApp</p>
-                  <p className="text-xs text-ink-900/50 dark:text-cream-100/50">Abrir en WhatsApp</p>
+                  <p className="font-display font-semibold">{t('calendar.whatsappGroup')}</p>
+                  <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{t('calendar.openInWhatsapp')}</p>
                 </div>
               </a>
             </Reveal>
@@ -173,7 +178,7 @@ export default function Dashboard() {
 
           <Reveal delay={220}>
           <div className="card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-2">Orden de rotación</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-2">{t('calendar.rotationOrder')}</p>
             <ol className="flex flex-col gap-2">
               {(floor?.rotationOrder || []).map((id, idx) => {
                 const m = memberById[id]

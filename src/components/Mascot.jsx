@@ -1,3 +1,5 @@
+import { useLanguage } from '../context/LanguageContext'
+
 /**
  * Mascota de Convive: una llave simple, sin cara — cada roommate es una
  * llave más del piso. Mismo trazo grueso que el resto del set de iconos.
@@ -5,13 +7,14 @@
  * nunca como icono funcional.
  */
 export default function Mascot({ className = 'w-24 h-24', wobble = true }) {
+  const { t } = useLanguage()
   return (
     <svg
       viewBox="0 0 140 140"
       fill="none"
       className={`text-ink-900 dark:text-cream-100 ${className}`}
       role="img"
-      aria-label="Mascota de Convive: una llave"
+      aria-label={t('mascot.ariaLabel')}
     >
       <g className={wobble ? 'mascot-wobble' : ''} style={{ transformOrigin: '50% 20%' }}>
         <ellipse cx="70" cy="122" rx="24" ry="6" fill="currentColor" opacity="0.1" />

@@ -7,11 +7,11 @@ import { useData } from '../context/DataContext'
 import { useTheme } from '../context/ThemeContext'
 import { usePush } from '../context/PushContext'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 import { getFloorHistory } from '../lib/db'
 import { getMemberColor } from '../lib/roomieColors'
 import { CameraIcon, LockIcon, MoonIcon, SunIcon, AlertIcon, BellIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict } from 'date-fns'
-import { es } from 'date-fns/locale'
 
 const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/
 
@@ -31,6 +31,7 @@ export default function Perfil() {
     cancelRoomPartner
   } = useData()
   const { showToast } = useToast()
+  const { t, dateLocale } = useLanguage()
 
   // React Router no hace scroll nativo a #anclas (eso solo pasa en
   // navegación de página completa) — el menú de Ajustes enlaza a
@@ -44,7 +45,7 @@ export default function Perfil() {
   if (!user) return null
 
   return (
-    <AppLayout title="Perfil">
+    <AppLayout title={t('perfil.title')}>
       <div className="flex flex-col gap-5 max-w-2xl">
         {membership?.removalRequestedBy && (
           <Reveal>
@@ -56,17 +57,18 @@ export default function Perfil() {
               potContributions={potContributions}
               removeMember={removeMember}
               showToast={showToast}
+              t={t}
             />
           </Reveal>
         )}
         <Reveal>
-          <ProfileHeader user={user} email={email} membership={membership} floor={floor} onSaved={refresh} />
+          <ProfileHeader user={user} email={email} membership={membership} floor={floor} onSaved={refresh} t={t} />
         </Reveal>
         <Reveal delay={60}>
-          <PersonalInfoCard user={user} updateProfile={updateProfile} showToast={showToast} onSaved={refresh} />
+          <PersonalInfoCard user={user} updateProfile={updateProfile} showToast={showToast} onSaved={refresh} t={t} />
         </Reveal>
         <Reveal delay={120}>
-          <AccountCard user={user} email={email} membership={membership} floor={floor} />
+          <AccountCard user={user} email={email} membership={membership} floor={floor} t={t} dateLocale={dateLocale} />
         </Reveal>
         <Reveal delay={150}>
           <RoomPartnerCard
@@ -80,6 +82,7 @@ export default function Perfil() {
             rejectRoomPartner={rejectRoomPartner}
             cancelRoomPartner={cancelRoomPartner}
             showToast={showToast}
+            t={t}
           />
         </Reveal>
         <Reveal delay={180}>
@@ -91,17 +94,18 @@ export default function Perfil() {
             userId={user.id}
             floorName={floor?.name}
             showToast={showToast}
+            t={t}
           />
         </Reveal>
         <Reveal delay={220}>
-          <PreferencesCard />
+          <PreferencesCard t={t} />
         </Reveal>
       </div>
     </AppLayout>
   )
 }
 
-function RemovalPendingCard({ floorName, membership, userId, members, potContributions, removeMember, showToast }) {
+function RemovalPendingCard({ floorName, membership, userId, members, potContributions, removeMember, showToast, t }) {
   const [confirming, setConfirming] = useState(false)
 
   const activeMembers = members.filter((m) => m.potActive !== false)
@@ -114,15 +118,15 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
   const balance = myContributed - fairShare
 
   async function handleConfirm() {
-    if (!confirm(`¿Confirmas tu salida de ${floorName}? Perderás acceso a todas las funcionalidades y tu información quedará archivada.`)) {
+    if (!confirm(t('perfil.confirmExitDialog', { floorName }))) {
       return
     }
     setConfirming(true)
     try {
       await removeMember(membership.id, userId)
-      showToast('Saliste del piso', 'default')
+      showToast(t('perfil.exitedToast'), 'default')
     } catch (err) {
-      showToast('No se pudo procesar la salida: ' + err.message, 'default')
+      showToast(t('perfil.exitErrorToast', { error: err.message }), 'default')
       setConfirming(false)
     }
   }
@@ -132,29 +136,25 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
       <div className="flex items-start gap-3">
         <AlertIcon className="w-5 h-5 text-clay-500 shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <h2 className="font-display font-semibold text-clay-500">Salida pendiente de confirmación</h2>
+          <h2 className="font-display font-semibold text-clay-500">{t('perfil.removalPendingTitle')}</h2>
           <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mt-1">
-            Un administrador ha iniciado tu salida de <strong>{floorName}</strong>. Debes confirmarla para que se
-            haga efectiva; tus responsabilidades se reasignarán automáticamente.
+            {t('perfil.removalPendingBody', { floorName })}
           </p>
           <div className="text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2.5 mt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mb-1">
-              Tu saldo en el pote de dinero
+              {t('perfil.potBalanceTitle')}
             </p>
             <p>
-              Aportaste <strong>{myContributed.toFixed(2)}€</strong>, tu parte equitativa era{' '}
-              <strong>{fairShare.toFixed(2)}€</strong> — saldo final:{' '}
-              <strong className={balance >= 0 ? 'text-sage-500' : 'text-clay-500'}>
-                {balance > 0 ? '+' : ''}
-                {balance.toFixed(2)}€
-              </strong>
+              {t('perfil.potBalanceLine', {
+                contributed: myContributed.toFixed(2),
+                fairShare: fairShare.toFixed(2),
+                balance: `${balance > 0 ? '+' : ''}${balance.toFixed(2)}`
+              })}
             </p>
-            <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-1">
-              La app no transfiere dinero real: si corresponde, liquídalo con el piso por fuera (efectivo, Bizum, etc.).
-            </p>
+            <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-1">{t('perfil.potBalanceDisclaimer')}</p>
           </div>
           <button type="button" className="btn-danger text-sm mt-3" onClick={handleConfirm} disabled={confirming}>
-            {confirming ? 'Procesando…' : 'Confirmar salida'}
+            {confirming ? t('perfil.confirmingExit') : t('perfil.confirmExit')}
           </button>
         </div>
       </div>
@@ -162,7 +162,7 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
   )
 }
 
-function ProfileHeader({ user, email, membership, floor, onSaved }) {
+function ProfileHeader({ user, email, membership, floor, onSaved, t }) {
   const { updateProfile } = useData()
   const { showToast } = useToast()
   const [uploading, setUploading] = useState(false)
@@ -174,9 +174,9 @@ function ProfileHeader({ user, email, membership, floor, onSaved }) {
     try {
       await updateProfile(user.id, { avatarFile: file })
       await onSaved()
-      showToast('Foto de perfil actualizada', 'success')
+      showToast(t('perfil.avatarUpdatedToast'), 'success')
     } catch (err) {
-      showToast('No se pudo subir la foto: ' + err.message, 'default')
+      showToast(t('perfil.avatarErrorToast', { error: err.message }), 'default')
     } finally {
       setUploading(false)
     }
@@ -199,7 +199,7 @@ function ProfileHeader({ user, email, membership, floor, onSaved }) {
         <p className="text-sm text-ink-900/60 dark:text-cream-100/60 truncate">{email}</p>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-[10px] uppercase font-bold text-violet-500 bg-violet-50 dark:bg-violet-700/25 px-1.5 py-0.5 rounded-md">
-            {membership?.role === 'admin' ? 'Admin' : 'Miembro'}
+            {membership?.role === 'admin' ? t('perfil.admin') : t('perfil.member')}
           </span>
           {floor && <span className="text-xs text-ink-900/40 dark:text-cream-100/40">{floor.name}</span>}
         </div>
@@ -208,7 +208,7 @@ function ProfileHeader({ user, email, membership, floor, onSaved }) {
   )
 }
 
-function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
+function PersonalInfoCard({ user, updateProfile, showToast, onSaved, t }) {
   const [name, setName] = useState(user.name || '')
   const [nickname, setNickname] = useState(user.nickname || '')
   const [age, setAge] = useState(user.age || '')
@@ -230,9 +230,9 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
     try {
       await updateProfile(user.id, { color: next })
       await onSaved()
-      showToast('Color actualizado', 'success')
+      showToast(t('perfil.colorUpdatedToast'), 'success')
     } catch (err) {
-      showToast('No se pudo guardar el color: ' + err.message, 'default')
+      showToast(t('perfil.colorErrorToast', { error: err.message }), 'default')
     } finally {
       setSavingColor(false)
     }
@@ -256,9 +256,9 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
         presentationMessage: bio.trim() || null
       })
       await onSaved()
-      showToast('Perfil actualizado correctamente', 'success')
+      showToast(t('perfil.profileUpdatedToast'), 'success')
     } catch (err) {
-      showToast('No se pudo guardar: ' + err.message, 'default')
+      showToast(t('perfil.profileErrorToast', { error: err.message }), 'default')
     } finally {
       setSaving(false)
     }
@@ -266,10 +266,8 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
 
   return (
     <form onSubmit={handleSubmit} className="card p-5 flex flex-col gap-3">
-      <h2 className="font-display font-semibold mb-1">Información personal</h2>
-      <p className="text-xs text-ink-900/50 dark:text-cream-100/50 -mt-2 mb-1">
-        Esto es lo que ven tus compañeros de piso en tu tarjeta de Convives.
-      </p>
+      <h2 className="font-display font-semibold mb-1">{t('perfil.personalInfoTitle')}</h2>
+      <p className="text-xs text-ink-900/50 dark:text-cream-100/50 -mt-2 mb-1">{t('perfil.personalInfoSubtitle')}</p>
 
       <div className="flex items-center gap-3">
         <div className="relative shrink-0">
@@ -282,91 +280,91 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved }) {
             value={color}
             onChange={handleColorChange}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            aria-label="Tu color"
+            aria-label={t('perfil.yourColorAria')}
           />
         </div>
         <div className="text-sm">
-          <p className="font-medium">Tu color</p>
+          <p className="font-medium">{t('perfil.yourColor')}</p>
           <p className="text-xs text-ink-900/50 dark:text-cream-100/50">
-            {savingColor ? 'Guardando…' : 'Te identifica en el círculo de Inicio'}
+            {savingColor ? t('perfil.savingColor') : t('perfil.colorHint')}
           </p>
         </div>
       </div>
 
       <label className="text-sm">
-        Nombre completo
+        {t('perfil.fullName')}
         <input className="input mt-1" value={name} onChange={(e) => setName(e.target.value)} required />
       </label>
 
       <label className="text-sm">
-        Apodo
-        <input className="input mt-1" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Cómo te dicen" />
+        {t('perfil.nickname')}
+        <input className="input mt-1" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder={t('perfil.nicknamePlaceholder')} />
       </label>
 
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
           <label className="text-sm block">
-            Edad
+            {t('perfil.age')}
             <input type="number" min="1" max="129" className="input mt-1" value={age} onChange={(e) => setAge(e.target.value)} />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-ink-900/50 dark:text-cream-100/50 mt-1.5">
             <input type="checkbox" checked={agePublic} onChange={(e) => setAgePublic(e.target.checked)} />
-            Visible para otros
+            {t('perfil.visibleToOthers')}
           </label>
         </div>
         <div>
           <label className="text-sm block">
-            Teléfono
-            <input type="tel" className="input mt-1" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Opcional" />
+            {t('perfil.phone')}
+            <input type="tel" className="input mt-1" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('perfil.phonePlaceholder')} />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-ink-900/50 dark:text-cream-100/50 mt-1.5">
             <input type="checkbox" checked={phonePublic} onChange={(e) => setPhonePublic(e.target.checked)} />
-            Visible para otros
+            {t('perfil.visibleToOthers')}
           </label>
         </div>
       </div>
 
       <label className="text-sm">
-        Gustos / intereses
-        <input className="input mt-1" value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="Ej. Música, cine, deporte" />
+        {t('perfil.interests')}
+        <input className="input mt-1" value={interests} onChange={(e) => setInterests(e.target.value)} placeholder={t('perfil.interestsPlaceholder')} />
       </label>
 
       <div>
         <label className="text-sm block">
-          A qué te dedicas
+          {t('perfil.occupation')}
           <input
             className="input mt-1"
             value={occupation}
             onChange={(e) => setOccupation(e.target.value)}
-            placeholder="Ej. Estudiante, arquitecta, diseñador"
+            placeholder={t('perfil.occupationPlaceholder')}
           />
         </label>
         <label className="flex items-center gap-1.5 text-xs text-ink-900/50 dark:text-cream-100/50 mt-1.5">
           <input type="checkbox" checked={occupationPublic} onChange={(e) => setOccupationPublic(e.target.checked)} />
-          Visible para otros
+          {t('perfil.visibleToOthers')}
         </label>
       </div>
 
       <label className="text-sm">
-        Biografía
+        {t('perfil.bio')}
         <textarea
           className="input mt-1 min-h-20"
           value={bio}
           maxLength={240}
           onChange={(e) => setBio(e.target.value)}
-          placeholder="Cuéntale algo de ti a tus roommates"
+          placeholder={t('perfil.bioPlaceholder')}
         />
         <span className="text-xs text-ink-900/40 dark:text-cream-100/40">{bio.length}/240</span>
       </label>
 
       <button className="btn-primary text-sm self-start mt-1" type="submit" disabled={saving}>
-        {saving ? 'Guardando…' : 'Guardar cambios'}
+        {saving ? t('perfil.saving') : t('perfil.saveChanges')}
       </button>
     </form>
   )
 }
 
-function AccountCard({ user, email, membership, floor }) {
+function AccountCard({ user, email, membership, floor, t, dateLocale }) {
   const [history, setHistory] = useState(null)
 
   useEffect(() => {
@@ -381,27 +379,27 @@ function AccountCard({ user, email, membership, floor }) {
 
   return (
     <div className="card p-5">
-      <h2 className="font-display font-semibold mb-1">Cuenta</h2>
-      <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mb-4">Esta información es privada, solo tú la ves.</p>
+      <h2 className="font-display font-semibold mb-1">{t('perfil.accountTitle')}</h2>
+      <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mb-4">{t('perfil.accountSubtitle')}</p>
 
       <dl className="flex flex-col gap-2.5 text-sm mb-4">
         <div className="flex justify-between">
-          <dt className="text-ink-900/50 dark:text-cream-100/50">Correo electrónico</dt>
+          <dt className="text-ink-900/50 dark:text-cream-100/50">{t('perfil.email')}</dt>
           <dd className="font-medium">{email}</dd>
         </div>
         {floor && membership?.joinedAt && (
           <div className="flex justify-between">
-            <dt className="text-ink-900/50 dark:text-cream-100/50">En {floor.name} desde</dt>
-            <dd className="font-medium">{format(new Date(membership.joinedAt), "d 'de' MMMM 'de' yyyy", { locale: es })}</dd>
+            <dt className="text-ink-900/50 dark:text-cream-100/50">{t('perfil.inFloorSince', { floorName: floor.name })}</dt>
+            <dd className="font-medium">{format(new Date(membership.joinedAt), t('perfil.longDateFormat'), { locale: dateLocale })}</dd>
           </div>
         )}
       </dl>
 
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mb-2">Historial de pisos</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mb-2">{t('perfil.floorHistoryTitle')}</p>
       {history === null ? (
-        <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Cargando…</p>
+        <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('perfil.loading')}</p>
       ) : history.length === 0 ? (
-        <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Sin historial todavía.</p>
+        <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('perfil.noHistoryYet')}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {history.map((h) => (
@@ -409,11 +407,15 @@ function AccountCard({ user, email, membership, floor }) {
               <span className="min-w-0 truncate">
                 <strong>{h.floorName}</strong>{' '}
                 <span className="text-ink-900/50 dark:text-cream-100/50">
-                  {h.status === 'active' ? '· activo ahora' : h.status === 'rejected' ? '· solicitud rechazada' : `· hasta ${h.leftAt ? format(new Date(h.leftAt), 'd MMM yyyy', { locale: es }) : '—'}`}
+                  {h.status === 'active'
+                    ? t('perfil.activeNow')
+                    : h.status === 'rejected'
+                    ? t('perfil.rejectedRequest')
+                    : t('perfil.untilDate', { date: h.leftAt ? format(new Date(h.leftAt), 'd MMM yyyy', { locale: dateLocale }) : '—' })}
                 </span>
               </span>
               <span className="text-xs text-ink-900/40 dark:text-cream-100/40 shrink-0 ml-2">
-                {formatDistanceToNowStrict(new Date(h.joinedAt), { locale: es, addSuffix: true })}
+                {formatDistanceToNowStrict(new Date(h.joinedAt), { locale: dateLocale, addSuffix: true })}
               </span>
             </li>
           ))}
@@ -433,7 +435,8 @@ function RoomPartnerCard({
   acceptRoomPartner,
   rejectRoomPartner,
   cancelRoomPartner,
-  showToast
+  showToast,
+  t
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [selected, setSelected] = useState('')
@@ -445,18 +448,15 @@ function RoomPartnerCard({
   async function handleInvite() {
     if (!selected) return
     await requestRoomPartner(selected)
-    showToast('Invitación enviada', 'success')
+    showToast(t('perfil.invitedToast'), 'success')
     setPickerOpen(false)
     setSelected('')
   }
 
   return (
     <div className="card p-5">
-      <h2 className="font-display font-semibold mb-1">Compañero de habitación</h2>
-      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
-        Si comparten habitación, emparéjate con esa persona para que las dos reciban las mismas notificaciones del
-        piso (quién está a cargo de qué, avisos de la lavadora, del pote, etc.).
-      </p>
+      <h2 className="font-display font-semibold mb-1">{t('perfil.roomPartnerTitle')}</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">{t('perfil.roomPartnerSubtitle')}</p>
 
       {myRoomPartner?.member && (
         <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
@@ -468,7 +468,7 @@ function RoomPartnerCard({
             onClick={() => cancelRoomPartner(myRoomPartner.requestId)}
             className="text-xs font-semibold text-clay-500 hover:underline shrink-0 ml-2"
           >
-            Desvincular
+            {t('perfil.unlink')}
           </button>
         </div>
       )}
@@ -481,14 +481,14 @@ function RoomPartnerCard({
             className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-gold-100 dark:bg-gold-400/15 mt-2"
           >
             <span className="text-sm min-w-0">
-              <strong>{requester?.name || 'Alguien'}</strong> te invitó a emparejarse
+              {t('perfil.invitedYou', { name: requester?.name || t('perfil.someone') })}
             </span>
             <div className="flex gap-2 shrink-0">
               <button onClick={() => rejectRoomPartner(r.id)} className="btn-danger text-xs px-3 py-1.5">
-                Rechazar
+                {t('perfil.reject')}
               </button>
               <button onClick={() => acceptRoomPartner(r.id)} className="btn-primary text-xs px-3 py-1.5">
-                Aceptar
+                {t('perfil.accept')}
               </button>
             </div>
           </div>
@@ -497,12 +497,12 @@ function RoomPartnerCard({
 
       {outgoingPartnerRequest && (
         <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700 mt-2">
-          <span className="text-sm">Esperando que {outgoingTarget?.name || 'la otra persona'} confirme</span>
+          <span className="text-sm">{t('perfil.waitingConfirm', { name: outgoingTarget?.name || t('perfil.theOtherPerson') })}</span>
           <button
             onClick={() => cancelRoomPartner(outgoingPartnerRequest.id)}
             className="text-xs font-semibold text-violet-500 hover:underline shrink-0"
           >
-            Anular
+            {t('perfil.cancelInvite')}
           </button>
         </div>
       )}
@@ -510,11 +510,11 @@ function RoomPartnerCard({
       {!myRoomPartner?.member &&
         !outgoingPartnerRequest &&
         (otherMembers.length === 0 ? (
-          <p className="text-sm text-ink-900/50 dark:text-cream-100/50">No hay más gente en el piso todavía.</p>
+          <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('perfil.noMoreMembers')}</p>
         ) : pickerOpen ? (
           <div className="flex flex-col gap-2 mt-2">
             <select className="input" value={selected} onChange={(e) => setSelected(e.target.value)}>
-              <option value="">Elige un roommate</option>
+              <option value="">{t('perfil.chooseRoommate')}</option>
               {otherMembers.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -523,23 +523,23 @@ function RoomPartnerCard({
             </select>
             <div className="flex gap-2">
               <button type="button" className="btn-secondary text-sm" onClick={() => setPickerOpen(false)}>
-                Cancelar
+                {t('perfil.cancel')}
               </button>
               <button type="button" className="btn-primary text-sm" onClick={handleInvite} disabled={!selected}>
-                Invitar
+                {t('perfil.invite')}
               </button>
             </div>
           </div>
         ) : (
           <button type="button" className="btn-secondary text-sm" onClick={() => setPickerOpen(true)}>
-            + Invitar a alguien
+            {t('perfil.addSomeone')}
           </button>
         ))}
     </div>
   )
 }
 
-function SecurityCard({ changePassword, logout, removeMember, membership, userId, floorName, showToast }) {
+function SecurityCard({ changePassword, logout, removeMember, membership, userId, floorName, showToast, t }) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -550,17 +550,17 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
     e.preventDefault()
     setPasswordError('')
     if (!PASSWORD_RULE.test(newPassword)) {
-      setPasswordError('La nueva contraseña debe tener al menos 8 caracteres, una mayúscula y un número.')
+      setPasswordError(t('perfil.passwordRuleError'))
       return
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('Las contraseñas no coinciden.')
+      setPasswordError(t('perfil.passwordMismatch'))
       return
     }
     setChangingPassword(true)
     try {
       await changePassword(currentPassword, newPassword)
-      showToast('Contraseña actualizada', 'success')
+      showToast(t('perfil.passwordUpdatedToast'), 'success')
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
@@ -573,7 +573,7 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
 
   function handleLeaveFloor() {
     if (!membership) return
-    if (confirm(`¿Estás seguro de que quieres salir del piso ${floorName}? Perderás acceso a todas las funcionalidades y tu información será archivada.`)) {
+    if (confirm(t('perfil.leaveFloorConfirm', { floorName }))) {
       removeMember(membership.id, userId)
     }
   }
@@ -582,15 +582,15 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
     <div className="card p-5">
       <div className="flex items-center gap-2 mb-4">
         <LockIcon className="w-4 h-4 text-ink-900/50 dark:text-cream-100/50" />
-        <h2 className="font-display font-semibold">Seguridad</h2>
+        <h2 className="font-display font-semibold">{t('perfil.securityTitle')}</h2>
       </div>
 
       <form onSubmit={handleChangePassword} className="flex flex-col gap-3 mb-5">
-        <p className="text-sm font-medium">Cambiar contraseña</p>
+        <p className="text-sm font-medium">{t('perfil.changePasswordTitle')}</p>
         <input
           type="password"
           className="input"
-          placeholder="Contraseña actual"
+          placeholder={t('perfil.currentPasswordPlaceholder')}
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           required
@@ -598,7 +598,7 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
         <input
           type="password"
           className="input"
-          placeholder="Nueva contraseña"
+          placeholder={t('perfil.newPasswordPlaceholder')}
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           required
@@ -606,25 +606,25 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
         <input
           type="password"
           className="input"
-          placeholder="Confirmar nueva contraseña"
+          placeholder={t('perfil.confirmPasswordPlaceholder')}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
         />
-        <p className="text-xs text-ink-900/40 dark:text-cream-100/40">Mínimo 8 caracteres, con una mayúscula y un número.</p>
+        <p className="text-xs text-ink-900/40 dark:text-cream-100/40">{t('perfil.passwordHint')}</p>
         {passwordError && <p className="text-sm font-medium text-clay-500">{passwordError}</p>}
         <button className="btn-secondary text-sm self-start" type="submit" disabled={changingPassword}>
-          {changingPassword ? 'Actualizando…' : 'Actualizar contraseña'}
+          {changingPassword ? t('perfil.updatingPassword') : t('perfil.updatePassword')}
         </button>
       </form>
 
       <div className="flex flex-wrap gap-2 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
         <button type="button" className="btn-secondary text-sm" onClick={logout}>
-          Cerrar sesión
+          {t('perfil.logout')}
         </button>
         {membership && (
           <button type="button" className="btn-danger text-sm" onClick={handleLeaveFloor}>
-            Dejar el piso
+            {t('perfil.leaveFloor')}
           </button>
         )}
       </div>
@@ -632,20 +632,22 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
   )
 }
 
-function PreferencesCard() {
+function PreferencesCard({ t }) {
   const { theme, toggleTheme } = useTheme()
   const { supported, subscribed, needsInstall, optIn, optOut } = usePush()
+  const currentThemeLabel = theme === 'light' ? t('perfil.lightTheme') : t('perfil.darkTheme')
+  const targetThemeLabel = theme === 'light' ? t('perfil.darkTheme') : t('perfil.lightTheme')
 
   return (
     <div id="preferencias" className="card p-5 scroll-mt-24">
-      <h2 className="font-display font-semibold mb-3">Preferencias</h2>
+      <h2 className="font-display font-semibold mb-3">{t('perfil.preferencesTitle')}</h2>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           {theme === 'light' ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
-          Tema {theme === 'light' ? 'claro' : 'oscuro'}
+          {t('perfil.themeLabel', { theme: currentThemeLabel })}
         </div>
         <button type="button" className="btn-secondary text-sm" onClick={toggleTheme}>
-          Cambiar a {theme === 'light' ? 'oscuro' : 'claro'}
+          {t('perfil.switchTo', { theme: targetThemeLabel })}
         </button>
       </div>
 
@@ -655,25 +657,20 @@ function PreferencesCard() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm">
                 <BellIcon className="w-4 h-4" />
-                Notificaciones push {subscribed ? 'activadas' : 'desactivadas'}
+                {t('perfil.pushLabel', { status: subscribed ? t('perfil.pushOn') : t('perfil.pushOff') })}
               </div>
               <button type="button" className="btn-secondary text-sm" onClick={subscribed ? optOut : optIn}>
-                {subscribed ? 'Desactivar' : 'Activar'}
+                {subscribed ? t('perfil.deactivate') : t('perfil.activate')}
               </button>
             </div>
           )}
           {!supported && needsInstall && (
             <div className="flex items-center gap-2 text-sm">
               <BellIcon className="w-4 h-4" />
-              Notificaciones push
+              {t('perfil.pushNotifications')}
             </div>
           )}
-          {needsInstall && (
-            <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mt-2">
-              En iPhone/iPad: primero añade Convive a tu pantalla de inicio (Compartir → "Añadir a pantalla de
-              inicio") y ábrela desde ahí para poder activarlas.
-            </p>
-          )}
+          {needsInstall && <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mt-2">{t('perfil.iosHint')}</p>}
         </div>
       )}
     </div>

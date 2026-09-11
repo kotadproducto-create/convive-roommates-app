@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
+import { useLanguage } from '../context/LanguageContext'
 import Avatar from '../components/Avatar'
 import { AuthShell } from './Login'
 import { CameraIcon } from '../components/icons'
@@ -23,6 +24,7 @@ export default function Onboarding() {
   const { user, refresh } = useAuth()
   const { updateProfile } = useData()
   const navigate = useNavigate()
+  const { t } = useLanguage()
 
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -93,32 +95,32 @@ export default function Onboarding() {
       {step === 0 && (
         <div className="flex flex-col gap-3">
           <div>
-            <h1 className="font-display text-xl font-bold tracking-tight mb-1">¿Cómo te dicen?</h1>
-            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">Todo esto es opcional — puedes completarlo después desde tu Perfil.</p>
+            <h1 className="font-display text-xl font-bold tracking-tight mb-1">{t('onboarding.step1Title')}</h1>
+            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">{t('onboarding.step1Subtitle')}</p>
           </div>
           <label className="text-sm">
-            Apodo
-            <input className="input mt-1" value={fields.nickname} onChange={(e) => set('nickname', e.target.value)} placeholder="Cómo te dicen" />
+            {t('perfil.nickname')}
+            <input className="input mt-1" value={fields.nickname} onChange={(e) => set('nickname', e.target.value)} placeholder={t('perfil.nicknamePlaceholder')} />
           </label>
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="text-sm block">
-                Edad
+                {t('perfil.age')}
                 <input type="number" min="1" max="129" className="input mt-1" value={fields.age} onChange={(e) => set('age', e.target.value)} />
               </label>
               <label className="flex items-center gap-1.5 text-xs text-ink-900/50 dark:text-cream-100/50 mt-1.5">
                 <input type="checkbox" checked={fields.agePublic} onChange={(e) => set('agePublic', e.target.checked)} />
-                Visible para otros
+                {t('perfil.visibleToOthers')}
               </label>
             </div>
             <div>
               <label className="text-sm block">
-                Teléfono
-                <input type="tel" className="input mt-1" value={fields.phone} onChange={(e) => set('phone', e.target.value)} placeholder="Opcional" />
+                {t('perfil.phone')}
+                <input type="tel" className="input mt-1" value={fields.phone} onChange={(e) => set('phone', e.target.value)} placeholder={t('perfil.phonePlaceholder')} />
               </label>
               <label className="flex items-center gap-1.5 text-xs text-ink-900/50 dark:text-cream-100/50 mt-1.5">
                 <input type="checkbox" checked={fields.phonePublic} onChange={(e) => set('phonePublic', e.target.checked)} />
-                Visible para otros
+                {t('perfil.visibleToOthers')}
               </label>
             </div>
           </div>
@@ -128,31 +130,31 @@ export default function Onboarding() {
       {step === 1 && (
         <div className="flex flex-col gap-3">
           <div>
-            <h1 className="font-display text-xl font-bold tracking-tight mb-1">Cuéntanos de ti</h1>
-            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">Esto es lo que ven tus compañeros de piso en tu tarjeta de Convives.</p>
+            <h1 className="font-display text-xl font-bold tracking-tight mb-1">{t('onboarding.step2Title')}</h1>
+            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">{t('onboarding.step2Subtitle')}</p>
           </div>
           <div>
             <label className="text-sm block">
-              A qué te dedicas
-              <input className="input mt-1" value={fields.occupation} onChange={(e) => set('occupation', e.target.value)} placeholder="Ej. Estudiante, arquitecta, diseñador" />
+              {t('perfil.occupation')}
+              <input className="input mt-1" value={fields.occupation} onChange={(e) => set('occupation', e.target.value)} placeholder={t('perfil.occupationPlaceholder')} />
             </label>
             <label className="flex items-center gap-1.5 text-xs text-ink-900/50 dark:text-cream-100/50 mt-1.5">
               <input type="checkbox" checked={fields.occupationPublic} onChange={(e) => set('occupationPublic', e.target.checked)} />
-              Visible para otros
+              {t('perfil.visibleToOthers')}
             </label>
           </div>
           <label className="text-sm">
-            Gustos / intereses
-            <input className="input mt-1" value={fields.interests} onChange={(e) => set('interests', e.target.value)} placeholder="Ej. Música, cine, deporte" />
+            {t('perfil.interests')}
+            <input className="input mt-1" value={fields.interests} onChange={(e) => set('interests', e.target.value)} placeholder={t('perfil.interestsPlaceholder')} />
           </label>
           <label className="text-sm">
-            Biografía
+            {t('perfil.bio')}
             <textarea
               className="input mt-1 min-h-20"
               value={fields.bio}
               maxLength={240}
               onChange={(e) => set('bio', e.target.value)}
-              placeholder="Cuéntale algo de ti a tus roommates"
+              placeholder={t('perfil.bioPlaceholder')}
             />
             <span className="text-xs text-ink-900/40 dark:text-cream-100/40">{fields.bio.length}/240</span>
           </label>
@@ -162,8 +164,8 @@ export default function Onboarding() {
       {step === 2 && (
         <div className="flex flex-col gap-4">
           <div>
-            <h1 className="font-display text-xl font-bold tracking-tight mb-1">Tu identidad en Convive</h1>
-            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">Una foto y un color para que te reconozcan de un vistazo.</p>
+            <h1 className="font-display text-xl font-bold tracking-tight mb-1">{t('onboarding.step3Title')}</h1>
+            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">{t('onboarding.step3Subtitle')}</p>
           </div>
 
           <div className="flex items-center gap-4">
@@ -184,7 +186,7 @@ export default function Onboarding() {
                 />
               </label>
             </div>
-            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">Foto de perfil (opcional)</p>
+            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">{t('onboarding.profilePhoto')}</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -195,12 +197,12 @@ export default function Onboarding() {
                 value={fields.color}
                 onChange={(e) => set('color', e.target.value)}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                aria-label="Tu color"
+                aria-label={t('perfil.yourColorAria')}
               />
             </div>
             <div className="text-sm">
-              <p className="font-medium">Tu color</p>
-              <p className="text-xs text-ink-900/50 dark:text-cream-100/50">Te identifica en el círculo de Inicio</p>
+              <p className="font-medium">{t('perfil.yourColor')}</p>
+              <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{t('perfil.colorHint')}</p>
             </div>
           </div>
         </div>
@@ -209,19 +211,19 @@ export default function Onboarding() {
       <div className="flex items-center justify-between gap-2 mt-6">
         {step > 0 ? (
           <button type="button" onClick={() => setStep((s) => s - 1)} className="text-sm font-semibold text-violet-500 hover:underline">
-            ‹ Atrás
+            {t('onboarding.back')}
           </button>
         ) : (
           <button type="button" onClick={skipAll} disabled={saving} className="text-sm font-semibold text-ink-900/50 dark:text-cream-100/50 hover:underline">
-            Omitir todo
+            {t('onboarding.skipAll')}
           </button>
         )}
         <div className="flex items-center gap-3">
           <button type="button" onClick={next} disabled={saving} className="text-sm font-semibold text-ink-900/50 dark:text-cream-100/50 hover:underline">
-            Omitir
+            {t('onboarding.skip')}
           </button>
           <button type="button" onClick={next} disabled={saving} className="btn-primary text-sm">
-            {saving ? 'Guardando…' : step === STEP_COUNT - 1 ? 'Terminar' : 'Siguiente'}
+            {saving ? t('onboarding.saving') : step === STEP_COUNT - 1 ? t('onboarding.finish') : t('onboarding.next')}
           </button>
         </div>
       </div>

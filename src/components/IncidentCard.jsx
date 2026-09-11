@@ -1,7 +1,6 @@
 import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
 
-export default function IncidentCard({ incident, canDelete, onDelete }) {
+export default function IncidentCard({ incident, canDelete, onDelete, t, dateLocale }) {
   return (
     <div className="card overflow-hidden flex flex-col">
       {incident.photoUrl && (
@@ -14,9 +13,9 @@ export default function IncidentCard({ incident, canDelete, onDelete }) {
             <button
               onClick={() => onDelete(incident.id)}
               className="text-xs font-semibold text-clay-500 hover:underline shrink-0"
-              aria-label="Eliminar incidencia"
+              aria-label={t('incidents.deleteAria')}
             >
-              Eliminar
+              {t('incidents.delete')}
             </button>
           )}
         </div>
@@ -25,11 +24,11 @@ export default function IncidentCard({ incident, canDelete, onDelete }) {
         )}
         <div className="flex items-center justify-between text-xs text-ink-900/40 dark:text-cream-100/40 mt-1">
           <span>{incident.authorName}</span>
-          <span>{format(new Date(incident.createdAt), "d MMM, HH:mm", { locale: es })}</span>
+          <span>{format(new Date(incident.createdAt), 'd MMM, HH:mm', { locale: dateLocale })}</span>
         </div>
         {incident.expiresAt && (
           <p className="text-[11px] font-semibold text-gold-500">
-            Expira {format(new Date(incident.expiresAt), "d MMM", { locale: es })}
+            {t('incidents.expiresLabel', { date: format(new Date(incident.expiresAt), 'd MMM', { locale: dateLocale }) })}
           </p>
         )}
       </div>

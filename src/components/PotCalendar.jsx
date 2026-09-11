@@ -11,10 +11,8 @@ import {
   isSameDay,
   isToday
 } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { useLanguage } from '../context/LanguageContext'
 import { potAmountColorClass } from '../lib/pot'
-
-const WEEKDAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 
 /**
  * Calendario gráfico de movimientos del pote: un punto verde el día que
@@ -26,6 +24,18 @@ const WEEKDAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 export default function PotCalendar({ contributions, memberById = {} }) {
   const [cursor, setCursor] = useState(() => new Date())
   const [selected, setSelected] = useState(null)
+  const { t, dateLocale } = useLanguage()
+  // Iniciales de día de la semana localizadas — mismo enfoque que
+  // CalendarView.jsx (una semana cualquiera con el `dateLocale` activo).
+  const weekdayLabels = useMemo(() => {
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 })
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start)
+      d.setDate(d.getDate() + i)
+      return format(d, 'EEEEE', { locale: dateLocale })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateLocale])
 
   const byDay = useMemo(() => {
     const map = new Map()
@@ -71,31 +81,31 @@ export default function PotCalendar({ contributions, memberById = {} }) {
           <button
             type="button"
             onClick={() => { setCursor((d) => addMonths(d, -1)); setSelected(null) }}
-            aria-label="Mes anterior"
+            aria-label={t('wallet.prevMonthAria')}
             className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-90 transition-transform"
           >
             ‹
           </button>
-          <p className="font-display font-bold capitalize min-w-[9rem] text-center">{format(cursor, "MMMM 'de' yyyy", { locale: es })}</p>
+          <p className="font-display font-bold capitalize min-w-[9rem] text-center">{format(cursor, t('calendar.monthYearFormat'), { locale: dateLocale })}</p>
           <button
             type="button"
             onClick={() => { setCursor((d) => addMonths(d, 1)); setSelected(null) }}
-            aria-label="Mes siguiente"
+            aria-label={t('wallet.nextMonthAria')}
             className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-90 transition-transform"
           >
             ›
           </button>
         </div>
         <div className="flex items-center gap-3 text-xs font-semibold text-ink-900/60 dark:text-cream-100/60">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sage-500 inline-block" />Aporte</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-clay-500 inline-block" />Gasto</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-ink-900/30 dark:border-cream-100/30 inline-block" />Sin movimiento</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sage-500 inline-block" />{t('wallet.contributionLegend')}</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-clay-500 inline-block" />{t('wallet.expenseLegend')}</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-ink-900/30 dark:border-cream-100/30 inline-block" />{t('wallet.noMovementLegend')}</span>
         </div>
       </div>
 
       <div className="grid grid-cols-7 mb-1">
-        {WEEKDAY_LABELS.map((d) => (
-          <p key={d} className="text-[10px] font-bold uppercase text-center text-ink-900/40 dark:text-cream-100/40">
+        {weekdayLabels.map((d, i) => (
+          <p key={i} className="text-[10px] font-bold uppercase text-center text-ink-900/40 dark:text-cream-100/40">
             {d}
           </p>
         ))}
@@ -107,11 +117,11 @@ export default function PotCalendar({ contributions, memberById = {} }) {
           const inMonth = isSameMonth(date, cursor)
           const label = entry
             ? entry.aporte && entry.gasto
-              ? 'Aporte y gasto'
+              ? t('wallet.contributionAndExpense')
               : entry.aporte
-                ? 'Aporte'
-                : 'Gasto'
-            : 'Sin movimiento'
+                ? t('wallet.contributionLegend')
+                : t('wallet.expenseLegend')
+            : t('wallet.noMovementLegend')
           const isSelected = selectedKey === key
           return (
             <button
@@ -140,16 +150,16 @@ export default function PotCalendar({ contributions, memberById = {} }) {
       {selected && (
         <div className="mt-4 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
           <div className="flex items-center justify-between mb-2">
-            <p className="font-display font-semibold capitalize">{format(selected, "EEEE d 'de' MMMM", { locale: es })}</p>
+            <p className="font-display font-semibold capitalize">{format(selected, t('calendar.dayTitleFormat'), { locale: dateLocale })}</p>
             <div className="text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">Saldo ese día</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('wallet.balanceThatDay')}</p>
               <p className={`font-display font-bold ${potAmountColorClass(balanceAsOf(selected))}`}>
                 {balanceAsOf(selected).toFixed(2)}€
               </p>
             </div>
           </div>
           {selectedItems.length === 0 ? (
-            <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Sin movimientos este día.</p>
+            <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('wallet.noMovementsThatDay')}</p>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {selectedItems.map((c) => {
@@ -157,7 +167,7 @@ export default function PotCalendar({ contributions, memberById = {} }) {
                 return (
                   <li key={c.id} className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-cream-100 dark:bg-ink-700">
                     <span className="truncate">
-                      <strong>{memberById[c.userId]?.name || 'Alguien'}</strong> {isExpense ? 'gastó' : 'aportó'}
+                      <strong>{memberById[c.userId]?.name || t('wallet.someone')}</strong> {isExpense ? t('wallet.spent') : t('wallet.contributedVerb')}
                       {c.note && <span className="text-ink-900/50 dark:text-cream-100/50"> · {c.note}</span>}
                     </span>
                     <span className={`font-semibold shrink-0 ml-2 ${isExpense ? 'text-clay-500' : 'text-sage-500'}`}>

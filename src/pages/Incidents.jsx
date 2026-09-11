@@ -6,19 +6,15 @@ import { useData } from '../context/DataContext'
 import { uploadIncidentPhoto } from '../lib/db'
 import { PinIcon } from '../components/icons'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
-
-const EXAMPLES = [
-  'Cuidado con la limpieza de la cocina',
-  'Recibir paquete (no estaré)',
-  'Llaves olvidadas, necesito entrar',
-  'Pedir permiso para usar la batidora'
-]
 
 export default function Incidents() {
   const { user, membership } = useAuth()
   const { floor, incidents, addIncident, removeIncident } = useData()
   const { showToast } = useToast()
+  const { t, dateLocale } = useLanguage()
+  const EXAMPLES = t('incidents.examples')
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -48,7 +44,7 @@ export default function Incidents() {
         photoUrl = await uploadIncidentPhoto(photoFile, floor.id)
       }
       await addIncident({ title, description, photoUrl, expiresAt: expiresAt || null })
-      showToast('Incidencia publicada en el muro', 'success')
+      showToast(t('incidents.publishedToast'), 'success')
       setTitle('')
       setDescription('')
       setPhotoFile(null)
@@ -56,20 +52,18 @@ export default function Incidents() {
       setExpiresAt('')
       setShowForm(false)
     } catch (err) {
-      setError('No se pudo publicar la incidencia: ' + err.message)
+      setError(t('incidents.publishErrorToast', { error: err.message }))
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <AppLayout title="Muro de incidencias">
+    <AppLayout title={t('incidents.title')}>
       <div className="flex items-center justify-between mb-5">
-        <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-          Avisos temporales para todo el piso: paquetes, permisos, cuidados puntuales...
-        </p>
+        <p className="text-sm text-ink-900/60 dark:text-cream-100/60">{t('incidents.subtitle')}</p>
         <button className="btn-primary text-sm shrink-0" onClick={() => setShowForm((s) => !s)}>
-          {showForm ? 'Cancelar' : '+ Nueva incidencia'}
+          {showForm ? t('incidents.cancel') : t('incidents.newIncident')}
         </button>
       </div>
 
@@ -77,14 +71,14 @@ export default function Incidents() {
         <form onSubmit={handleSubmit} className="card p-5 mb-6 flex flex-col gap-3">
           <input
             className="input"
-            placeholder="Título (ej: Recibir paquete de Juan)"
+            placeholder={t('incidents.titlePlaceholder')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
           />
           <textarea
             className="input min-h-20"
-            placeholder="Descripción (opcional)"
+            placeholder={t('incidents.descriptionPlaceholder')}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -102,18 +96,18 @@ export default function Incidents() {
           </div>
           <div className="flex flex-wrap gap-3 items-center">
             <label className="btn-secondary text-sm cursor-pointer">
-              📷 Añadir foto
+              📷 {t('incidents.addPhoto')}
               <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
             </label>
-            {photoPreview && <img src={photoPreview} alt="preview" className="w-14 h-14 object-cover rounded-lg" />}
+            {photoPreview && <img src={photoPreview} alt={t('incidents.photoPreviewAlt')} className="w-14 h-14 object-cover rounded-lg" />}
             <div className="flex items-center gap-2 text-sm ml-auto">
-              <label className="text-ink-900/60 dark:text-cream-100/60">Expira:</label>
+              <label className="text-ink-900/60 dark:text-cream-100/60">{t('incidents.expires')}</label>
               <input type="date" className="input w-auto" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             </div>
           </div>
           {error && <p className="text-sm font-medium text-clay-500">{error}</p>}
           <button className="btn-primary self-start" type="submit" disabled={submitting}>
-            {submitting ? 'Publicando…' : 'Publicar en el muro'}
+            {submitting ? t('incidents.publishing') : t('incidents.publish')}
           </button>
         </form>
       )}
@@ -123,9 +117,7 @@ export default function Incidents() {
           <div className="w-12 h-12 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-500 dark:text-violet-200 flex items-center justify-center">
             <PinIcon className="w-6 h-6" />
           </div>
-          <p className="text-sm text-center text-ink-900/50 dark:text-cream-100/50 max-w-xs">
-            Todavía no hay nada en el muro. El primer aviso que publiques queda fijado aquí para todo el piso.
-          </p>
+          <p className="text-sm text-center text-ink-900/50 dark:text-cream-100/50 max-w-xs">{t('incidents.emptyBody')}</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -135,6 +127,8 @@ export default function Incidents() {
                 incident={incident}
                 canDelete={incident.userId === user.id || membership?.role === 'admin'}
                 onDelete={removeIncident}
+                t={t}
+                dateLocale={dateLocale}
               />
             </Reveal>
           ))}

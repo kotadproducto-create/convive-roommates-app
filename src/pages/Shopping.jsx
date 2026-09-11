@@ -4,6 +4,7 @@ import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 import {
   StoreIcon,
   AlertIcon,
@@ -18,7 +19,6 @@ import {
   StampIcon
 } from '../components/icons'
 import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
 
 /** Valida que sea una URL http(s) bien formada — no cualquier esquema
  * (bloquea javascript:/data: y similares antes de guardarla como link). */
@@ -46,9 +46,9 @@ function guessStoreFromUrl(value) {
 }
 
 const STOCK_META = {
-  out: { label: 'Agotado', dot: 'bg-clay-500', chip: 'bg-clay-100 dark:bg-clay-500/20 text-clay-500 border-2 border-clay-500/40', order: 0 },
-  low: { label: 'Por acabarse', dot: 'bg-gold-500', chip: 'bg-gold-100 dark:bg-gold-400/20 text-gold-500 border-2 border-gold-500/40', order: 1 },
-  ok: { label: 'Con stock', dot: 'bg-sage-500', chip: 'bg-sage-100 dark:bg-sage-500/20 text-sage-500 border-2 border-sage-500/40', order: 2 }
+  out: { labelKey: 'shopping.stockOut', dot: 'bg-clay-500', chip: 'bg-clay-100 dark:bg-clay-500/20 text-clay-500 border-2 border-clay-500/40', order: 0 },
+  low: { labelKey: 'shopping.stockLow', dot: 'bg-gold-500', chip: 'bg-gold-100 dark:bg-gold-400/20 text-gold-500 border-2 border-gold-500/40', order: 1 },
+  ok: { labelKey: 'shopping.stockOk', dot: 'bg-sage-500', chip: 'bg-sage-100 dark:bg-sage-500/20 text-sage-500 border-2 border-sage-500/40', order: 2 }
 }
 
 export default function Shopping() {
@@ -66,6 +66,7 @@ export default function Shopping() {
     recordPurchaseSession
   } = useData()
   const { showToast } = useToast()
+  const { t, dateLocale } = useLanguage()
   // 'menu' | 'buy' (Hacer la compra) | 'edit' (Preparar lista) | 'status'
   const [mode, setMode] = useState('menu')
   const [showForm, setShowForm] = useState(false)
@@ -97,10 +98,10 @@ export default function Shopping() {
   async function handleFormSubmit(values) {
     if (editing) {
       await updateShoppingItem(editing.id, values)
-      showToast('Producto actualizado', 'success')
+      showToast(t('shopping.itemUpdatedToast'), 'success')
     } else {
       await addShoppingItem(values)
-      showToast('Producto agregado a la lista', 'success')
+      showToast(t('shopping.itemAddedToast'), 'success')
     }
     setShowForm(false)
     setEditing(null)
@@ -112,18 +113,19 @@ export default function Shopping() {
 
   async function handleConfirmPurchase(payload) {
     await recordPurchaseSession(payload)
-    showToast('Compra registrada — el pote y el estado de los productos ya se actualizaron', 'success')
+    showToast(t('shopping.purchaseRecordedToast'), 'success')
     setMode('menu')
   }
 
   return (
-    <AppLayout title="Compras">
+    <AppLayout title={t('shopping.title')}>
       {mode === 'menu' && (
         <MenuScreen
           pendingCount={pendingItems.length}
           outCount={outCount}
           totalCount={shoppingItems.length}
           onSelect={setMode}
+          t={t}
         />
       )}
 
@@ -133,21 +135,24 @@ export default function Shopping() {
           onAddItem={handleAddOnTheFly}
           onConfirm={handleConfirmPurchase}
           onBack={() => setMode('menu')}
+          t={t}
         />
       )}
 
-      {mode === 'status' && <StatusScreen items={sortedItems} onSetStock={setItemStock} onBack={() => setMode('menu')} />}
+      {mode === 'status' && (
+        <StatusScreen items={sortedItems} onSetStock={setItemStock} onBack={() => setMode('menu')} t={t} />
+      )}
 
       {mode === 'edit' && (
         <>
-          <BackButton onBack={() => setMode('menu')} />
+          <BackButton onBack={() => setMode('menu')} t={t} />
 
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
-              <h2 className="font-display text-lg font-bold">Lista de compras</h2>
+              <h2 className="font-display text-lg font-bold">{t('shopping.listTitle')}</h2>
               {shopper && (
                 <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-                  Esta semana compra {isShopper ? <strong>tú</strong> : <strong>{shopper.name}</strong>}.
+                  {isShopper ? t('shopping.buysThisWeekYou') : t('shopping.buysThisWeekOther', { name: shopper.name })}
                 </p>
               )}
             </div>
@@ -158,13 +163,13 @@ export default function Shopping() {
                 setShowForm((s) => !s)
               }}
             >
-              {showForm && !editing ? 'Cancelar' : '+ Producto'}
+              {showForm && !editing ? t('shopping.cancel') : t('shopping.addProduct')}
             </button>
           </div>
 
           {outCount > 0 && (
             <Reveal>
-              <OutOfStockBanner outCount={outCount} />
+              <OutOfStockBanner outCount={outCount} t={t} />
             </Reveal>
           )}
 
@@ -176,6 +181,7 @@ export default function Shopping() {
                 setEditing(null)
               }}
               onSubmit={handleFormSubmit}
+              t={t}
             />
           )}
 
@@ -191,26 +197,27 @@ export default function Shopping() {
                   onDelete={() => removeShoppingItem(item.id)}
                   onSetStock={(level) => setItemStock(item.id, level)}
                   onPurchase={(payload) =>
-                    markItemPurchased(item.id, payload).then(() => showToast(`${item.name} marcado como comprado`, 'success'))
+                    markItemPurchased(item.id, payload).then(() =>
+                      showToast(t('shopping.itemPurchasedToast', { name: item.name }), 'success')
+                    )
                   }
+                  t={t}
                 />
               </Reveal>
             ))}
             {sortedItems.length === 0 && (
-              <p className="text-sm text-ink-900/50 dark:text-cream-100/50 col-span-full">
-                Todavía no hay productos en la lista. Agrega el primero con "+ Producto".
-              </p>
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50 col-span-full">{t('shopping.emptyList')}</p>
             )}
           </div>
 
           <div className="card p-5">
             <button type="button" className="flex items-center justify-between w-full" onClick={() => setShowHistory((s) => !s)}>
-              <h3 className="font-display font-semibold">Historial de compras</h3>
-              <span className="text-xs font-semibold text-violet-500">{showHistory ? 'Ocultar' : 'Ver'}</span>
+              <h3 className="font-display font-semibold">{t('shopping.purchaseHistoryTitle')}</h3>
+              <span className="text-xs font-semibold text-violet-500">{showHistory ? t('shopping.hide') : t('shopping.show')}</span>
             </button>
             {showHistory &&
               (history.length === 0 ? (
-                <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">Todavía no se ha comprado nada.</p>
+                <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">{t('shopping.noPurchasesYet')}</p>
               ) : (
                 <ul className="flex flex-col gap-1 mt-3 max-h-72 overflow-y-auto">
                   {history.map((p) => (
@@ -218,12 +225,10 @@ export default function Shopping() {
                       key={p.id}
                       className="flex justify-between text-sm py-1.5 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15"
                     >
-                      <span>
-                        <strong>{memberById[p.userId]?.name || 'Alguien'}</strong> compró {p.itemName}
-                      </span>
+                      <span>{t('shopping.someoneBought', { name: memberById[p.userId]?.name || t('shopping.someone'), item: p.itemName })}</span>
                       <span className="text-ink-900/40 dark:text-cream-100/40 text-xs shrink-0 ml-2">
                         {p.price ? `${p.price}€ · ` : ''}
-                        {format(new Date(p.createdAt), "d MMM, HH:mm", { locale: es })}
+                        {format(new Date(p.createdAt), 'd MMM, HH:mm', { locale: dateLocale })}
                       </span>
                     </li>
                   ))}
@@ -239,23 +244,23 @@ export default function Shopping() {
 /** Aviso de agotados: mismo lenguaje visual "urgente" que ya usa el
  * pop-up de compras pendientes de Inicio (borde grueso + halo de color
  * + insignia con pulso) — para que nadie lo pase por alto. */
-function OutOfStockBanner({ outCount }) {
+function OutOfStockBanner({ outCount, t }) {
   return (
     <div className="card p-3.5 mb-4 flex items-center gap-3 border-[3px] border-clay-500 shadow-[0_0_0_4px_theme(colors.clay.100)] dark:shadow-[0_0_0_4px_theme(colors.clay.500/20%)]">
       <div className="w-10 h-10 rounded-full bg-clay-500 flex items-center justify-center shrink-0 animate-pulse">
         <AlertIcon className="w-5 h-5 text-white" />
       </div>
       <p className="text-sm sm:text-base font-extrabold text-clay-500">
-        {outCount} producto{outCount > 1 ? 's' : ''} agotado{outCount > 1 ? 's' : ''}: hace falta reponer.
+        {t('shopping.outOfStockBanner', { count: outCount, plural: outCount > 1 ? 's' : '' })}
       </p>
     </div>
   )
 }
 
-function BackButton({ onBack }) {
+function BackButton({ onBack, t }) {
   return (
     <button type="button" onClick={onBack} className="flex items-center gap-1 text-sm font-semibold text-violet-500 hover:underline mb-4">
-      ‹ Compras
+      {t('shopping.backToShopping')}
     </button>
   )
 }
@@ -263,15 +268,15 @@ function BackButton({ onBack }) {
 /** Pantalla de entrada: elegir la intención antes de mostrar nada más
  * (comprar / organizar la lista / chequear qué queda) — en vez de mezclar
  * las tres cosas en cada tarjeta como antes. */
-function MenuScreen({ pendingCount, outCount, totalCount, onSelect }) {
+function MenuScreen({ pendingCount, outCount, totalCount, onSelect, t }) {
   return (
     <div>
-      <h2 className="font-display text-lg font-bold mb-1">Compras</h2>
-      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-5">¿Qué necesitas hacer?</p>
+      <h2 className="font-display text-lg font-bold mb-1">{t('shopping.title')}</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-5">{t('shopping.whatToDo')}</p>
 
       {outCount > 0 && (
         <Reveal>
-          <OutOfStockBanner outCount={outCount} />
+          <OutOfStockBanner outCount={outCount} t={t} />
         </Reveal>
       )}
 
@@ -280,8 +285,12 @@ function MenuScreen({ pendingCount, outCount, totalCount, onSelect }) {
           <MenuCard
             tone="coral"
             icon={CartIcon}
-            title="Hacer la compra"
-            subtitle={pendingCount > 0 ? `${pendingCount} producto${pendingCount > 1 ? 's' : ''} por comprar` : 'Todo al día'}
+            title={t('shopping.buyMenuTitle')}
+            subtitle={
+              pendingCount > 0
+                ? t('shopping.buyMenuSubtitlePending', { count: pendingCount, plural: pendingCount > 1 ? 's' : '' })
+                : t('shopping.buyMenuSubtitleDone')
+            }
             onClick={() => onSelect('buy')}
           />
         </Reveal>
@@ -289,8 +298,8 @@ function MenuScreen({ pendingCount, outCount, totalCount, onSelect }) {
           <MenuCard
             tone="violet"
             icon={EditIcon}
-            title="Preparar lista de compras"
-            subtitle={`${totalCount} producto${totalCount === 1 ? '' : 's'} en la lista`}
+            title={t('shopping.editMenuTitle')}
+            subtitle={t('shopping.editMenuSubtitle', { count: totalCount, plural: totalCount === 1 ? '' : 's' })}
             onClick={() => onSelect('edit')}
           />
         </Reveal>
@@ -298,8 +307,8 @@ function MenuScreen({ pendingCount, outCount, totalCount, onSelect }) {
           <MenuCard
             tone="sage"
             icon={StampIcon}
-            title="Status de productos"
-            subtitle="Actualiza qué queda en casa"
+            title={t('shopping.statusMenuTitle')}
+            subtitle={t('shopping.statusMenuSubtitle')}
             onClick={() => onSelect('status')}
           />
         </Reveal>
@@ -335,12 +344,12 @@ function MenuCard({ tone, icon: Icon, title, subtitle, onClick }) {
 /** "Status de productos": solo los 3 chips de stock, sin editar/borrar/
  * comprar — para que cualquier roomie actualice qué queda en casa sin
  * pasar por el flujo de compra. */
-function StatusScreen({ items, onSetStock, onBack }) {
+function StatusScreen({ items, onSetStock, onBack, t }) {
   return (
     <div>
-      <BackButton onBack={onBack} />
-      <h2 className="font-display text-lg font-bold mb-1">Status de productos</h2>
-      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">Marca cómo está cada producto en casa ahora mismo.</p>
+      <BackButton onBack={onBack} t={t} />
+      <h2 className="font-display text-lg font-bold mb-1">{t('shopping.statusTitle')}</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">{t('shopping.statusSubtitle')}</p>
 
       <div className="flex flex-col gap-2">
         {items.map((item) => (
@@ -357,15 +366,13 @@ function StatusScreen({ items, onSetStock, onBack }) {
                   }`}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${item.stockLevel === level ? m.dot : 'bg-ink-900/20 dark:bg-cream-100/20'}`} />
-                  {m.label}
+                  {t(m.labelKey)}
                 </button>
               ))}
             </div>
           </div>
         ))}
-        {items.length === 0 && (
-          <p className="text-sm text-ink-900/50 dark:text-cream-100/50">Todavía no hay productos en la lista.</p>
-        )}
+        {items.length === 0 && <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('shopping.noProductsYet')}</p>}
       </div>
     </div>
   )
@@ -375,7 +382,7 @@ function StatusScreen({ items, onSetStock, onBack }) {
  * cantidad por producto (en vez de checkbox), agregar algo no listado
  * sobre la marcha, un monto total del viaje y una foto de ticket
  * opcional — todo en un solo "Confirmar compra". */
-function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
+function BuyScreen({ items, onAddItem, onConfirm, onBack, t }) {
   const { showToast } = useToast()
   const [quantities, setQuantities] = useState({})
   const [expanded, setExpanded] = useState(() => new Set())
@@ -431,7 +438,7 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
 
   async function handleConfirm() {
     if (selectedIds.length === 0) {
-      showToast('Marca al menos un producto como comprado', 'error')
+      showToast(t('shopping.markAtLeastOne'), 'error')
       return
     }
     setSubmitting(true)
@@ -444,12 +451,12 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
 
   return (
     <div>
-      <BackButton onBack={onBack} />
-      <h2 className="font-display text-lg font-bold mb-1">Hacer la compra</h2>
-      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">Marca lo que vayas metiendo al carrito.</p>
+      <BackButton onBack={onBack} t={t} />
+      <h2 className="font-display text-lg font-bold mb-1">{t('shopping.buyScreenTitle')}</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">{t('shopping.buyScreenSubtitle')}</p>
 
       {allItems.length === 0 ? (
-        <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mb-4">No hay nada agotado ni por acabarse ahora mismo.</p>
+        <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mb-4">{t('shopping.nothingToBuy')}</p>
       ) : (
         <div className="flex flex-col gap-2 mb-4">
           {allItems.map((item) => (
@@ -461,6 +468,7 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
               onDec={() => dec(item.id)}
               expanded={expanded.has(item.id)}
               onToggleInfo={() => toggleInfo(item.id)}
+              t={t}
             />
           ))}
         </div>
@@ -471,12 +479,12 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
           <input
             className="input text-sm flex-1"
             autoFocus
-            placeholder="Nombre del producto"
+            placeholder={t('shopping.productNamePlaceholder')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
           <button type="submit" className="btn-primary text-sm shrink-0">
-            Agregar
+            {t('shopping.add')}
           </button>
         </form>
       ) : (
@@ -485,14 +493,14 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
           onClick={() => setAddingNew(true)}
           className="btn-secondary text-sm w-full mb-5 flex items-center justify-center gap-1.5"
         >
-          <PlusIcon className="w-3.5 h-3.5" /> Agregar producto no listado
+          <PlusIcon className="w-3.5 h-3.5" /> {t('shopping.addUnlistedProduct')}
         </button>
       )}
 
       <div className="card p-4 flex flex-col gap-4 mb-5">
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 block mb-1">
-            Monto a pagar
+            {t('shopping.amountToPay')}
           </label>
           <input
             type="number"
@@ -506,7 +514,7 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 block mb-1">
-            Foto del ticket (opcional)
+            {t('shopping.receiptPhoto')}
           </label>
           {receiptPreview && (
             <img
@@ -516,20 +524,20 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack }) {
             />
           )}
           <label className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
-            <CameraIcon className="w-4 h-4" /> {receiptPreview ? 'Cambiar foto' : 'Montar ticket'}
+            <CameraIcon className="w-4 h-4" /> {receiptPreview ? t('shopping.changePhoto') : t('shopping.attachReceipt')}
             <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReceiptChange} />
           </label>
         </div>
       </div>
 
       <button type="button" className="btn-primary w-full" onClick={handleConfirm} disabled={submitting}>
-        {submitting ? 'Guardando…' : 'Confirmar compra'}
+        {submitting ? t('shopping.saving') : t('shopping.confirmPurchase')}
       </button>
     </div>
   )
 }
 
-function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo }) {
+function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo, t }) {
   const meta = STOCK_META[item.stockLevel]
   return (
     <div className="card p-3">
@@ -540,12 +548,12 @@ function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo }) {
               {item.name}
             </p>
             {meta && item.stockLevel !== 'ok' && (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${meta.chip}`}>{meta.label}</span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${meta.chip}`}>{t(meta.labelKey)}</span>
             )}
           </div>
           {(item.note || item.linkUrl) && (
             <button type="button" onClick={onToggleInfo} className="text-xs font-semibold text-violet-500 hover:underline mt-0.5">
-              {expanded ? 'Ocultar info' : 'Más info'}
+              {expanded ? t('shopping.hideInfo') : t('shopping.moreInfo')}
             </button>
           )}
         </div>
@@ -555,7 +563,7 @@ function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo }) {
               <button
                 type="button"
                 onClick={onDec}
-                aria-label="Restar"
+                aria-label={t('shopping.decreaseAria')}
                 className="w-7 h-7 rounded-full border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center"
               >
                 <MinusIcon className="w-3 h-3" />
@@ -566,7 +574,7 @@ function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo }) {
           <button
             type="button"
             onClick={onInc}
-            aria-label="Sumar"
+            aria-label={t('shopping.increaseAria')}
             className="w-8 h-8 rounded-full bg-coral-500 border-2 border-ink-900 text-white flex items-center justify-center active:scale-90 transition-transform"
           >
             <PlusIcon className="w-4 h-4" />
@@ -583,7 +591,7 @@ function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo }) {
               rel="noreferrer noopener"
               className="flex items-center gap-1 text-xs font-semibold text-violet-500 hover:underline w-fit"
             >
-              <LinkIcon className="w-3.5 h-3.5" /> Ver producto
+              <LinkIcon className="w-3.5 h-3.5" /> {t('shopping.viewProduct')}
             </a>
           )}
         </div>
@@ -592,7 +600,7 @@ function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo }) {
   )
 }
 
-function ItemForm({ initial, onCancel, onSubmit }) {
+function ItemForm({ initial, onCancel, onSubmit, t }) {
   const [name, setName] = useState(initial?.name || '')
   const [store, setStore] = useState(initial?.store || '')
   const [storeLocation, setStoreLocation] = useState(initial?.storeLocation || '')
@@ -653,7 +661,7 @@ function ItemForm({ initial, onCancel, onSubmit }) {
     if (!name.trim()) return
     const trimmedLink = linkUrl.trim()
     if (trimmedLink && !isValidHttpUrl(trimmedLink)) {
-      setLinkError('El link debe ser una URL válida (empezando por http:// o https://).')
+      setLinkError(t('shopping.linkInvalid'))
       setOpenRows((prev) => new Set(prev).add('link'))
       return
     }
@@ -687,12 +695,12 @@ function ItemForm({ initial, onCancel, onSubmit }) {
           type="button"
           onClick={onCancel}
           className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
-          aria-label="Cerrar"
+          aria-label={t('shopping.closeAria')}
         >
           <CloseIcon className="w-4 h-4" />
         </button>
 
-        <h2 className="font-display text-lg font-bold mb-4">{initial ? 'Editar producto' : 'Agregar producto'}</h2>
+        <h2 className="font-display text-lg font-bold mb-4">{initial ? t('shopping.editItemTitle') : t('shopping.addItemTitle')}</h2>
 
         {/* Tarjeta del producto: foto + nombre + supermercado, siempre visibles */}
         <div className="bg-cream-200/60 dark:bg-ink-700/60 rounded-2xl p-4 flex flex-col items-center text-center mb-4">
@@ -705,41 +713,41 @@ function ItemForm({ initial, onCancel, onSubmit }) {
           </div>
           <input
             className="font-display font-semibold text-center bg-transparent border-none focus-visible:outline-none w-full mb-1 placeholder:text-ink-900/30 dark:placeholder:text-cream-100/30"
-            placeholder="Nombre del producto"
+            placeholder={t('shopping.productNamePlaceholder')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
           />
           <input
             className="text-xs text-center bg-transparent border-none focus-visible:outline-none w-full text-ink-900/50 dark:text-cream-100/50 placeholder:text-ink-900/30 dark:placeholder:text-cream-100/30"
-            placeholder="Supermercado (opcional)"
+            placeholder={t('shopping.storeNamePlaceholder')}
             value={store}
             onChange={(e) => setStore(e.target.value)}
           />
           <label className="btn-secondary text-xs cursor-pointer mt-3">
-            {imagePreview ? 'Cambiar foto' : 'Añadir foto'}
+            {imagePreview ? t('shopping.changePhoto') : t('shopping.addPhoto')}
             <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageChange} />
           </label>
         </div>
 
         <div className="flex flex-col">
-          <ExpandRow label="Ubicación" open={openRows.has('ubicacion')} onToggle={() => toggleRow('ubicacion')}>
+          <ExpandRow label={t('shopping.locationLabel')} open={openRows.has('ubicacion')} onToggle={() => toggleRow('ubicacion')}>
             <input
               className="input"
-              placeholder="Ej. Pasillo de lácteos"
+              placeholder={t('shopping.locationPlaceholder')}
               value={storeLocation}
               onChange={(e) => setStoreLocation(e.target.value)}
             />
           </ExpandRow>
-          <ExpandRow label="Cantidad habitual" open={openRows.has('cantidad')} onToggle={() => toggleRow('cantidad')}>
+          <ExpandRow label={t('shopping.usualQtyLabel')} open={openRows.has('cantidad')} onToggle={() => toggleRow('cantidad')}>
             <input
               className="input"
-              placeholder="Ej. 2 litros"
+              placeholder={t('shopping.usualQtyPlaceholder')}
               value={usualQuantity}
               onChange={(e) => setUsualQuantity(e.target.value)}
             />
           </ExpandRow>
-          <ExpandRow label="Precio estimado" open={openRows.has('precio')} onToggle={() => toggleRow('precio')}>
+          <ExpandRow label={t('shopping.estPriceLabel')} open={openRows.has('precio')} onToggle={() => toggleRow('precio')}>
             <input
               className="input"
               type="number"
@@ -750,17 +758,17 @@ function ItemForm({ initial, onCancel, onSubmit }) {
               onChange={(e) => setEstimatedPrice(e.target.value)}
             />
           </ExpandRow>
-          <ExpandRow label="Nota" open={openRows.has('nota')} onToggle={() => toggleRow('nota')}>
+          <ExpandRow label={t('shopping.noteLabel')} open={openRows.has('nota')} onToggle={() => toggleRow('nota')}>
             <textarea
               className="input min-h-16"
               value={note}
               maxLength={300}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Ej. Comprar la versión sin gluten, o de marca blanca"
+              placeholder={t('shopping.notePlaceholder')}
             />
             <span className="text-xs text-ink-900/40 dark:text-cream-100/40">{note.length}/300</span>
           </ExpandRow>
-          <ExpandRow label="Link del producto" open={openRows.has('link')} onToggle={() => toggleRow('link')}>
+          <ExpandRow label={t('shopping.linkLabel')} open={openRows.has('link')} onToggle={() => toggleRow('link')}>
             <input className="input" type="url" value={linkUrl} onChange={handleLinkChange} placeholder="https://www.mercadona.es/..." />
             {linkError && <span className="text-xs font-medium text-clay-500 block mt-1">{linkError}</span>}
           </ExpandRow>
@@ -768,11 +776,11 @@ function ItemForm({ initial, onCancel, onSubmit }) {
 
         <label className="flex items-center gap-2 text-sm mt-4">
           <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
-          Producto recurrente (si no, queda como compra puntual)
+          {t('shopping.recurringCheckbox')}
         </label>
 
         <button type="submit" className="btn-primary text-sm w-full mt-5" disabled={saving}>
-          {saving ? 'Guardando…' : 'Guardar cambios'}
+          {saving ? t('shopping.saving') : t('shopping.saveChanges')}
         </button>
       </form>
     </div>
@@ -797,7 +805,7 @@ function ExpandRow({ label, open, onToggle, children }) {
   )
 }
 
-function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
+function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase, t }) {
   const [buying, setBuying] = useState(false)
   const [price, setPrice] = useState(item.estimatedPrice || '')
   const [addToPot, setAddToPot] = useState(false)
@@ -824,7 +832,7 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
               type="button"
               onClick={() => setLightboxOpen(true)}
               className="shrink-0 active:scale-95 transition-transform"
-              title="Ver foto en grande"
+              title={t('shopping.viewPhotoTitle')}
             >
               <img src={item.imageUrl} alt="" className="w-12 h-12 object-cover rounded-lg" />
             </button>
@@ -834,7 +842,7 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
               <p className="font-display font-semibold truncate">{item.name}</p>
               {!item.recurring && (
                 <span className="text-[10px] uppercase font-bold text-violet-500 bg-violet-50 dark:bg-violet-700/25 px-1.5 py-0.5 rounded-md shrink-0">
-                  Puntual
+                  {t('shopping.oneTimeTag')}
                 </span>
               )}
             </div>
@@ -852,7 +860,7 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
           <button
             type="button"
             onClick={onEdit}
-            title="Editar"
+            title={t('shopping.editTitle')}
             className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
           >
             <EditIcon className="w-4 h-4" />
@@ -860,7 +868,7 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
           <button
             type="button"
             onClick={onDelete}
-            title="Eliminar"
+            title={t('shopping.deleteTitle')}
             className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 text-clay-500"
           >
             <TrashIcon className="w-4 h-4" />
@@ -879,7 +887,7 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
               className="flex items-center gap-1 text-xs font-semibold text-violet-500 hover:underline py-1 -my-1 w-fit"
             >
               <LinkIcon className="w-3.5 h-3.5 shrink-0" />
-              Ver producto{item.store ? ` en ${item.store}` : ''}
+              {item.store ? t('shopping.viewProductAt', { store: item.store }) : t('shopping.viewProduct')}
             </a>
           )}
         </div>
@@ -896,7 +904,7 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
             }`}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${item.stockLevel === level ? m.dot : 'bg-ink-900/20 dark:bg-cream-100/20'}`} />
-            {m.label}
+            {t(m.labelKey)}
           </button>
         ))}
       </div>
@@ -908,26 +916,26 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
             step="0.01"
             min="0"
             className="input text-sm"
-            placeholder="Precio pagado (opcional)"
+            placeholder={t('shopping.pricePaidPlaceholder')}
             value={price}
             onChange={(e) => setPrice(e.target.value)}
           />
           <label className="flex items-center gap-2 text-xs text-ink-900/60 dark:text-cream-100/60">
             <input type="checkbox" checked={addToPot} disabled={!price} onChange={(e) => setAddToPot(e.target.checked)} />
-            Registrar como gasto en el pote
+            {t('shopping.logAsPotExpense')}
           </label>
           <div className="flex gap-2">
             <button type="button" className="btn-secondary text-xs flex-1" onClick={() => setBuying(false)}>
-              Cancelar
+              {t('shopping.cancel')}
             </button>
             <button type="submit" className="btn-primary text-xs flex-1" disabled={submitting}>
-              {submitting ? 'Guardando…' : 'Confirmar'}
+              {submitting ? t('shopping.saving') : t('shopping.confirm')}
             </button>
           </div>
         </form>
       ) : (
         <button type="button" className="btn-secondary text-sm" onClick={() => setBuying(true)}>
-          Marcar como comprado
+          {t('shopping.markPurchased')}
         </button>
       )}
 
@@ -940,7 +948,7 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase }) {
             type="button"
             onClick={() => setLightboxOpen(false)}
             className="absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center bg-cream-100/20 text-cream-100 hover:bg-cream-100/30"
-            title="Cerrar"
+            title={t('shopping.closePhotoTitle')}
           >
             <CloseIcon className="w-4 h-4" />
           </button>
