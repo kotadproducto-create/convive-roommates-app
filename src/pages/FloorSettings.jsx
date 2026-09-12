@@ -6,8 +6,10 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
 import { update, getRotationHistory } from '../lib/db'
-import { TASK_TYPES, getWeekKey, getMondayOfWeek, whoIsAssigned, fixedTaskOverride } from '../lib/rotation'
-import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, TASK_ICONS } from '../components/icons'
+import { TASK_LABEL, getWeekKey, getMondayOfWeek } from '../lib/rotation'
+import { assigneeFor } from '../lib/activities'
+import { FIXED_ICONS } from '../components/ActivityCard'
+import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon } from '../components/icons'
 import { format, addDays } from 'date-fns'
 
 /** Valida que sea una URL http(s) bien formada, igual que en la lista de
@@ -27,6 +29,8 @@ export default function FloorSettings() {
     floor,
     members,
     weekKey,
+    activities,
+    activityCompletions,
     absenceRequests,
     awayUserIds,
     reorderRotation,
@@ -206,7 +210,8 @@ export default function FloorSettings() {
             weekKey={weekKey}
             awayUserIds={awayUserIds}
             floorId={floor?.id}
-            floor={floor}
+            activities={activities}
+            activityCompletions={activityCompletions}
             myAbsenceRequests={myAbsenceRequests}
             pendingAbsenceRequests={pendingAbsenceRequests}
             requestAbsence={requestAbsence}
@@ -307,6 +312,8 @@ export default function FloorSettings() {
   )
 }
 
+const FIXED_ORDER = ['compras', 'basura', 'lavadora']
+
 function RotationSection({
   isAdmin,
   order,
@@ -315,7 +322,8 @@ function RotationSection({
   weekKey,
   awayUserIds,
   floorId,
-  floor,
+  activities,
+  activityCompletions,
   myAbsenceRequests,
   pendingAbsenceRequests,
   requestAbsence,
@@ -332,6 +340,15 @@ function RotationSection({
   const sunday = addDays(monday, 6)
   const nextMonday = addDays(monday, 7)
   const nextWeekKey = getWeekKey(nextMonday)
+
+  const fixedActivities = useMemo(
+    () =>
+      activities
+        .filter((a) => a.fixedKey)
+        .slice()
+        .sort((a, b) => FIXED_ORDER.indexOf(a.fixedKey) - FIXED_ORDER.indexOf(b.fixedKey)),
+    [activities]
+  )
 
   async function loadHistory() {
     if (history !== null || !floorId) return
@@ -359,22 +376,21 @@ function RotationSection({
       </div>
 
       <div className="flex flex-col gap-1.5 mb-4">
-        {TASK_TYPES.map((type) => {
-          const Icon = TASK_ICONS[type.icon]
-          const currentId = whoIsAssigned(order, weekKey, type.offset)
-          const nextId = whoIsAssigned(order, nextWeekKey, type.offset)
-          const typeLabel = fixedTaskOverride(floor, type.key)?.title || t(`taskTypes.${type.key}`)
+        {fixedActivities.map((activity) => {
+          const Icon = FIXED_ICONS[activity.fixedKey]
+          const currentId = assigneeFor(activity, order, weekKey)
+          const nextId = assigneeFor(activity, order, nextWeekKey)
           return (
-            <div key={type.key} className="flex items-center justify-between text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
-              {type.key === 'compras' ? (
+            <div key={activity.id} className="flex items-center justify-between text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+              {activity.fixedKey === 'compras' ? (
                 <Link to="/compras" className="flex items-center gap-2 hover:opacity-80" title={t('floorSettings.goToShoppingList')}>
                   {Icon && <Icon className="w-4 h-4 text-violet-500" />}
-                  <span className="underline decoration-dotted underline-offset-2">{typeLabel}</span>
+                  <span className="underline decoration-dotted underline-offset-2">{activity.title}</span>
                 </Link>
               ) : (
                 <span className="flex items-center gap-2">
                   {Icon && <Icon className="w-4 h-4 text-violet-500" />}
-                  {typeLabel}
+                  {activity.title}
                 </span>
               )}
               <span className="text-xs text-ink-900/50 dark:text-cream-100/50">
@@ -486,45 +502,84 @@ function RotationSection({
           <p className="text-sm font-medium">{t('floorSettings.rotationHistoryTitle')}</p>
           <span className="text-xs font-semibold text-violet-500">{showHistory ? t('floorSettings.hide') : t('floorSettings.show')}</span>
         </button>
-        {showHistory && <RotationHistory history={history} memberById={memberById} floor={floor} t={t} dateLocale={dateLocale} />}
+        {showHistory && (
+          <RotationHistory
+            history={history}
+            memberById={memberById}
+            activities={fixedActivities}
+            activityCompletions={activityCompletions}
+            t={t}
+            dateLocale={dateLocale}
+          />
+        )}
       </div>
     </div>
   )
 }
 
-function RotationHistory({ history, memberById, floor, t, dateLocale }) {
+// La clave de período de las 3 fijas hoy es semanal ("2026-W37"), pero
+// si alguien les cambia la cadencia a mensual/diaria desde Actividades
+// la clave cambia de forma — se detecta el formato para etiquetar bien
+// cada grupo en vez de asumir siempre semana.
+function formatPeriodLabel(period, t, dateLocale) {
+  if (/^\d{4}-W\d{2}$/.test(period)) {
+    return t('floorSettings.weekOfLabel', { date: format(getMondayOfWeek(period), t('calendar.dayMonthFormat'), { locale: dateLocale }) })
+  }
+  if (/^\d{4}-\d{2}$/.test(period)) {
+    const [y, m] = period.split('-').map(Number)
+    return format(new Date(y, m - 1, 1), t('calendar.monthYearFormat'), { locale: dateLocale })
+  }
+  return format(new Date(`${period}T00:00:00`), t('calendar.dayMonthFormat'), { locale: dateLocale })
+}
+
+function RotationHistory({ history, memberById, activities, activityCompletions, t, dateLocale }) {
   const grouped = useMemo(() => {
     if (!history) return []
-    const byWeek = new Map()
+    const byPeriod = new Map()
+    // Filas viejas de la tabla `tasks` (anteriores a esta migración).
     for (const row of history) {
-      if (!byWeek.has(row.weekKey)) byWeek.set(row.weekKey, [])
-      byWeek.get(row.weekKey).push(row)
+      if (!byPeriod.has(row.weekKey)) byPeriod.set(row.weekKey, [])
+      byPeriod.get(row.weekKey).push({
+        id: `task-${row.id}`,
+        label: TASK_LABEL[row.type] || row.type,
+        assignedUserId: row.assignedUserId,
+        completed: row.completed
+      })
     }
-    return [...byWeek.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
-  }, [history])
+    // Finalizaciones reales de las 3 fijas (posteriores a la migración).
+    for (const completion of activityCompletions) {
+      const activity = activities.find((a) => a.id === completion.activityId)
+      if (!activity) continue
+      if (!byPeriod.has(completion.periodKey)) byPeriod.set(completion.periodKey, [])
+      byPeriod.get(completion.periodKey).push({
+        id: `activity-${completion.id}`,
+        label: activity.title,
+        assignedUserId: completion.assignedUserId,
+        completed: completion.completed
+      })
+    }
+    return [...byPeriod.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
+  }, [history, activities, activityCompletions])
 
   if (history === null) return <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">{t('floorSettings.loading')}</p>
   if (grouped.length === 0) return <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">{t('floorSettings.noHistoryYet')}</p>
 
   return (
     <ul className="flex flex-col gap-3 mt-3 max-h-80 overflow-y-auto">
-      {grouped.map(([week, weekTasks]) => (
-        <li key={week}>
+      {grouped.map(([period, rows]) => (
+        <li key={period}>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mb-1">
-            {t('floorSettings.weekOfLabel', { date: format(getMondayOfWeek(week), t('calendar.dayMonthFormat'), { locale: dateLocale }) })}
+            {formatPeriodLabel(period, t, dateLocale)}
           </p>
           <ul className="flex flex-col gap-1">
-            {weekTasks.map((task) => {
-              const type = TASK_TYPES.find((tt) => tt.key === task.type)
-              return (
-                <li key={task.id} className="flex items-center justify-between text-sm px-2.5 py-1.5 rounded-lg bg-cream-100 dark:bg-ink-700">
-                  <span>{type ? fixedTaskOverride(floor, type.key)?.title || t(`taskTypes.${type.key}`) : task.type} · {memberById[task.assignedUserId]?.name || t('floorSettings.unassigned')}</span>
-                  <span className={task.completed ? 'text-sage-500 text-xs font-semibold' : 'text-ink-900/40 dark:text-cream-100/40 text-xs'}>
-                    {task.completed ? t('floorSettings.done') : t('floorSettings.notCompleted')}
-                  </span>
-                </li>
-              )
-            })}
+            {rows.map((row) => (
+              <li key={row.id} className="flex items-center justify-between text-sm px-2.5 py-1.5 rounded-lg bg-cream-100 dark:bg-ink-700">
+                <span>{row.label} · {memberById[row.assignedUserId]?.name || t('floorSettings.unassigned')}</span>
+                <span className={row.completed ? 'text-sage-500 text-xs font-semibold' : 'text-ink-900/40 dark:text-cream-100/40 text-xs'}>
+                  {row.completed ? t('floorSettings.done') : t('floorSettings.notCompleted')}
+                </span>
+              </li>
+            ))}
           </ul>
         </li>
       ))}

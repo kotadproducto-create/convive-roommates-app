@@ -217,28 +217,34 @@ export function DataProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [absenceRequests, members, todayISO, currentFloor?.id])
 
-  // Genera (una sola vez, de forma idempotente) las tareas de la semana
-  // actual y las notificaciones de recordatorio de turno / pote bajo.
+  // Genera (una sola vez, de forma idempotente) las finalizaciones de
+  // la semana actual de las 3 fijas y las notificaciones de
+  // recordatorio de turno / pote bajo. Las 3 fijas (Compras/Basura/
+  // Lavadora) ya no viven en "tasks" (motor viejo de rotation.js, solo
+  // histórico) — son actividades reales con `fixedKey`, así que este
+  // efecto se apoya en ensureActivityPeriods/currentPeriodKey de
+  // lib/activities.js igual que cualquier otra actividad recurrente.
   useEffect(() => {
     if (!currentFloor) return
     let cancelled = false
 
     async function run() {
       const effectiveRotationOrder = (currentFloor.rotationOrder || []).filter((id) => !awayUserIds.has(id))
-      await ensureWeekTasks(currentFloor.id, weekKey, effectiveRotationOrder)
+      await ensureActivityPeriods(activities, effectiveRotationOrder, weekKey)
       if (cancelled) return
 
       const existingNotifs = await getAll('notifications', { floorId: currentFloor.id })
       const alreadyNotifiedTurno = existingNotifs.some((n) => n.weekKey === weekKey && n.type === 'turno')
 
       if (!alreadyNotifiedTurno) {
-        const weekTasks = (await getAll('tasks', { floorId: currentFloor.id })).filter(
-          (t) => t.weekKey === weekKey
-        )
-        for (const t of weekTasks) {
-          if (!t.assignedUserId) continue
-          const typeInfo = TASK_TYPES.find((tt) => tt.key === t.type)
-          await notifyUser(currentFloor.id, t.assignedUserId, 'turno', `Esta semana te toca: ${typeInfo?.label || t.type}`, weekKey)
+        const fixedActivities = activities.filter((a) => a.fixedKey)
+        const periodCompletions = await getAll('activity_completions', { floorId: currentFloor.id })
+        for (const activity of fixedActivities) {
+          const period = currentPeriodKey(activity, weekKey)
+          if (!period) continue
+          const completion = periodCompletions.find((c) => c.activityId === activity.id && c.periodKey === period)
+          if (!completion?.assignedUserId) continue
+          await notifyUser(currentFloor.id, completion.assignedUserId, 'turno', `Esta semana te toca: ${activity.title}`, weekKey)
         }
       }
 
@@ -260,7 +266,7 @@ export function DataProvider({ children }) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFloor?.id, currentFloor?.rotationOrder?.length, currentFloor?.potAmount, weekKey, awayUserIds])
+  }, [currentFloor?.id, currentFloor?.rotationOrder?.length, currentFloor?.potAmount, weekKey, awayUserIds, activities])
 
   // Igual que arriba pero para el gestor de actividades propias: arma
   // (idempotente) la fila de activity_completions del período actual de
@@ -860,55 +866,6 @@ export function DataProvider({ children }) {
     [currentFloor, user, shoppingItems, addPotExpense]
   )
 
-  // "Hacer la compra": registra de una vez varios productos comprados
-  // en un mismo viaje. A diferencia de markItemPurchased (precio por
-  // producto), aquí el monto es del viaje completo — se registra una
-  // sola vez en el pote (reutilizando addPotExpense, con foto de
-  // ticket si se adjunta) y purchase_sessions agrupa qué productos
-  // fueron parte de esa compra. Si la tarea semanal "Compras del piso"
-  // existe y sigue pendiente, se marca completada de una vez (cuenta
-  // para la racha y las recompensas, sin tener que ir aparte al
-  // Calendario a marcarla).
-  const recordPurchaseSession = useCallback(
-    async ({ itemIds, totalAmount, receiptFile }) => {
-      if (!currentFloor || !user) return
-
-      let potContributionId = null
-      const amount = Number(totalAmount) || 0
-      if (amount > 0) {
-        const contribution = await addPotExpense(amount, { note: 'Compra del piso', receiptFile })
-        potContributionId = contribution?.id || null
-      }
-
-      const session = await create('purchase_sessions', {
-        floorId: currentFloor.id,
-        userId: user.id,
-        potContributionId
-      })
-
-      for (const itemId of itemIds) {
-        const item = shoppingItems.find((i) => i.id === itemId)
-        if (!item) continue
-        await update('shopping_items', itemId, { stockLevel: 'ok' })
-        await create('shopping_purchases', {
-          floorId: currentFloor.id,
-          itemId,
-          itemName: item.name,
-          userId: user.id,
-          price: null,
-          potContributionId,
-          sessionId: session.id
-        })
-      }
-
-      const comprasTask = tasks.find((t) => t.type === 'compras' && !t.completed)
-      if (comprasTask) {
-        await completeTask(comprasTask.id)
-      }
-    },
-    [currentFloor, user, shoppingItems, tasks, addPotExpense, completeTask]
-  )
-
   const redeemReward = useCallback(
     async (rewardKey) => {
       const reward = REWARD_CATALOG.find((r) => r.key === rewardKey)
@@ -943,6 +900,8 @@ export function DataProvider({ children }) {
       const activity = await create('activities', {
         floorId: currentFloor.id,
         title: input.title,
+        fixedKey: input.fixedKey || null,
+        points: input.points ?? null,
         frequencyType: input.frequencyType,
         recurrenceUnit: input.frequencyType === 'recurring' ? input.recurrenceUnit : null,
         recurrenceInterval: input.frequencyType === 'recurring' ? Number(input.recurrenceInterval) || 1 : 1,
@@ -952,7 +911,8 @@ export function DataProvider({ children }) {
         timesPerWeek: isWeekRecurrence ? Math.max(1, (input.weekdays || []).length) : null,
         specificDate: input.frequencyType === 'once' ? input.specificDate : null,
         assignmentMode: input.frequencyType === 'once' ? 'manual' : input.assignmentMode,
-        assignedUserId: input.assignmentMode === 'manual' || input.frequencyType === 'once' ? input.assignedUserId : null,
+        // null = "Todos" (nadie en particular) — ya no se exige elegir a alguien.
+        assignedUserId: (input.assignmentMode === 'manual' || input.frequencyType === 'once') ? input.assignedUserId || null : null,
         createdBy: user.id
       })
       if (activity.frequencyType === 'once') {
@@ -970,24 +930,100 @@ export function DataProvider({ children }) {
     [currentFloor, user, weekKey]
   )
 
-  const updateActivity = useCallback((activityId, patch) => update('activities', activityId, patch), [])
+  // Mismo cálculo de timesPerWeek que addActivity (a partir de weekdays)
+  // — ActivityForm siempre manda el objeto completo al editar, así que
+  // es seguro recalcularlo entero en vez de solo mezclar el patch.
+  const updateActivity = useCallback((activityId, patch) => {
+    const isWeekRecurrence = patch.frequencyType === 'recurring' && patch.recurrenceUnit === 'week'
+    return update('activities', activityId, {
+      ...patch,
+      timesPerWeek: isWeekRecurrence ? Math.max(1, (patch.weekdays || []).length) : null
+    })
+  }, [])
   const removeActivity = useCallback((activityId) => remove('activities', activityId), [])
 
   // Progreso del período actual de una actividad: para timesPerWeek=1 (o
   // mensual/evento único) es un simple hecho/deshecho; si tiene varias
-  // veces por semana, delta suma/resta contra el objetivo.
+  // veces por semana, delta suma/resta contra el objetivo. Si la
+  // actividad otorga puntos (las 3 fijas, ver `activity.points`), se
+  // acreditan al responsable de ESTE período justo al llegar al
+  // objetivo — mismo patrón que ya usa completeTask para las tareas
+  // viejas. No hay reversa al deshacer (tampoco la había antes).
   const setActivityProgress = useCallback(
     async (completion, delta) => {
       const activity = activities.find((a) => a.id === completion.activityId)
       const target = activity?.timesPerWeek || 1
+      const wasCompleted = completion.completed
       const timesDone = Math.min(target, Math.max(0, (completion.timesDone || 0) + delta))
+      const nowCompleted = timesDone >= target
       await update('activity_completions', completion.id, {
         timesDone,
-        completed: timesDone >= target,
-        completedAt: timesDone >= target ? new Date().toISOString() : null
+        completed: nowCompleted,
+        completedAt: nowCompleted ? new Date().toISOString() : null
       })
+      if (nowCompleted && !wasCompleted && activity?.points && completion.assignedUserId) {
+        const assignee = members.find((m) => m.id === completion.assignedUserId)
+        if (assignee) {
+          await update('profiles', assignee.id, { points: (assignee.points || 0) + activity.points })
+        }
+      }
     },
-    [activities]
+    [activities, members]
+  )
+
+  // "Hacer la compra": registra de una vez varios productos comprados
+  // en un mismo viaje. A diferencia de markItemPurchased (precio por
+  // producto), aquí el monto es del viaje completo — se registra una
+  // sola vez en el pote (reutilizando addPotExpense, con foto de
+  // ticket si se adjunta) y purchase_sessions agrupa qué productos
+  // fueron parte de esa compra. Si el período actual de la actividad
+  // "Compras del piso" existe y sigue pendiente, se marca completado de
+  // una vez (cuenta para la racha y las recompensas, sin tener que ir
+  // aparte al Calendario a marcarlo).
+  const recordPurchaseSession = useCallback(
+    async ({ itemIds, totalAmount, receiptFile }) => {
+      if (!currentFloor || !user) return
+
+      let potContributionId = null
+      const amount = Number(totalAmount) || 0
+      if (amount > 0) {
+        const contribution = await addPotExpense(amount, { note: 'Compra del piso', receiptFile })
+        potContributionId = contribution?.id || null
+      }
+
+      const session = await create('purchase_sessions', {
+        floorId: currentFloor.id,
+        userId: user.id,
+        potContributionId
+      })
+
+      for (const itemId of itemIds) {
+        const item = shoppingItems.find((i) => i.id === itemId)
+        if (!item) continue
+        await update('shopping_items', itemId, { stockLevel: 'ok' })
+        await create('shopping_purchases', {
+          floorId: currentFloor.id,
+          itemId,
+          itemName: item.name,
+          userId: user.id,
+          price: null,
+          potContributionId,
+          sessionId: session.id
+        })
+      }
+
+      const comprasActivity = activities.find((a) => a.fixedKey === 'compras')
+      if (comprasActivity) {
+        const periodKey = currentPeriodKey(comprasActivity, weekKey)
+        const completion = periodKey
+          ? activityCompletions.find((c) => c.activityId === comprasActivity.id && c.periodKey === periodKey)
+          : null
+        if (completion && !completion.completed) {
+          await setActivityProgress(completion, comprasActivity.timesPerWeek || 1)
+        }
+      }
+    },
+    [currentFloor, user, shoppingItems, activities, activityCompletions, weekKey, addPotExpense, setActivityProgress]
   )
 
   const leaderboard = useMemo(() => [...members].sort((a, b) => (b.points || 0) - (a.points || 0)), [members])

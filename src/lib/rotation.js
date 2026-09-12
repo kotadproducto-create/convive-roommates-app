@@ -1,4 +1,5 @@
 import { getAll, update, upsertIgnoreDuplicates } from './db'
+import { currentPeriodKey } from './activities'
 
 /**
  * Las 3 tareas fijas del piso. El "offset" determina que, dentro de la
@@ -53,38 +54,51 @@ export function weekIndexFromKey(weekKey) {
 }
 
 /**
- * Racha de semanas seguidas con las 3 tareas completadas. Cuenta la
- * semana actual si ya está completa (aunque no haya terminado), y sigue
- * hacia atrás por semanas ANTERIORES consecutivas y 100% completadas;
- * se corta en la primera semana pasada incompleta o de la que no haya
- * registro (piso nuevo, o semana sin tareas generadas).
+ * Racha de semanas seguidas con las 3 fijas (Compras/Basura/Lavadora,
+ * identificadas por `fixedKey` en `activities` — ver lib/activities.js)
+ * completadas. Cuenta la semana actual si ya está completa (aunque no
+ * haya terminado), y sigue hacia atrás por semanas ANTERIORES
+ * consecutivas y 100% completadas; se corta en la primera semana
+ * pasada incompleta o de la que no haya registro (piso nuevo, o
+ * semana en la que ninguna de las 3 tenía ocurrencia — p.ej. si se
+ * reconfiguran a mensuales).
  */
-export function computeWeekStreak(tasks, currentWeekKey) {
-  const byWeek = new Map()
-  for (const t of tasks) {
-    if (!byWeek.has(t.weekKey)) byWeek.set(t.weekKey, [])
-    byWeek.get(t.weekKey).push(t)
+export function computeWeekStreak(activities, activityCompletions, currentWeekKey) {
+  const fixed = activities.filter((a) => a.fixedKey)
+  if (fixed.length === 0) return 0
+
+  // null = sin ninguna de las 3 con ocurrencia esa semana (sin datos,
+  // corta la racha); true/false = si las que sí tenían ocurrencia esa
+  // semana quedaron todas completadas.
+  function weekFullyDone(weekKey) {
+    const applicable = fixed
+      .map((activity) => ({ activity, period: currentPeriodKey(activity, weekKey) }))
+      .filter((x) => x.period)
+    if (applicable.length === 0) return null
+    return applicable.every(
+      ({ activity, period }) =>
+        activityCompletions.some((c) => c.activityId === activity.id && c.periodKey === period && c.completed)
+    )
   }
 
   let streak = 0
-  let index = weekIndexFromKey(currentWeekKey)
+  let cursor = getMondayOfWeek(currentWeekKey)
   let isCurrentWeek = true
 
   while (true) {
-    const weekKey = [...byWeek.keys()].find((k) => weekIndexFromKey(k) === index)
-    if (!weekKey) break
-    const weekTasks = byWeek.get(weekKey)
-    const allDone = weekTasks.length > 0 && weekTasks.every((t) => t.completed)
+    const weekKey = getWeekKey(cursor)
+    const status = weekFullyDone(weekKey)
+    if (status === null) break
 
     if (isCurrentWeek) {
       isCurrentWeek = false
-      if (allDone) streak++
-      index--
-      continue
+      if (status) streak++
+    } else {
+      if (!status) break
+      streak++
     }
-    if (!allDone) break
-    streak++
-    index--
+    cursor = new Date(cursor)
+    cursor.setUTCDate(cursor.getUTCDate() - 7)
   }
 
   return streak

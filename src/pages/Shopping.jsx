@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
+import { currentPeriodKey } from '../lib/activities'
 import {
   StoreIcon,
   AlertIcon,
@@ -55,7 +56,9 @@ export default function Shopping() {
   const { user } = useAuth()
   const {
     members,
-    tasks,
+    activities,
+    activityCompletions,
+    weekKey,
     shoppingItems,
     shoppingPurchases,
     addShoppingItem,
@@ -74,8 +77,12 @@ export default function Shopping() {
   const [showHistory, setShowHistory] = useState(false)
 
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
-  const comprasTask = tasks.find((t) => t.type === 'compras')
-  const shopper = comprasTask ? memberById[comprasTask.assignedUserId] : null
+  const comprasActivity = activities.find((a) => a.fixedKey === 'compras')
+  const comprasPeriod = comprasActivity ? currentPeriodKey(comprasActivity, weekKey) : null
+  const comprasCompletion = comprasPeriod
+    ? activityCompletions.find((c) => c.activityId === comprasActivity.id && c.periodKey === comprasPeriod)
+    : null
+  const shopper = comprasCompletion ? memberById[comprasCompletion.assignedUserId] : null
   const isShopper = shopper?.id === user.id
 
   // Prioridad de compra: primero lo agotado, luego lo que está por

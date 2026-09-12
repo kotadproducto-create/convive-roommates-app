@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
-import { TASK_TYPES, TASK_DAY_OFFSET, getMondayOfWeek, computeWeekStreak } from '../lib/rotation'
+import { getMondayOfWeek, computeWeekStreak } from '../lib/rotation'
+import { currentPeriodKey, dueActivitiesOnDate } from '../lib/activities'
 import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon, BellIcon } from '../components/icons'
 import { potAmountColorClass } from '../lib/pot'
 import { getTimeGreeting } from '../lib/greeting'
@@ -15,9 +16,11 @@ import RoomieOrb from '../components/RoomieOrb'
 import Avatar from '../components/Avatar'
 import { format, formatDistanceToNow, isSameDay } from 'date-fns'
 
+const FIXED_ORDER = ['compras', 'basura', 'lavadora']
+
 export default function Timeline() {
   const { user } = useAuth()
-  const { floor, members, tasks, notifications, shoppingItems, completeTask, uncompleteTask, weekKey, markAllNotificationsRead } = useData()
+  const { floor, members, activities, activityCompletions, notifications, shoppingItems, setActivityProgress, weekKey, markAllNotificationsRead } = useData()
   const { showToast } = useToast()
   const { t, dateLocale } = useLanguage()
   const [showAllNotifications, setShowAllNotifications] = useState(false)
@@ -27,12 +30,43 @@ export default function Timeline() {
   const hasReadNotifications = notifications.length > unreadNotifications.length
   const visibleNotifications = showAllNotifications ? notifications : unreadNotifications
 
-  function handleStamp(task, type) {
-    if (task.completed) {
-      uncompleteTask(task.id)
-    } else {
-      completeTask(task.id)
-      showToast(`¡${type.label} completada! +${type.points} recompensas`, 'success')
+  const fixedActivities = useMemo(() => activities.filter((a) => a.fixedKey), [activities])
+
+  // Progreso del período actual de cada fija — usado por el "stamp" de
+  // la semana, el orbe de roomies (RoomieOrb) y los chips de la
+  // cabecera. Una sola fuente para las 3 vistas.
+  const fixedProgress = useMemo(
+    () =>
+      fixedActivities
+        .slice()
+        .sort((a, b) => FIXED_ORDER.indexOf(a.fixedKey) - FIXED_ORDER.indexOf(b.fixedKey))
+        .map((activity) => {
+          const periodKey = currentPeriodKey(activity, weekKey)
+          const completion = periodKey ? activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === periodKey) : null
+          return {
+            id: activity.id,
+            type: activity.fixedKey,
+            title: activity.title,
+            assignedUserId: completion?.assignedUserId ?? activity.assignedUserId,
+            completed: completion?.completed || false,
+            completion
+          }
+        }),
+    [fixedActivities, activityCompletions, weekKey]
+  )
+
+  function handleStamp(item) {
+    if (!item?.completion) return
+    const wasCompleted = item.completion.completed
+    const delta = wasCompleted ? -1 : 1
+    setActivityProgress(item.completion, delta)
+    if (!wasCompleted) {
+      const activity = fixedActivities.find((a) => a.id === item.completion.activityId)
+      const target = activity?.timesPerWeek || 1
+      const timesDone = Math.min(target, Math.max(0, (item.completion.timesDone || 0) + delta))
+      if (timesDone >= target) {
+        showToast(`¡${item.title} completada! +${activity?.points ?? 0} recompensas`, 'success')
+      }
     }
   }
 
@@ -42,22 +76,22 @@ export default function Timeline() {
     return Array.from({ length: 7 }).map((_, i) => {
       const date = new Date(monday)
       date.setUTCDate(monday.getUTCDate() + i)
-      const type = TASK_TYPES.find((t) => TASK_DAY_OFFSET[t.key] === i)
-      const task = type ? tasks.find((t) => t.type === type.key) : null
-      return { date, type, task }
+      const items = dueActivitiesOnDate(date, fixedActivities, activityCompletions)
+      items.sort((a, b) => FIXED_ORDER.indexOf(a.activity.fixedKey) - FIXED_ORDER.indexOf(b.activity.fixedKey))
+      return { date, item: items[0] || null, extraCount: Math.max(0, items.length - 1) }
     })
-  }, [monday, tasks])
+  }, [monday, fixedActivities, activityCompletions])
 
   const outOfStockCount = shoppingItems.filter((i) => i.stockLevel === 'out').length
   const pendingShoppingCount = shoppingItems.filter((i) => i.stockLevel !== 'ok').length
-  const weekDone = tasks.filter((t) => t.completed).length
-  const weekStreak = computeWeekStreak(tasks, weekKey)
+  const weekDone = fixedProgress.filter((p) => p.completed).length
+  const weekStreak = computeWeekStreak(activities, activityCompletions, weekKey)
   const greeting = getTimeGreeting()
   const GreetingIcon = greeting.icon === 'moon' ? MoonIcon : SunIcon
 
   return (
     <>
-      <PendingPopups user={user} floor={floor} tasks={tasks} shoppingItems={shoppingItems} />
+      <PendingPopups user={user} floor={floor} activities={activities} activityCompletions={activityCompletions} weekKey={weekKey} shoppingItems={shoppingItems} />
       <AppLayout
         title={t('nav.inicio')}
         subheader={
@@ -66,7 +100,7 @@ export default function Timeline() {
             to="/actividades"
             tone="sky"
             icon={StampIcon}
-            value={`${weekDone}/${tasks.length}`}
+            value={`${weekDone}/${fixedProgress.length}`}
             label={t('timeline.chips.activities')}
             streak={weekStreak}
           />
@@ -105,7 +139,7 @@ export default function Timeline() {
 
       <section className="mb-8">
         <h3 className="font-display text-lg font-bold mb-3 text-center sm:text-left">{t('timeline.roomiesTitle')}</h3>
-        <RoomieOrb members={members} tasks={tasks} floor={floor} />
+        <RoomieOrb members={members} tasks={fixedProgress} />
       </section>
 
       <div className="grid lg:grid-cols-3 gap-5 items-start mb-8">
@@ -122,11 +156,12 @@ export default function Timeline() {
           </div>
           <div className="card p-4">
             <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-              {days.map(({ date, type, task }) => {
-                const assignee = task ? memberById[task.assignedUserId] : null
+              {days.map(({ date, item, extraCount }) => {
+                const assignedUserId = item?.completion?.assignedUserId
+                const assignee = assignedUserId ? memberById[assignedUserId] : null
                 const today = isSameDay(date, new Date())
                 const isFuture = date.getTime() > Date.now()
-                const isMinePending = assignee?.id === user?.id && task && !task.completed
+                const isMinePending = Boolean(assignee?.id === user?.id && item?.completion && !item.completion.completed)
                 return (
                   <div
                     key={date.toISOString()}
@@ -136,17 +171,17 @@ export default function Timeline() {
                       {format(date, 'EEEEE', { locale: dateLocale })}
                     </span>
                     <span className="text-xs font-bold">{format(date, 'd')}</span>
-                    {type ? (
+                    {item ? (
                       <button
                         type="button"
-                        disabled={isFuture || !task}
-                        onClick={() => handleStamp(task, type)}
-                        title={`${type.label} · ${assignee?.name || 'Sin asignar'}${isMinePending ? ' — te toca a ti' : ''}`}
+                        disabled={isFuture || !item.completion}
+                        onClick={() => handleStamp({ completion: item.completion, title: item.activity.title })}
+                        title={`${item.activity.title} · ${assignee?.name || t('calendar.unassigned')}${isMinePending ? t('calendar.yourTurnDash') : ''}`}
                         className="stamp-btn relative mt-1 disabled:cursor-not-allowed"
                       >
                         <div
                           className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold border-2 transition-colors ${
-                            task?.completed
+                            item.completion?.completed
                               ? 'bg-gold-400 border-ink-900 text-ink-900 shadow-[0_3px_0_0_theme(colors.ink.900)]'
                               : isMinePending
                                 ? 'bg-coral-500 border-ink-900 text-white shadow-[0_3px_0_0_theme(colors.ink.900)] ring-2 ring-coral-500/40'
@@ -159,8 +194,13 @@ export default function Timeline() {
                         >
                           {assignee?.name?.[0]?.toUpperCase() || '?'}
                         </div>
-                        {task?.completed && (
+                        {item.completion?.completed && (
                           <StampIcon className="w-4 h-4 absolute -bottom-1 -right-1 text-violet-500 bg-cream-100 dark:bg-ink-800 rounded-full" />
+                        )}
+                        {extraCount > 0 && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-ink-900 dark:bg-cream-100 text-cream-100 dark:text-ink-900 text-[8px] font-bold flex items-center justify-center">
+                            +{extraCount}
+                          </span>
                         )}
                       </button>
                     ) : (
@@ -243,7 +283,7 @@ export default function Timeline() {
               icon={SparkleIcon}
               tone="sky"
               label={t('timeline.themeActivities')}
-              stat={t('timeline.themeActivitiesStat', { done: weekDone, total: tasks.length })}
+              stat={t('timeline.themeActivitiesStat', { done: weekDone, total: fixedProgress.length })}
             />
           </Reveal>
           <Reveal delay={60}>

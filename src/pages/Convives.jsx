@@ -8,7 +8,6 @@ import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { currentPeriodKey } from '../lib/activities'
-import { fixedTaskOverride } from '../lib/rotation'
 import { getMemberColor } from '../lib/roomieColors'
 import { CoinIcon, SunIcon, HomeIcon, PhoneIcon, EditIcon, PlusIcon, MinusIcon, ChevronDownIcon } from '../components/icons'
 import { formatDistanceToNowStrict } from 'date-fns'
@@ -16,13 +15,10 @@ import { formatDistanceToNowStrict } from 'date-fns'
 export default function Convives() {
   const { user, membership } = useAuth()
   const {
-    floor,
     members,
-    tasks,
     weekKey,
     activities,
     activityCompletions,
-    completeTask,
     setActivityProgress,
     incomingSwapRequests,
     outgoingSwapRequests,
@@ -62,12 +58,9 @@ export default function Convives() {
               currentUserId={user.id}
               isAdmin={isAdmin}
               members={members}
-              floor={floor}
-              tasks={tasks}
               weekKey={weekKey}
               activities={activities}
               activityCompletions={activityCompletions}
-              completeTask={completeTask}
               setActivityProgress={setActivityProgress}
               requestSwap={requestSwap}
               outgoingSwapRequests={outgoingSwapRequests}
@@ -81,23 +74,13 @@ export default function Convives() {
   )
 }
 
-/** Pendientes de esta semana/período para un miembro: junta las 3
- * tareas fijas (tasks) con el período actual de cada actividad propia
- * (activityCompletions), ambas sin completar — una sola lista, con lo
- * necesario para poder marcar hecho o proponer un intercambio sobre
- * cada ítem (mismo target_type/target_id que espera requestSwap). */
-function getPendingItems(memberId, tasks, activities, activityCompletions, weekKey, t, floor) {
-  const fixed = tasks
-    .filter((task) => task.assignedUserId === memberId && !task.completed)
-    .map((task) => ({
-      targetType: 'task',
-      targetId: task.id,
-      title: fixedTaskOverride(floor, task.type)?.title || t(`taskTypes.${task.type}`),
-      completion: task,
-      activity: null
-    }))
-
-  const custom = activities
+/** Pendientes del período actual para un miembro: las 3 fijas y las
+ * actividades propias son ahora la misma tabla (`activities`), así que
+ * es una sola lista — lo necesario para poder marcar hecho o proponer
+ * un intercambio sobre cada ítem (mismo target_type/target_id que
+ * espera requestSwap). */
+function getPendingItems(memberId, activities, activityCompletions, weekKey) {
+  return activities
     .map((a) => {
       const period = currentPeriodKey(a, weekKey)
       const completion = activityCompletions.find((c) => c.activityId === a.id && c.periodKey === period)
@@ -105,24 +88,21 @@ function getPendingItems(memberId, tasks, activities, activityCompletions, weekK
       return { targetType: 'activity_completion', targetId: completion.id, title: a.title, completion, activity: a }
     })
     .filter(Boolean)
-
-  return [...fixed, ...custom]
 }
 
 /** Una fila de "Esta semana": título del turno + Marcar hecho +
  * Intercambiar (con un <select> de compañeros que se abre al tocar,
  * mismo patrón que el picker de compañero de habitación en Perfil). */
-function PendingItemRow({ item, members, currentUserId, completeTask, setActivityProgress, requestSwap, hasOutgoingSwap, t }) {
+function PendingItemRow({ item, members, currentUserId, setActivityProgress, requestSwap, hasOutgoingSwap, t }) {
   const { showToast } = useToast()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [selected, setSelected] = useState('')
   const otherMembers = members.filter((m) => m.id !== currentUserId)
 
-  const isStepped = item.activity?.frequencyType === 'weekly' && (item.activity.timesPerWeek || 1) > 1
+  const isStepped = item.activity?.frequencyType === 'recurring' && item.activity.recurrenceUnit === 'week' && (item.activity.timesPerWeek || 1) > 1
 
   function handleDone() {
-    if (item.targetType === 'task') completeTask(item.targetId)
-    else setActivityProgress(item.completion, 1)
+    setActivityProgress(item.completion, 1)
   }
 
   async function handleSwap() {
@@ -228,12 +208,9 @@ function ConviveCard({
   currentUserId,
   isAdmin,
   members,
-  floor,
-  tasks,
   weekKey,
   activities,
   activityCompletions,
-  completeTask,
   setActivityProgress,
   requestSwap,
   outgoingSwapRequests,
@@ -244,7 +221,7 @@ function ConviveCard({
   const [adjusting, setAdjusting] = useState(false)
 
   const isSelf = member.id === currentUserId
-  const pendingItems = getPendingItems(member.id, tasks, activities, activityCompletions, weekKey, t, floor)
+  const pendingItems = getPendingItems(member.id, activities, activityCompletions, weekKey)
   const canManage = isSelf || isAdmin
   const onVacation = member.potActive === false
   const isActive = member.activeStatus !== false
@@ -394,7 +371,6 @@ function ConviveCard({
                   item={item}
                   members={members}
                   currentUserId={currentUserId}
-                  completeTask={completeTask}
                   setActivityProgress={setActivityProgress}
                   requestSwap={requestSwap}
                   hasOutgoingSwap={outgoingSwapRequests.some((r) => r.targetId === item.targetId)}

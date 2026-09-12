@@ -1,31 +1,32 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
-import TaskCard from '../components/TaskCard'
+import ActivityCard from '../components/ActivityCard'
 import CalendarView from '../components/CalendarView'
 import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
-import { TASK_TYPES, getMondayOfWeek, fixedTaskOverride } from '../lib/rotation'
+import { getMondayOfWeek } from '../lib/rotation'
+import { currentPeriodKey } from '../lib/activities'
 import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
 import { AlertIcon, ChatIcon } from '../components/icons'
 import { format } from 'date-fns'
+
+const FIXED_ORDER = ['compras', 'basura', 'lavadora']
 
 export default function Dashboard() {
   const { user } = useAuth()
   const {
     floor,
     members,
-    tasks,
     activities,
     activityCompletions,
     shoppingItems,
     shoppingPurchases,
     potContributions,
     notifications,
-    completeTask,
-    uncompleteTask,
+    setActivityProgress,
     requestWasher,
     addPotContribution,
     weekKey
@@ -46,14 +47,24 @@ export default function Dashboard() {
     setTimeout(() => setWasherMsg(false), 3000)
   }
 
-  const weekTasks = useMemo(
+  const fixedActivities = useMemo(
     () =>
-      tasks
+      activities
+        .filter((a) => a.fixedKey)
         .slice()
-        .sort((a, b) => TASK_TYPES.findIndex((t) => t.key === a.type) - TASK_TYPES.findIndex((t) => t.key === b.type)),
-    [tasks]
+        .sort((a, b) => FIXED_ORDER.indexOf(a.fixedKey) - FIXED_ORDER.indexOf(b.fixedKey)),
+    [activities]
   )
-  const doneCount = weekTasks.filter((t) => t.completed).length
+  const fixedWithCompletion = useMemo(
+    () =>
+      fixedActivities.map((activity) => {
+        const periodKey = currentPeriodKey(activity, weekKey)
+        const completion = periodKey ? activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === periodKey) : null
+        return { activity, completion }
+      }),
+    [fixedActivities, activityCompletions, weekKey]
+  )
+  const doneCount = fixedWithCompletion.filter(({ completion }) => completion?.completed).length
   const outOfStockItems = shoppingItems.filter((i) => i.stockLevel === 'out')
 
   return (
@@ -74,12 +85,9 @@ export default function Dashboard() {
         <CalendarView
           floor={floor}
           memberById={memberById}
-          currentWeekKey={weekKey}
-          tasks={tasks}
           activities={activities}
           activityCompletions={activityCompletions}
-          completeTask={completeTask}
-          uncompleteTask={uncompleteTask}
+          setActivityProgress={setActivityProgress}
           potContributions={potContributions}
           shoppingPurchases={shoppingPurchases}
           shoppingItems={shoppingItems}
@@ -109,26 +117,22 @@ export default function Dashboard() {
           <div className="flex items-baseline justify-between mb-3">
             <h3 className="font-display text-lg font-bold">{t('calendar.weekTasksTitle')}</h3>
             <span className="text-xs font-semibold text-ink-900/50 dark:text-cream-100/50">
-              {t('calendar.completedCount', { done: doneCount, total: weekTasks.length })}
+              {t('calendar.completedCount', { done: doneCount, total: fixedWithCompletion.length })}
             </span>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
-            {weekTasks.map((task, i) => {
-              const override = fixedTaskOverride(floor, task.type)
-              return (
-                <Reveal key={task.id} delay={i * 70}>
-                  <TaskCard
-                    task={task}
-                    typeInfo={TASK_TYPES.find((t) => t.key === task.type)}
-                    overrideLabel={override?.title}
-                    overridePoints={override?.points}
-                    assignee={memberById[task.assignedUserId]}
-                    currentUserId={user?.id}
-                    onToggle={(id, undo) => (undo ? uncompleteTask(id) : completeTask(id))}
-                  />
-                </Reveal>
-              )
-            })}
+            {fixedWithCompletion.map(({ activity, completion }, i) => (
+              <Reveal key={activity.id} delay={i * 70}>
+                <ActivityCard
+                  activity={activity}
+                  completion={completion}
+                  memberById={memberById}
+                  onProgress={(delta) => completion && setActivityProgress(completion, delta)}
+                  t={t}
+                  dateLocale={dateLocale}
+                />
+              </Reveal>
+            ))}
           </div>
         </section>
 

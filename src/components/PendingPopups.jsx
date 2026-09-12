@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../context/LanguageContext'
-import { fixedTaskOverride } from '../lib/rotation'
+import { currentPeriodKey } from '../lib/activities'
 import { CartIcon, SparkleIcon, CloseIcon } from './icons'
 
 function todayKey() {
@@ -38,11 +38,11 @@ const TONE_BADGE = {
  * Se muestran uno a la vez y como máximo una vez por día (localStorage),
  * para no repetirse cada vez que se abre la app en el mismo día.
  */
-export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
+export default function PendingPopups({ user, floor, activities, activityCompletions, weekKey, shoppingItems }) {
   // Solo para forzar un re-render tras cerrar un aviso (escribir en
   // localStorage no dispara uno solo). El propio localStorage sigue
   // siendo la única fuente de verdad — se relee en cada render, así que
-  // no hay riesgo de quedarse con un estado viejo mientras tasks/
+  // no hay riesgo de quedarse con un estado viejo mientras activities/
   // shoppingItems todavía están cargando.
   const [, bump] = useState(0)
   const [showQueue, setShowQueue] = useState(false)
@@ -54,8 +54,19 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
     if (!user) return []
     const list = []
 
-    const comprasTask = tasks.find((t) => t.type === 'compras')
-    if (comprasTask?.assignedUserId === user.id) {
+    // Progreso del período ACTUAL de una de las 3 fijas — null si esa
+    // fija todavía no tiene finalización generada (piso recién
+    // migrado, o esta semana no le toca ocurrencia).
+    function progressFor(fixedKey) {
+      const activity = activities.find((a) => a.fixedKey === fixedKey)
+      if (!activity) return null
+      const periodKey = currentPeriodKey(activity, weekKey)
+      const completion = periodKey ? activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === periodKey) : null
+      return { activity, completion }
+    }
+
+    const compras = progressFor('compras')
+    if (compras?.completion?.assignedUserId === user.id) {
       const missing = shoppingItems.filter((i) => i.stockLevel === 'out')
       if (missing.length > 0) {
         list.push({
@@ -71,9 +82,10 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
       }
     }
 
-    const pendingActivities = tasks.filter(
-      (t) => (t.type === 'basura' || t.type === 'lavadora') && t.assignedUserId === user.id && !t.completed
-    )
+    const pendingActivities = ['basura', 'lavadora']
+      .map((key) => progressFor(key))
+      .filter((p) => p?.completion?.assignedUserId === user.id && !p.completion.completed)
+
     if (pendingActivities.length > 0) {
       list.push({
         key: 'actividades',
@@ -81,13 +93,13 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
         tone: 'sky',
         title: t('pendingPopups.activitiesTitle'),
         bigNumber: pendingActivities.length,
-        items: pendingActivities.map((task) => fixedTaskOverride(floor, task.type)?.title || t(`taskTypes.${task.type}`))
+        items: pendingActivities.map((p) => p.activity.title)
       })
     }
 
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, tasks, shoppingItems, language, floor])
+  }, [user, activities, activityCompletions, weekKey, shoppingItems, language])
 
   // Cerrar una categoría la saca de `popups` (queda marcada en
   // localStorage), y la siguiente pendiente pasa a ser la primera

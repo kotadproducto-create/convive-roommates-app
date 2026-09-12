@@ -151,6 +151,50 @@ export function AuthProvider({ children }) {
     })
 
     await update('floors', newFloor.id, { rotationOrder: [signUpData.user.id] })
+
+    // Las 3 tareas fijas arrancan ya creadas como actividades reales
+    // (editables desde Actividades) — mismos valores por defecto que
+    // usa la migración de backfill para pisos ya existentes.
+    await create('activities', {
+      floorId: newFloor.id,
+      title: 'Compras del piso',
+      fixedKey: 'compras',
+      points: 15,
+      frequencyType: 'recurring',
+      recurrenceUnit: 'week',
+      recurrenceInterval: 1,
+      weekdays: [0],
+      timesPerWeek: 1,
+      assignmentMode: 'rotation',
+      startDate: new Date().toISOString().slice(0, 10)
+    })
+    await create('activities', {
+      floorId: newFloor.id,
+      title: 'Sacar la basura',
+      fixedKey: 'basura',
+      points: 5,
+      frequencyType: 'recurring',
+      recurrenceUnit: 'week',
+      recurrenceInterval: 1,
+      weekdays: [0, 2, 4],
+      timesPerWeek: 3,
+      assignmentMode: 'rotation',
+      startDate: new Date().toISOString().slice(0, 10)
+    })
+    await create('activities', {
+      floorId: newFloor.id,
+      title: 'Lavadora (lencería de baño)',
+      fixedKey: 'lavadora',
+      points: 10,
+      frequencyType: 'recurring',
+      recurrenceUnit: 'week',
+      recurrenceInterval: 1,
+      weekdays: [4],
+      timesPerWeek: 1,
+      assignmentMode: 'rotation',
+      startDate: new Date().toISOString().slice(0, 10)
+    })
+
     await loadProfileAndFloor(signUpData.user.id)
   }
 

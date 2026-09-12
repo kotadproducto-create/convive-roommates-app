@@ -14,41 +14,40 @@ import {
   isSameDay,
   isToday
 } from 'date-fns'
-import { TASK_TYPES, TASK_DAY_OFFSET, getWeekKey, whoIsAssigned, fixedTaskOverride } from '../lib/rotation'
-import { currentPeriodKey, isDueOnDate } from '../lib/activities'
-import { TASK_ICONS, JarIcon, CartIcon, StoreIcon, WasherIcon, SparkleIcon } from './icons'
+import { currentPeriodKey, isDueOnDate, assigneeFor, getWeekKeyOf } from '../lib/activities'
+import { JarIcon, CartIcon, StoreIcon, WasherIcon, SparkleIcon } from './icons'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { TASK_TONE_CLASSES } from './TaskCard'
+import { FIXED_ICONS } from './ActivityCard'
 
 const ACTIVITY_TONE_CLASS = 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
 
 /**
- * Calendario gráfico con vistas mes/semana/día y navegación.
- * La asignación de cada día se calcula en vivo con whoIsAssigned/getWeekKey
- * (la misma lógica real que ya usa la app) — nunca se inventan datos.
- * Solo la semana ACTUAL tiene tareas reales cargadas (tasks), así que solo
- * ahí se puede marcar/deshacer; el resto del calendario es el horario
- * previsto (quién le toca), no un historial de si se cumplió o no.
+ * Calendario gráfico con vistas mes/semana/día y navegación. Las 3
+ * tareas fijas (Compras/Basura/Lavadora, `activity.fixedKey`) y las
+ * actividades propias del piso son ahora filas de la misma tabla
+ * `activities` (ver lib/activities.js) — un solo camino de datos para
+ * ambas. Solo el período ACTUAL de cada actividad tiene una fila real
+ * en `activityCompletions` (ver `ensureActivityPeriods`), así que solo
+ * ahí hay algo que marcar/deshacer; para otras fechas se previsualiza
+ * de solo lectura quién le tocaría por rotación (`assigneeFor`), sin
+ * inventar un historial de si se cumplió o no.
  *
- * Cada día puede traer MÁS DE UN ítem (una de las 3 tareas fijas Y una o
- * más actividades propias recurrentes/de una sola vez que caigan ese
- * día — ver isDueOnDate en lib/activities.js). Por eso `dayInfo(date)`
- * devuelve una LISTA, no un solo objeto: Mes/Semana muestran el primero
- * (con un "+N" si hay más) por espacio, y Día los lista todos. Las
- * actividades propias se muestran de solo lectura acá (marcarlas hecha
- * sigue siendo cosa de Actividades) — las 3 fijas conservan su botón de
- * marcar/deshacer de siempre.
+ * Cada día puede traer MÁS DE UN ítem (varias actividades cayendo el
+ * mismo día — ver isDueOnDate en lib/activities.js). Por eso
+ * `dayInfo(date)` devuelve una LISTA, no un solo objeto: Mes/Semana
+ * muestran el primero (con un "+N" si hay más) por espacio, y Día los
+ * lista todos. Las actividades propias se muestran de solo lectura
+ * acá (marcarlas hecha sigue siendo cosa de Actividades) — las 3
+ * fijas conservan su botón de marcar/deshacer de siempre.
  */
 export default function CalendarView({
   floor,
   memberById,
-  currentWeekKey,
-  tasks,
   activities = [],
   activityCompletions = [],
-  completeTask,
-  uncompleteTask,
+  setActivityProgress,
   potContributions = [],
   shoppingPurchases = [],
   shoppingItems = [],
@@ -71,55 +70,37 @@ export default function CalendarView({
 
   function dayInfo(date) {
     const items = []
-    const dow = (date.getDay() + 6) % 7 // 0=lunes .. 6=domingo
-    const type = TASK_TYPES.find((tt) => TASK_DAY_OFFSET[tt.key] === dow)
-    if (type && floor) {
-      const wk = getWeekKey(date)
-      const isCurrentWeek = wk === currentWeekKey
-      const assignedUserId = isCurrentWeek
-        ? tasks.find((tk) => tk.type === type.key)?.assignedUserId
-        : whoIsAssigned(floor.rotationOrder, wk, type.offset)
-      const task = isCurrentWeek ? tasks.find((tk) => tk.type === type.key) : null
-      const isMine = Boolean(currentUserId) && assignedUserId === currentUserId
-      const override = fixedTaskOverride(floor, type.key)
-      items.push({
-        kind: 'fixed',
-        key: type.key,
-        type,
-        icon: TASK_ICONS[type.icon],
-        label: override?.title || t(`taskTypes.${type.key}`),
-        points: override?.points ?? type.points,
-        assignee: memberById[assignedUserId],
-        task,
-        isCurrentWeek,
-        isMine,
-        done: Boolean(task?.completed),
-        pending: isCurrentWeek && isMine && !task?.completed,
-        toneClass: TASK_TONE_CLASSES[type.key]
-      })
-    }
+    const wk = getWeekKeyOf(date)
 
     for (const activity of activities) {
       if (!isDueOnDate(activity, date)) continue
-      const period = currentPeriodKey(activity, getWeekKey(date))
+      const isFixed = Boolean(activity.fixedKey)
+      const period = currentPeriodKey(activity, wk)
       const completion = period ? activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === period) : null
-      const assignedUserId = completion?.assignedUserId || activity.assignedUserId
+      // Sin finalización (semana/día/mes que no es el período activo
+      // ahora mismo): se previsualiza igual quién le tocaría por
+      // rotación, de solo lectura — mismo espíritu que antes con
+      // whoIsAssigned para semanas fuera de la actual.
+      const assignedUserId = completion ? completion.assignedUserId : assigneeFor(activity, floor?.rotationOrder, wk)
       const isMine = Boolean(currentUserId) && assignedUserId === currentUserId
       items.push({
-        kind: 'activity',
+        kind: isFixed ? 'fixed' : 'activity',
         key: activity.id,
-        icon: SparkleIcon,
+        icon: isFixed ? FIXED_ICONS[activity.fixedKey] : SparkleIcon,
         label: activity.title,
+        points: activity.points,
         assignee: memberById[assignedUserId],
         activity,
         completion,
+        isCurrentPeriod: Boolean(completion),
         isMine,
         done: Boolean(completion?.completed),
         pending: isMine && completion && !completion.completed,
-        toneClass: ACTIVITY_TONE_CLASS
+        toneClass: isFixed ? TASK_TONE_CLASSES[activity.fixedKey] : ACTIVITY_TONE_CLASS
       })
     }
 
+    items.sort((a, b) => (a.kind === 'fixed' ? 0 : 1) - (b.kind === 'fixed' ? 0 : 1))
     return items
   }
 
@@ -181,8 +162,7 @@ export default function CalendarView({
         <DayDetail
           cursor={cursor}
           dayInfo={dayInfo}
-          completeTask={completeTask}
-          uncompleteTask={uncompleteTask}
+          setActivityProgress={setActivityProgress}
           memberById={memberById}
           potContributions={potContributions}
           shoppingPurchases={shoppingPurchases}
@@ -291,7 +271,7 @@ function WeekStrip({ cursor, dayInfo, t, dateLocale }) {
                         ? 'bg-coral-500 border-ink-900 ring-2 ring-coral-500/40'
                         : `${first.toneClass} border-transparent`
                   }`}
-                  title={`${first.label} · ${first.assignee?.name || t('calendar.unassigned')}${first.kind === 'fixed' && !first.isCurrentWeek ? t('calendar.plannedParen') : ''}${first.pending ? t('calendar.yourTurnDash') : ''}`}
+                  title={`${first.label} · ${first.assignee?.name || t('calendar.unassigned')}${first.kind === 'fixed' && !first.isCurrentPeriod ? t('calendar.plannedParen') : ''}${first.pending ? t('calendar.yourTurnDash') : ''}`}
                 >
                   {Icon && <Icon className={`w-4 h-4 ${first.done || first.pending ? 'text-white' : ''}`} />}
                 </div>
@@ -389,17 +369,21 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
   }, [cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t])
 }
 
-function DayDetail({ cursor, dayInfo, completeTask, uncompleteTask, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t }) {
+function DayDetail({ cursor, dayInfo, setActivityProgress, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t }) {
   const items = dayInfo(cursor)
   const { showToast } = useToast()
   const events = useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t)
 
   function handleToggle(item) {
-    if (item.task.completed) {
-      uncompleteTask(item.task.id)
-    } else {
-      completeTask(item.task.id)
-      showToast(t('taskCard.completedToast', { label: item.label, points: item.points }), 'success')
+    const wasCompleted = item.completion.completed
+    const delta = wasCompleted ? -1 : 1
+    setActivityProgress(item.completion, delta)
+    if (!wasCompleted) {
+      const target = item.activity?.timesPerWeek || 1
+      const timesDone = Math.min(target, Math.max(0, (item.completion.timesDone || 0) + delta))
+      if (timesDone >= target) {
+        showToast(t('taskCard.completedToast', { label: item.label, points: item.points }), 'success')
+      }
     }
   }
 
@@ -412,7 +396,7 @@ function DayDetail({ cursor, dayInfo, completeTask, uncompleteTask, memberById, 
           const Icon = item.icon
           const toneClass = item.pending ? 'bg-coral-500 text-white' : item.toneClass
           const badgeBorderClass = item.pending ? 'border-coral-600' : 'border-ink-900/70 dark:border-cream-100/30'
-          const isShopping = item.kind === 'fixed' && item.type.key === 'compras'
+          const isShopping = item.activity?.fixedKey === 'compras'
           return (
             <div
               key={item.key}
@@ -445,36 +429,30 @@ function DayDetail({ cursor, dayInfo, completeTask, uncompleteTask, memberById, 
                   ) : (
                     item.assignee?.name || t('calendar.unassigned')
                   )}
-                  {item.kind === 'fixed' && (
+                  {item.points != null && (
                     <>
                       {' '}
                       · {t('taskCard.rewards', { points: item.points })}
                     </>
                   )}
-                  {item.kind === 'fixed' && item.isCurrentWeek && item.task && (
-                    <span className={item.task.completed ? 'text-sage-500' : 'text-gold-500'}>
-                      {' '}
-                      · {item.task.completed ? t('calendar.doneStatus') : t('calendar.pendingStatus')}
-                    </span>
-                  )}
-                  {item.kind === 'activity' && item.completion && (
+                  {item.completion && (
                     <span className={item.completion.completed ? 'text-sage-500' : 'text-gold-500'}>
                       {' '}
                       · {item.completion.completed ? t('calendar.doneStatus') : t('calendar.pendingStatus')}
                     </span>
                   )}
                 </p>
-                {item.kind === 'fixed' && !item.isCurrentWeek && (
+                {!item.isCurrentPeriod && (
                   <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">{t('calendar.plannedHint')}</p>
                 )}
               </div>
-              {item.kind === 'fixed' && item.isCurrentWeek && item.task && (
+              {item.kind === 'fixed' && item.isCurrentPeriod && (
                 <button
                   type="button"
                   onClick={() => handleToggle(item)}
-                  className={item.task.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}
+                  className={item.completion.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}
                 >
-                  {item.task.completed ? t('calendar.undo') : t('calendar.markDone')}
+                  {item.completion.completed ? t('calendar.undo') : t('calendar.markDone')}
                 </button>
               )}
             </div>

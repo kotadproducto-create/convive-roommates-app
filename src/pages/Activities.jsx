@@ -1,49 +1,31 @@
 import { useMemo, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
-import TaskCard from '../components/TaskCard'
-import Avatar from '../components/Avatar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { update } from '../lib/db'
-import { TASK_TYPES, TASK_POINTS, fixedTaskOverride } from '../lib/rotation'
 import { currentPeriodKey } from '../lib/activities'
-import { SparkleIcon, EditIcon, TrashIcon, PlusIcon, MinusIcon, CloseIcon } from '../components/icons'
+import ActivityCard from '../components/ActivityCard'
+import { CloseIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict, startOfWeek, addDays } from 'date-fns'
 
 /**
- * Gestor de actividades del piso: una sola lista "Frecuentes" que junta
- * las 3 tareas fijas (Compras/Basura/Lavadora, que siguen rotando
- * automáticamente vía rotation.js) con las actividades recurrentes
- * propias, más "De una sola vez" para eventos puntuales. Las 3 fijas
- * son editables en nombre/puntos por piso (floors.fixed_task_overrides)
- * pero su rotación en sí no se toca acá. Ver DataContext.jsx
+ * Gestor de actividades del piso: una sola lista "Frecuentes" — junta
+ * las 3 fijas (Compras/Basura/Lavadora, identificadas por
+ * `activity.fixedKey`, no borrables) con las actividades recurrentes
+ * propias, porque ambas son filas de la misma tabla `activities` — más
+ * "De una sola vez" para eventos puntuales. Ver DataContext.jsx
  * (activities/activityCompletions/addActivity/...) y lib/activities.js
- * para el modelo de datos de las actividades propias.
+ * para el modelo de datos.
  */
 export default function Activities() {
-  const { user } = useAuth()
-  const {
-    floor,
-    members,
-    tasks,
-    weekKey,
-    completeTask,
-    uncompleteTask,
-    activities,
-    activityCompletions,
-    addActivity,
-    updateActivity,
-    removeActivity,
-    setActivityProgress
-  } = useData()
+  const { members, activities, activityCompletions, weekKey, addActivity, updateActivity, removeActivity, setActivityProgress } = useData()
   const { showToast } = useToast()
   const { t, dateLocale } = useLanguage()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [editingFixedTask, setEditingFixedTask] = useState(null)
 
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]))
   const recurringActivities = activities.filter((a) => a.frequencyType === 'recurring')
@@ -67,12 +49,26 @@ export default function Activities() {
     showToast(t('activities.deletedToast'), 'default')
   }
 
-  async function handleFixedTaskOverrideSave(key, patch) {
-    await update('floors', floor.id, {
-      fixedTaskOverrides: { ...(floor.fixedTaskOverrides || {}), [key]: patch }
-    })
-    showToast(t('activities.updatedToast'), 'success')
-    setEditingFixedTask(null)
+  function renderCard(activity, i) {
+    const periodKey = currentPeriodKey(activity, weekKey)
+    const completion = periodKey ? activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === periodKey) : null
+    return (
+      <Reveal key={activity.id} delay={i * 40}>
+        <ActivityCard
+          activity={activity}
+          completion={completion}
+          memberById={memberById}
+          onEdit={() => {
+            setEditing(activity)
+            setShowForm(false)
+          }}
+          onDelete={() => handleDelete(activity)}
+          onProgress={(delta) => completion && setActivityProgress(completion, delta)}
+          t={t}
+          dateLocale={dateLocale}
+        />
+      </Reveal>
+    )
   }
 
   return (
@@ -111,64 +107,10 @@ export default function Activities() {
 
       <section className="mb-6">
         <h3 className="font-display font-semibold mb-3">{t('activities.frequentTitle')}</h3>
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {tasks.map((task) => {
-            const override = fixedTaskOverride(floor, task.type)
-            const typeInfo = TASK_TYPES.find((tt) => tt.key === task.type)
-            return (
-              <Reveal key={task.id}>
-                {editingFixedTask === task.type ? (
-                  <FixedTaskEditForm
-                    taskKey={task.type}
-                    initial={{
-                      title: override?.title || t(`taskTypes.${task.type}`),
-                      points: override?.points ?? TASK_POINTS[task.type]
-                    }}
-                    onCancel={() => setEditingFixedTask(null)}
-                    onSubmit={(patch) => handleFixedTaskOverrideSave(task.type, patch)}
-                    t={t}
-                  />
-                ) : (
-                  <TaskCard
-                    task={task}
-                    typeInfo={typeInfo}
-                    overrideLabel={override?.title}
-                    overridePoints={override?.points}
-                    assignee={memberById[task.assignedUserId]}
-                    currentUserId={user?.id}
-                    onToggle={(id, undo) => (undo ? uncompleteTask(id) : completeTask(id))}
-                    onEdit={() => setEditingFixedTask(task.type)}
-                  />
-                )}
-              </Reveal>
-            )
-          })}
-          {recurringActivities.map((activity, i) => {
-            const periodKey = currentPeriodKey(activity, weekKey)
-            const completion = periodKey
-              ? activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === periodKey)
-              : null
-            return (
-              <Reveal key={activity.id} delay={i * 40}>
-                <ActivityCard
-                  activity={activity}
-                  completion={completion}
-                  memberById={memberById}
-                  onEdit={() => {
-                    setEditing(activity)
-                    setShowForm(false)
-                  }}
-                  onDelete={() => handleDelete(activity)}
-                  onProgress={(delta) => completion && setActivityProgress(completion, delta)}
-                  t={t}
-                  dateLocale={dateLocale}
-                />
-              </Reveal>
-            )
-          })}
-        </div>
-        {tasks.length === 0 && recurringActivities.length === 0 && (
+        {recurringActivities.length === 0 ? (
           <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('activities.empty')}</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">{recurringActivities.map(renderCard)}</div>
         )}
       </section>
 
@@ -177,29 +119,7 @@ export default function Activities() {
         {oneTimeActivities.length === 0 ? (
           <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('activities.emptyOnce')}</p>
         ) : (
-          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {oneTimeActivities.map((activity, i) => {
-              const periodKey = currentPeriodKey(activity, weekKey)
-              const completion = activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === periodKey)
-              return (
-                <Reveal key={activity.id} delay={i * 40}>
-                  <ActivityCard
-                    activity={activity}
-                    completion={completion}
-                    memberById={memberById}
-                    onEdit={() => {
-                      setEditing(activity)
-                      setShowForm(false)
-                    }}
-                    onDelete={() => handleDelete(activity)}
-                    onProgress={(delta) => completion && setActivityProgress(completion, delta)}
-                    t={t}
-                    dateLocale={dateLocale}
-                  />
-                </Reveal>
-              )
-            })}
-          </div>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">{oneTimeActivities.map(renderCard)}</div>
         )}
       </section>
     </AppLayout>
@@ -286,169 +206,43 @@ function GroupNoteCard({ floor, memberById, t, dateLocale }) {
   )
 }
 
-/** Mini-form para renombrar/ajustar los puntos de una de las 3 tareas
- * fijas, sin tocar su rotación (offset/día/turno siguen igual). */
-function FixedTaskEditForm({ taskKey, initial, onCancel, onSubmit, t }) {
-  const [title, setTitle] = useState(initial.title)
-  const [points, setPoints] = useState(initial.points)
-  const [saving, setSaving] = useState(false)
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!title.trim()) return
-    setSaving(true)
-    try {
-      await onSubmit({ title: title.trim(), points: Number(points) || 0 })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="card p-4 flex flex-col gap-3">
-      <p className="font-display font-semibold text-sm">{t('activities.editFixedTaskTitle', { title: initial.title })}</p>
-      <label className="text-sm">
-        {t('activities.fixedTaskNameLabel')}
-        <input className="input mt-1" value={title} onChange={(e) => setTitle(e.target.value)} required />
-      </label>
-      <label className="text-sm">
-        {t('activities.fixedTaskPointsLabel')}
-        <input type="number" min="0" className="input mt-1" value={points} onChange={(e) => setPoints(e.target.value)} required />
-      </label>
-      <div className="flex gap-2">
-        <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel}>
-          {t('activities.cancel')}
-        </button>
-        <button className="btn-primary text-sm flex-1" type="submit" disabled={saving}>
-          {saving ? t('activities.saving') : t('activities.saveChanges')}
-        </button>
-      </div>
-    </form>
-  )
-}
-
-function describeFrequency(activity, t, dateLocale) {
-  if (activity.frequencyType === 'once') {
-    return activity.specificDate
-      ? t('activities.frequencyOnceDate', { date: format(new Date(`${activity.specificDate}T00:00:00`), t('calendar.dayMonthFormat'), { locale: dateLocale }) })
-      : t('activities.frequencyOnce')
-  }
-  const interval = activity.recurrenceInterval || 1
-  const parts = []
-  if (activity.recurrenceUnit === 'month') {
-    parts.push(interval > 1 ? t('activities.recurEveryNMonths', { n: interval }) : t('activities.recurEveryMonth'))
-  } else {
-    parts.push(interval > 1 ? t('activities.recurEveryNWeeks', { n: interval }) : t('activities.recurEveryWeek'))
-    if (activity.weekdays?.length) {
-      const start = startOfWeek(new Date(), { weekStartsOn: 1 })
-      const labels = activity.weekdays
-        .slice()
-        .sort((a, b) => a - b)
-        .map((d) => format(addDays(start, d), 'EEEEE', { locale: dateLocale }))
-      parts.push(labels.join(' '))
-    }
-  }
-  if (activity.untilDate) {
-    parts.push(t('activities.untilLabel', { date: format(new Date(`${activity.untilDate}T00:00:00`), t('calendar.dayMonthFormat'), { locale: dateLocale }) }))
-  }
-  return parts.join(' · ')
-}
-
-function ActivityCard({ activity, completion, memberById, onEdit, onDelete, onProgress, t, dateLocale }) {
-  const assignee = memberById[completion?.assignedUserId || activity.assignedUserId]
-  const target = activity.timesPerWeek || 1
-  const timesDone = completion?.timesDone || 0
-  const isDone = completion?.completed || false
-  const isStepper = activity.frequencyType === 'recurring' && activity.recurrenceUnit === 'week' && target > 1
-  const notThisPeriod = activity.frequencyType === 'recurring' && !completion
-
-  return (
-    <div className={`card p-4 flex flex-col gap-3 ${isDone || notThisPeriod ? 'opacity-70' : ''}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center shrink-0">
-            <SparkleIcon className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-display font-semibold truncate">{activity.title}</p>
-            <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{describeFrequency(activity, t, dateLocale)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={onEdit}
-            title={t('activities.edit')}
-            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
-          >
-            <EditIcon className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            title={t('activities.delete')}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-clay-500 hover:bg-clay-100 dark:hover:bg-clay-500/15"
-          >
-            <TrashIcon className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {notThisPeriod ? (
-        <p className="text-xs text-ink-900/40 dark:text-cream-100/40">{t('activities.notThisPeriod')}</p>
-      ) : (
-        <>
-          <div className="flex items-center gap-2">
-            <Avatar url={assignee?.avatarUrl} name={assignee?.name} size="w-7 h-7" textSize="text-xs" />
-            <span className="text-sm font-medium truncate">{assignee ? assignee.name : t('activities.unassigned')}</span>
-            {activity.assignmentMode === 'rotation' && activity.frequencyType !== 'once' && (
-              <span className="text-[10px] text-ink-900/40 dark:text-cream-100/40 shrink-0">{t('activities.rotationTag')}</span>
-            )}
-          </div>
-
-          {isStepper ? (
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold">{t('activities.stepProgress', { done: timesDone, target })}</span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onProgress(-1)}
-                  disabled={timesDone <= 0}
-                  className="w-7 h-7 rounded-lg border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center disabled:opacity-40"
-                >
-                  <MinusIcon className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onProgress(1)}
-                  disabled={timesDone >= target}
-                  className="w-7 h-7 rounded-lg border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center disabled:opacity-40"
-                >
-                  <PlusIcon className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ) : isDone ? (
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-sage-500">{t('activities.completed')}</p>
-              <button type="button" onClick={() => onProgress(-1)} className="text-xs text-ink-900/40 dark:text-cream-100/40 hover:underline">
-                {t('activities.undo')}
-              </button>
-            </div>
-          ) : (
-            <button type="button" className="btn-primary text-sm w-full" onClick={() => onProgress(1)}>
-              {t('activities.markDone')}
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
 const WEEKDAY_KEYS = [0, 1, 2, 3, 4, 5, 6] // 0=lunes..6=domingo
 
-function RecurrenceEditor({ recurrenceUnit, setRecurrenceUnit, recurrenceInterval, setRecurrenceInterval, weekdays, toggleWeekday, untilDate, setUntilDate, t, dateLocale }) {
+// Presets de frecuencia: cada uno fija unidad+intervalo por debajo —
+// "Otra" es la única que deja tocar esos dos valores a mano.
+const PRESETS = ['daily', 'weekly', 'biweekly', 'monthly', 'other']
+const PRESET_RECURRENCE = {
+  daily: { unit: 'day', interval: 1 },
+  weekly: { unit: 'week', interval: 1 },
+  biweekly: { unit: 'week', interval: 2 },
+  monthly: { unit: 'month', interval: 1 }
+}
+function presetFromRecurrence(unit, interval) {
+  const match = Object.entries(PRESET_RECURRENCE).find(([, v]) => v.unit === unit && v.interval === interval)
+  return match ? match[0] : 'other'
+}
+const PRESET_LABEL_KEYS = {
+  daily: 'activities.dailyOption',
+  weekly: 'activities.weeklyOption',
+  biweekly: 'activities.biweeklyOption',
+  monthly: 'activities.monthlyOption',
+  other: 'activities.otherOption'
+}
+
+function RecurrenceEditor({
+  preset,
+  onSelectPreset,
+  recurrenceUnit,
+  setRecurrenceUnit,
+  recurrenceInterval,
+  setRecurrenceInterval,
+  weekdays,
+  toggleWeekday,
+  untilDate,
+  setUntilDate,
+  t,
+  dateLocale
+}) {
   const weekStart = useMemo(() => startOfWeek(new Date(), { weekStartsOn: 1 }), [])
   const weekdayLabels = useMemo(
     () => WEEKDAY_KEYS.map((d) => format(addDays(weekStart, d), 'EEEEE', { locale: dateLocale })),
@@ -457,21 +251,41 @@ function RecurrenceEditor({ recurrenceUnit, setRecurrenceUnit, recurrenceInterva
 
   return (
     <div className="flex flex-col gap-3 p-3 rounded-xl bg-cream-100 dark:bg-ink-700">
-      <div className="flex items-center gap-2">
-        <span className="text-sm shrink-0">{t('activities.repeatEvery')}</span>
-        <input
-          type="number"
-          min="1"
-          max="52"
-          className="input w-16 text-center"
-          value={recurrenceInterval}
-          onChange={(e) => setRecurrenceInterval(e.target.value)}
-        />
-        <select className="input flex-1" value={recurrenceUnit} onChange={(e) => setRecurrenceUnit(e.target.value)}>
-          <option value="week">{t('activities.unitWeeksOption')}</option>
-          <option value="month">{t('activities.unitMonthsOption')}</option>
-        </select>
+      <div className="flex flex-wrap gap-1.5">
+        {PRESETS.map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onSelectPreset(key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border-2 ${
+              preset === key
+                ? 'bg-violet-500 border-violet-500 text-white'
+                : 'border-ink-900/20 dark:border-cream-100/20 text-ink-900/60 dark:text-cream-100/60'
+            }`}
+          >
+            {t(PRESET_LABEL_KEYS[key])}
+          </button>
+        ))}
       </div>
+
+      {preset === 'other' && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm shrink-0">{t('activities.repeatEvery')}</span>
+          <input
+            type="number"
+            min="1"
+            max="52"
+            className="input w-16 text-center"
+            value={recurrenceInterval}
+            onChange={(e) => setRecurrenceInterval(e.target.value)}
+          />
+          <select className="input flex-1" value={recurrenceUnit} onChange={(e) => setRecurrenceUnit(e.target.value)}>
+            <option value="day">{t('activities.unitDaysOption')}</option>
+            <option value="week">{t('activities.unitWeeksOption')}</option>
+            <option value="month">{t('activities.unitMonthsOption')}</option>
+          </select>
+        </div>
+      )}
 
       {recurrenceUnit === 'week' && (
         <div>
@@ -522,6 +336,7 @@ function ActivityForm({ initial, members, onCancel, onSubmit, t, dateLocale }) {
   const [frequencyType, setFrequencyType] = useState(initial?.frequencyType || 'recurring')
   const [recurrenceUnit, setRecurrenceUnit] = useState(initial?.recurrenceUnit || 'week')
   const [recurrenceInterval, setRecurrenceInterval] = useState(initial?.recurrenceInterval || 1)
+  const [preset, setPreset] = useState(() => presetFromRecurrence(initial?.recurrenceUnit || 'week', initial?.recurrenceInterval || 1))
   const [weekdays, setWeekdays] = useState(initial?.weekdays || [])
   const [untilDate, setUntilDate] = useState(initial?.untilDate || '')
   const [specificDate, setSpecificDate] = useState(initial?.specificDate || '')
@@ -529,7 +344,16 @@ function ActivityForm({ initial, members, onCancel, onSubmit, t, dateLocale }) {
   const [assignedUserId, setAssignedUserId] = useState(initial?.assignedUserId || '')
   const [submitting, setSubmitting] = useState(false)
 
+  const isFixed = Boolean(initial?.fixedKey)
   const needsPerson = frequencyType === 'once' || assignmentMode === 'manual'
+
+  function selectPreset(key) {
+    setPreset(key)
+    if (key !== 'other') {
+      setRecurrenceUnit(PRESET_RECURRENCE[key].unit)
+      setRecurrenceInterval(PRESET_RECURRENCE[key].interval)
+    }
+  }
 
   function toggleWeekday(d) {
     setWeekdays((ws) => (ws.includes(d) ? ws.filter((x) => x !== d) : [...ws, d].sort((a, b) => a - b)))
@@ -539,11 +363,12 @@ function ActivityForm({ initial, members, onCancel, onSubmit, t, dateLocale }) {
     e.preventDefault()
     if (!title.trim()) return
     if (frequencyType === 'once' && !specificDate) return
-    if (needsPerson && !assignedUserId) return
     setSubmitting(true)
     try {
       await onSubmit({
         title: title.trim(),
+        fixedKey: initial?.fixedKey || null,
+        points: initial?.points ?? null,
         frequencyType,
         recurrenceUnit: frequencyType === 'recurring' ? recurrenceUnit : null,
         recurrenceInterval: Number(recurrenceInterval) || 1,
@@ -570,28 +395,32 @@ function ActivityForm({ initial, members, onCancel, onSubmit, t, dateLocale }) {
         required
       />
 
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1.5">{t('activities.frequencyLabel')}</p>
-        <div className="flex bg-cream-200 dark:bg-ink-700 rounded-xl p-1 text-sm font-semibold">
-          <button
-            type="button"
-            onClick={() => setFrequencyType('recurring')}
-            className={`flex-1 py-1.5 rounded-lg ${frequencyType === 'recurring' ? 'bg-white dark:bg-ink-800 shadow-sm' : ''}`}
-          >
-            {t('activities.freqCustomOption')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setFrequencyType('once')}
-            className={`flex-1 py-1.5 rounded-lg ${frequencyType === 'once' ? 'bg-white dark:bg-ink-800 shadow-sm' : ''}`}
-          >
-            {t('activities.freqOnceOption')}
-          </button>
+      {!isFixed && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1.5">{t('activities.frequencyLabel')}</p>
+          <div className="flex bg-cream-200 dark:bg-ink-700 rounded-xl p-1 text-sm font-semibold">
+            <button
+              type="button"
+              onClick={() => setFrequencyType('recurring')}
+              className={`flex-1 py-1.5 rounded-lg ${frequencyType === 'recurring' ? 'bg-white dark:bg-ink-800 shadow-sm' : ''}`}
+            >
+              {t('activities.freqCustomOption')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFrequencyType('once')}
+              className={`flex-1 py-1.5 rounded-lg ${frequencyType === 'once' ? 'bg-white dark:bg-ink-800 shadow-sm' : ''}`}
+            >
+              {t('activities.freqOnceOption')}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {frequencyType === 'recurring' && (
         <RecurrenceEditor
+          preset={preset}
+          onSelectPreset={selectPreset}
           recurrenceUnit={recurrenceUnit}
           setRecurrenceUnit={setRecurrenceUnit}
           recurrenceInterval={recurrenceInterval}
@@ -612,7 +441,7 @@ function ActivityForm({ initial, members, onCancel, onSubmit, t, dateLocale }) {
         </label>
       )}
 
-      {frequencyType !== 'once' && (
+      {frequencyType !== 'once' && !isFixed && (
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1.5">{t('activities.assignmentLabel')}</p>
           <div className="flex bg-cream-200 dark:bg-ink-700 rounded-xl p-1 text-sm font-semibold">
@@ -637,8 +466,8 @@ function ActivityForm({ initial, members, onCancel, onSubmit, t, dateLocale }) {
       {needsPerson && (
         <label className="text-sm">
           {frequencyType === 'once' ? t('activities.whoDoesIt') : t('activities.responsiblePerson')}
-          <select className="input mt-1" value={assignedUserId} onChange={(e) => setAssignedUserId(e.target.value)} required>
-            <option value="">{t('activities.choosePerson')}</option>
+          <select className="input mt-1" value={assignedUserId} onChange={(e) => setAssignedUserId(e.target.value)}>
+            <option value="">{t('activities.everyone')}</option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
