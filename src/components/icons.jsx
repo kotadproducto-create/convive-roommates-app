@@ -350,6 +350,25 @@ export function GearIcon(props) {
   )
 }
 
+export function MailIcon(props) {
+  return (
+    <IconBase {...props}>
+      <rect x="2.5" y="4.5" width="15" height="11" rx="1.8" />
+      <path d="M3 5.5l7 5.5 7-5.5" />
+    </IconBase>
+  )
+}
+
+export function InfoIcon(props) {
+  return (
+    <IconBase {...props}>
+      <circle cx="10" cy="10" r="7.2" />
+      <circle cx="10" cy="6.6" r="0.15" fill="currentColor" stroke="currentColor" strokeWidth="2.2" />
+      <path d="M10 9.4v4.4" />
+    </IconBase>
+  )
+}
+
 export const TASK_ICONS = {
   cart: CartIcon,
   trash: TrashIcon,

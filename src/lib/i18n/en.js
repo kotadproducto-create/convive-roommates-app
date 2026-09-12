@@ -315,6 +315,9 @@ export default {
     interestsPlaceholder: 'E.g. Music, film, sports',
     occupation: 'What you do',
     occupationPlaceholder: 'E.g. Student, architect, designer',
+    allergies: 'Allergies / dietary restrictions',
+    allergiesPlaceholder: 'E.g. Nut allergy, lactose intolerance',
+    allergiesHint: "Visible to your roommates — this is safety info, it can't be hidden.",
     bio: 'Bio',
     bioPlaceholder: 'Tell your roommates something about you',
     saving: 'Saving…',
@@ -324,6 +327,12 @@ export default {
     accountTitle: 'Account',
     accountSubtitle: "This info is private — only you can see it.",
     email: 'Email',
+    changeEmailTitle: 'Change email',
+    newEmailPlaceholder: 'New email',
+    updateEmailButton: 'Update email',
+    updatingEmail: 'Updating…',
+    emailUpdateRequestedToast: 'We sent a confirmation email to the new address. Confirm it there to complete the change.',
+    emailUpdateErrorToast: "Couldn't update the email: {{error}}",
     inFloorSince: 'In {{floorName}} since',
     longDateFormat: 'MMMM d, yyyy',
     floorHistoryTitle: 'Flat history',
@@ -678,6 +687,45 @@ export default {
     saving: 'Saving…',
     finish: 'Finish',
     next: 'Next'
+  },
+  ajustes: {
+    title: 'Settings',
+    notificationsTitle: 'Notifications',
+    dangerZoneTitle: 'Danger zone',
+    deleteAccountTitle: 'Delete account',
+    deleteAccountBody:
+      "This blocks your access for good. Your profile gets anonymized, but the flat's shared history (chores, pot, redemptions) stays for your roommates.",
+    deleteAccountConfirmPasswordPlaceholder: 'Confirm your password',
+    deleteAccountButton: 'Delete my account',
+    deleteAccountConfirmDialog: 'Are you sure you want to delete your account? This cannot be undone.',
+    deletingAccount: 'Deleting…',
+    deleteAccountErrorToast: "Couldn't delete the account: {{error}}",
+    deletedAccountName: 'Deleted account',
+    aboutTitle: 'About',
+    appVersion: 'Version {{version}}',
+    helpSupport: 'Help & support',
+    termsLink: 'Terms & conditions',
+    privacyLink: 'Privacy policy'
+  },
+  legal: {
+    draftNotice: 'Draft — review and replace this text before sharing the app outside your trusted group.',
+    back: '‹ Back to Settings',
+    termsTitle: 'Terms & conditions',
+    termsBody: [
+      'Convive is an app for organizing a shared flat: chores, shopping, the money pot, notices, and rewards among people who already live together.',
+      'By using it, you agree to use it in good faith with your roommates: the information you enter (completed chores, pot contributions, notices) is visible to the other active members of your flat.',
+      "The pot's amounts are a shared record, not a payment gateway — the app doesn't transfer real money between people.",
+      'You can leave a flat or delete your account at any time from Settings.',
+      'This app is provided "as is", with no warranties, for use within a trusted group.'
+    ],
+    privacyTitle: 'Privacy policy',
+    privacyBody: [
+      'We store the data you enter so the app works: your profile (name, nickname, age, phone, allergies, etc.), the flat\'s chores and activities, pot movements, and any notices you post.',
+      "Fields marked as private (age, phone, occupation) are only shown to whoever you choose — the rest of the flat's information is visible to the other active members, since it's shared by nature.",
+      "We don't sell or share your data with third parties for advertising purposes.",
+      'If you delete your account, your profile is anonymized (personal data is cleared) and your access is blocked for good; the flat\'s shared history stays for your former roommates.',
+      'For any question about your data, write to the Help & support address in Settings.'
+    ]
   },
   mascot: {
     ariaLabel: 'Convive mascot: a key'

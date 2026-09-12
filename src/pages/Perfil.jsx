@@ -4,19 +4,20 @@ import Reveal from '../components/Reveal'
 import Avatar from '../components/Avatar'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
-import { useTheme } from '../context/ThemeContext'
-import { usePush } from '../context/PushContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { getFloorHistory } from '../lib/db'
 import { getMemberColor } from '../lib/roomieColors'
-import { CameraIcon, LockIcon, MoonIcon, SunIcon, AlertIcon, BellIcon } from '../components/icons'
+import { CameraIcon, AlertIcon, MailIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict } from 'date-fns'
 
-const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/
-
+/**
+ * Perfil: identidad — quién sos y cómo te ven tus compañeros de piso.
+ * Todo lo de "cómo funciona la app para vos" (tema, idioma,
+ * notificaciones, contraseña, eliminar cuenta) vive en Ajustes.jsx.
+ */
 export default function Perfil() {
-  const { user, email, membership, floor, changePassword, logout, refresh } = useAuth()
+  const { user, email, membership, floor, updateEmail, refresh } = useAuth()
   const {
     updateProfile,
     removeMember,
@@ -32,15 +33,6 @@ export default function Perfil() {
   } = useData()
   const { showToast } = useToast()
   const { t, dateLocale } = useLanguage()
-
-  // React Router no hace scroll nativo a #anclas (eso solo pasa en
-  // navegación de página completa) — el menú de Ajustes enlaza a
-  // /perfil#preferencias, así que hay que moverlo a mano.
-  useEffect(() => {
-    if (!window.location.hash) return
-    const el = document.getElementById(window.location.hash.slice(1))
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
 
   if (!user) return null
 
@@ -68,7 +60,16 @@ export default function Perfil() {
           <PersonalInfoCard user={user} updateProfile={updateProfile} showToast={showToast} onSaved={refresh} t={t} />
         </Reveal>
         <Reveal delay={120}>
-          <AccountCard user={user} email={email} membership={membership} floor={floor} t={t} dateLocale={dateLocale} />
+          <AccountCard
+            user={user}
+            email={email}
+            membership={membership}
+            floor={floor}
+            updateEmail={updateEmail}
+            showToast={showToast}
+            t={t}
+            dateLocale={dateLocale}
+          />
         </Reveal>
         <Reveal delay={150}>
           <RoomPartnerCard
@@ -84,21 +85,6 @@ export default function Perfil() {
             showToast={showToast}
             t={t}
           />
-        </Reveal>
-        <Reveal delay={180}>
-          <SecurityCard
-            changePassword={changePassword}
-            logout={logout}
-            removeMember={removeMember}
-            membership={membership}
-            userId={user.id}
-            floorName={floor?.name}
-            showToast={showToast}
-            t={t}
-          />
-        </Reveal>
-        <Reveal delay={220}>
-          <PreferencesCard t={t} />
         </Reveal>
       </div>
     </AppLayout>
@@ -218,6 +204,7 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved, t }) {
   const [interests, setInterests] = useState(user.interests || '')
   const [occupation, setOccupation] = useState(user.occupation || '')
   const [occupationPublic, setOccupationPublic] = useState(user.occupationPublic !== false)
+  const [allergies, setAllergies] = useState(user.allergies || '')
   const [bio, setBio] = useState(user.presentationMessage || '')
   const [saving, setSaving] = useState(false)
   const [color, setColor] = useState(getMemberColor(user))
@@ -253,6 +240,7 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved, t }) {
         interests: interests.trim() || null,
         occupation: occupation.trim() || null,
         occupationPublic,
+        allergies: allergies.trim() || null,
         presentationMessage: bio.trim() || null
       })
       await onSaved()
@@ -345,6 +333,19 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved, t }) {
         </label>
       </div>
 
+      <div>
+        <label className="text-sm block">
+          {t('perfil.allergies')}
+          <input
+            className="input mt-1"
+            value={allergies}
+            onChange={(e) => setAllergies(e.target.value)}
+            placeholder={t('perfil.allergiesPlaceholder')}
+          />
+        </label>
+        <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mt-1.5">{t('perfil.allergiesHint')}</p>
+      </div>
+
       <label className="text-sm">
         {t('perfil.bio')}
         <textarea
@@ -364,8 +365,10 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved, t }) {
   )
 }
 
-function AccountCard({ user, email, membership, floor, t, dateLocale }) {
+function AccountCard({ user, email, membership, floor, updateEmail, showToast, t, dateLocale }) {
   const [history, setHistory] = useState(null)
+  const [newEmail, setNewEmail] = useState('')
+  const [updatingEmail, setUpdatingEmail] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -376,6 +379,21 @@ function AccountCard({ user, email, membership, floor, t, dateLocale }) {
       cancelled = true
     }
   }, [user.id])
+
+  async function handleUpdateEmail(e) {
+    e.preventDefault()
+    if (!newEmail.trim()) return
+    setUpdatingEmail(true)
+    try {
+      await updateEmail(newEmail.trim())
+      showToast(t('perfil.emailUpdateRequestedToast'), 'success')
+      setNewEmail('')
+    } catch (err) {
+      showToast(t('perfil.emailUpdateErrorToast', { error: err.message }), 'default')
+    } finally {
+      setUpdatingEmail(false)
+    }
+  }
 
   return (
     <div className="card p-5">
@@ -394,6 +412,25 @@ function AccountCard({ user, email, membership, floor, t, dateLocale }) {
           </div>
         )}
       </dl>
+
+      <form onSubmit={handleUpdateEmail} className="flex flex-col gap-2 mb-4 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
+        <p className="text-sm font-medium flex items-center gap-1.5">
+          <MailIcon className="w-4 h-4 shrink-0" />
+          {t('perfil.changeEmailTitle')}
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="email"
+            className="input text-sm flex-1"
+            placeholder={t('perfil.newEmailPlaceholder')}
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+          />
+          <button type="submit" className="btn-secondary text-sm shrink-0" disabled={updatingEmail || !newEmail.trim()}>
+            {updatingEmail ? t('perfil.updatingEmail') : t('perfil.updateEmailButton')}
+          </button>
+        </div>
+      </form>
 
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mb-2">{t('perfil.floorHistoryTitle')}</p>
       {history === null ? (
@@ -535,144 +572,6 @@ function RoomPartnerCard({
             {t('perfil.addSomeone')}
           </button>
         ))}
-    </div>
-  )
-}
-
-function SecurityCard({ changePassword, logout, removeMember, membership, userId, floorName, showToast, t }) {
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [changingPassword, setChangingPassword] = useState(false)
-  const [passwordError, setPasswordError] = useState('')
-
-  async function handleChangePassword(e) {
-    e.preventDefault()
-    setPasswordError('')
-    if (!PASSWORD_RULE.test(newPassword)) {
-      setPasswordError(t('perfil.passwordRuleError'))
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError(t('perfil.passwordMismatch'))
-      return
-    }
-    setChangingPassword(true)
-    try {
-      await changePassword(currentPassword, newPassword)
-      showToast(t('perfil.passwordUpdatedToast'), 'success')
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-    } catch (err) {
-      setPasswordError(err.message)
-    } finally {
-      setChangingPassword(false)
-    }
-  }
-
-  function handleLeaveFloor() {
-    if (!membership) return
-    if (confirm(t('perfil.leaveFloorConfirm', { floorName }))) {
-      removeMember(membership.id, userId)
-    }
-  }
-
-  return (
-    <div className="card p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <LockIcon className="w-4 h-4 text-ink-900/50 dark:text-cream-100/50" />
-        <h2 className="font-display font-semibold">{t('perfil.securityTitle')}</h2>
-      </div>
-
-      <form onSubmit={handleChangePassword} className="flex flex-col gap-3 mb-5">
-        <p className="text-sm font-medium">{t('perfil.changePasswordTitle')}</p>
-        <input
-          type="password"
-          className="input"
-          placeholder={t('perfil.currentPasswordPlaceholder')}
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          className="input"
-          placeholder={t('perfil.newPasswordPlaceholder')}
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          className="input"
-          placeholder={t('perfil.confirmPasswordPlaceholder')}
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          required
-        />
-        <p className="text-xs text-ink-900/40 dark:text-cream-100/40">{t('perfil.passwordHint')}</p>
-        {passwordError && <p className="text-sm font-medium text-clay-500">{passwordError}</p>}
-        <button className="btn-secondary text-sm self-start" type="submit" disabled={changingPassword}>
-          {changingPassword ? t('perfil.updatingPassword') : t('perfil.updatePassword')}
-        </button>
-      </form>
-
-      <div className="flex flex-wrap gap-2 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
-        <button type="button" className="btn-secondary text-sm" onClick={logout}>
-          {t('perfil.logout')}
-        </button>
-        {membership && (
-          <button type="button" className="btn-danger text-sm" onClick={handleLeaveFloor}>
-            {t('perfil.leaveFloor')}
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PreferencesCard({ t }) {
-  const { theme, toggleTheme } = useTheme()
-  const { supported, subscribed, needsInstall, optIn, optOut } = usePush()
-  const currentThemeLabel = theme === 'light' ? t('perfil.lightTheme') : t('perfil.darkTheme')
-  const targetThemeLabel = theme === 'light' ? t('perfil.darkTheme') : t('perfil.lightTheme')
-
-  return (
-    <div id="preferencias" className="card p-5 scroll-mt-24">
-      <h2 className="font-display font-semibold mb-3">{t('perfil.preferencesTitle')}</h2>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm">
-          {theme === 'light' ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
-          {t('perfil.themeLabel', { theme: currentThemeLabel })}
-        </div>
-        <button type="button" className="btn-secondary text-sm" onClick={toggleTheme}>
-          {t('perfil.switchTo', { theme: targetThemeLabel })}
-        </button>
-      </div>
-
-      {(supported || needsInstall) && (
-        <div className="mt-4 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
-          {supported && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm">
-                <BellIcon className="w-4 h-4" />
-                {t('perfil.pushLabel', { status: subscribed ? t('perfil.pushOn') : t('perfil.pushOff') })}
-              </div>
-              <button type="button" className="btn-secondary text-sm" onClick={subscribed ? optOut : optIn}>
-                {subscribed ? t('perfil.deactivate') : t('perfil.activate')}
-              </button>
-            </div>
-          )}
-          {!supported && needsInstall && (
-            <div className="flex items-center gap-2 text-sm">
-              <BellIcon className="w-4 h-4" />
-              {t('perfil.pushNotifications')}
-            </div>
-          )}
-          {needsInstall && <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mt-2">{t('perfil.iosHint')}</p>}
-        </div>
-      )}
     </div>
   )
 }

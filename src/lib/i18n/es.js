@@ -316,6 +316,9 @@ export default {
     interestsPlaceholder: 'Ej. Música, cine, deporte',
     occupation: 'A qué te dedicas',
     occupationPlaceholder: 'Ej. Estudiante, arquitecta, diseñador',
+    allergies: 'Alergias / restricciones alimentarias',
+    allergiesPlaceholder: 'Ej. Alergia a los frutos secos, intolerancia a la lactosa',
+    allergiesHint: 'Visible para tus compañeros de piso — es información de seguridad, no se puede ocultar.',
     bio: 'Biografía',
     bioPlaceholder: 'Cuéntale algo de ti a tus roommates',
     saving: 'Guardando…',
@@ -325,6 +328,12 @@ export default {
     accountTitle: 'Cuenta',
     accountSubtitle: 'Esta información es privada, solo tú la ves.',
     email: 'Correo electrónico',
+    changeEmailTitle: 'Cambiar correo electrónico',
+    newEmailPlaceholder: 'Nuevo correo electrónico',
+    updateEmailButton: 'Actualizar correo',
+    updatingEmail: 'Actualizando…',
+    emailUpdateRequestedToast: 'Te enviamos un correo de confirmación a la nueva dirección. Confirma desde ahí para completar el cambio.',
+    emailUpdateErrorToast: 'No se pudo actualizar el correo: {{error}}',
     inFloorSince: 'En {{floorName}} desde',
     longDateFormat: "d 'de' MMMM 'de' yyyy",
     floorHistoryTitle: 'Historial de pisos',
@@ -680,6 +689,45 @@ export default {
     saving: 'Guardando…',
     finish: 'Terminar',
     next: 'Siguiente'
+  },
+  ajustes: {
+    title: 'Configuraciones',
+    notificationsTitle: 'Notificaciones',
+    dangerZoneTitle: 'Zona de peligro',
+    deleteAccountTitle: 'Eliminar cuenta',
+    deleteAccountBody:
+      'Esto bloquea tu acceso para siempre. Tu perfil se anonimiza, pero el historial compartido del piso (tareas, pote, canjes) se conserva para tus compañeros.',
+    deleteAccountConfirmPasswordPlaceholder: 'Confirma tu contraseña',
+    deleteAccountButton: 'Eliminar mi cuenta',
+    deleteAccountConfirmDialog: '¿Seguro que quieres eliminar tu cuenta? Esta acción no se puede deshacer.',
+    deletingAccount: 'Eliminando…',
+    deleteAccountErrorToast: 'No se pudo eliminar la cuenta: {{error}}',
+    deletedAccountName: 'Cuenta eliminada',
+    aboutTitle: 'Acerca de',
+    appVersion: 'Versión {{version}}',
+    helpSupport: 'Ayuda y soporte',
+    termsLink: 'Términos y condiciones',
+    privacyLink: 'Política de privacidad'
+  },
+  legal: {
+    draftNotice: 'Borrador — revisa y reemplaza este texto antes de compartir la app fuera de tu grupo de confianza.',
+    back: '‹ Volver a Configuraciones',
+    termsTitle: 'Términos y condiciones',
+    termsBody: [
+      'Convive es una app para organizar la convivencia de un piso compartido: tareas, compras, el pote de dinero, incidencias y recompensas entre las personas que ya viven juntas.',
+      'Al usarla, aceptas usarla de buena fe con tus compañeros de piso: la información que cargás (tareas hechas, aportes al pote, incidencias) la ven los demás miembros activos de tu piso.',
+      'Los montos del pote son un registro compartido, no una pasarela de pago — la app no transfiere dinero real entre personas.',
+      'Podés dejar un piso o eliminar tu cuenta en cualquier momento desde Configuraciones.',
+      'Esta app se ofrece "tal cual", sin garantías, para el uso entre un grupo de confianza.'
+    ],
+    privacyTitle: 'Política de privacidad',
+    privacyBody: [
+      'Guardamos los datos que cargás para que la app funcione: tu perfil (nombre, apodo, edad, teléfono, alergias, etc.), las tareas y actividades del piso, los movimientos del pote y las incidencias que publiques.',
+      'Los campos marcados como privados (edad, teléfono, ocupación) solo se muestran a quien vos elijas mostrarlos — el resto de la información del piso la ven los demás miembros activos, porque es compartida por naturaleza.',
+      'No vendemos ni compartimos tus datos con terceros con fines publicitarios.',
+      'Si eliminás tu cuenta, tu perfil se anonimiza (se borran los datos personales) y tu acceso se bloquea para siempre; el historial compartido del piso permanece para tus excompañeros.',
+      'Para cualquier duda sobre tus datos, escribinos a la dirección de Ayuda y soporte en Configuraciones.'
+    ]
   },
   mascot: {
     ariaLabel: 'Mascota de Convive: una llave'

@@ -35,6 +35,7 @@ create table if not exists profiles (
   phone text,
   interests text, -- gustos/intereses, tarjeta de Convives y Perfil
   occupation text, -- "a qué se dedica" (opcional), tarjeta de Convives y Perfil
+  allergies text, -- alergias/restricciones alimentarias; siempre visible para el piso (info de seguridad, no de privacidad), a diferencia de los campos *_public de abajo
   avatar_url text,
   color text, -- color de identidad elegido en Perfil (círculo de roomies en Inicio); si es null, la app usa un color de respaldo derivado del id
   age_public boolean not null default true, -- privacidad de presentación (no RLS): oculta la edad a otros en Convives

@@ -20,6 +20,9 @@ import Wallet from './pages/Wallet'
 import Convives from './pages/Convives'
 import Shopping from './pages/Shopping'
 import Perfil from './pages/Perfil'
+import Ajustes from './pages/Ajustes'
+import Terminos from './pages/Terminos'
+import Privacidad from './pages/Privacidad'
 import FloorSettings from './pages/FloorSettings'
 
 function AuthedData({ children }) {
@@ -147,6 +150,36 @@ export default function App() {
                 <ProtectedRoute>
                   <AuthedData>
                     <FloorSettings />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ajustes"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Ajustes />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/terminos"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Terminos />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/privacidad"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Privacidad />
                   </AuthedData>
                 </ProtectedRoute>
               }

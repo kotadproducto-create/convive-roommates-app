@@ -2,17 +2,15 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
-import { useTheme } from '../context/ThemeContext'
 import { useLanguage } from '../context/LanguageContext'
-import { MoonIcon, SunIcon, BellIcon, GearIcon, PersonIcon, CloseIcon } from './icons'
+import { BellIcon, GearIcon, PersonIcon, CloseIcon } from './icons'
 import Avatar from './Avatar'
 import { formatDistanceToNow } from 'date-fns'
 
 export default function Topbar({ title, subheader }) {
   const { user, floor, membership, logout } = useAuth()
   const { notifications, unreadCount, markAllNotificationsRead } = useData()
-  const { theme, toggleTheme } = useTheme()
-  const { t, language, setLanguage, dateLocale } = useLanguage()
+  const { t, dateLocale } = useLanguage()
   const [open, setOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -111,61 +109,12 @@ export default function Topbar({ title, subheader }) {
                 {t('topbar.myProfile')}
               </Link>
               <Link
-                to="/perfil#preferencias"
+                to="/ajustes"
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-cream-200 dark:hover:bg-ink-700"
               >
                 <GearIcon className="w-4 h-4 shrink-0" />
                 {t('topbar.settings')}
               </Link>
-              <div className="flex items-center justify-between gap-2.5 px-3 py-2.5">
-                <span className="flex items-center gap-2.5 text-sm font-semibold">
-                  {theme === 'dark' ? <MoonIcon className="w-4 h-4 shrink-0" /> : <SunIcon className="w-4 h-4 shrink-0" />}
-                  {t('topbar.darkTheme')}
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={theme === 'dark'}
-                  aria-label={t('topbar.darkTheme')}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleTheme()
-                  }}
-                  className={`w-10 h-5 rounded-full relative shrink-0 transition-colors border-2 border-ink-900 dark:border-cream-100/40 ${
-                    theme === 'dark' ? 'bg-violet-500' : 'bg-cream-200'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-                      theme === 'dark' ? 'translate-x-[18px]' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-              <div className="flex items-center justify-between gap-2.5 px-3 py-2.5">
-                <span className="text-sm font-semibold">{t('topbar.language')}</span>
-                <div
-                  className="flex bg-cream-200 dark:bg-ink-700 rounded-lg p-0.5 text-xs font-semibold"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setLanguage('es')}
-                    aria-pressed={language === 'es'}
-                    className={`px-2.5 py-1 rounded-md ${language === 'es' ? 'bg-white dark:bg-ink-800 shadow-sm' : 'opacity-60'}`}
-                  >
-                    ES
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLanguage('en')}
-                    aria-pressed={language === 'en'}
-                    className={`px-2.5 py-1 rounded-md ${language === 'en' ? 'bg-white dark:bg-ink-800 shadow-sm' : 'opacity-60'}`}
-                  >
-                    EN
-                  </button>
-                </div>
-              </div>
               <div className="my-1 border-t border-ink-900/10 dark:border-cream-100/15" />
               <button
                 type="button"

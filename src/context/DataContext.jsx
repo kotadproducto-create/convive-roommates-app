@@ -497,6 +497,16 @@ export function DataProvider({ children }) {
       const newOrder = (currentFloor.rotationOrder || []).filter((id) => id !== profileId)
       await reassignPendingTasks(currentFloor.id, profileId, newOrder)
       await update('floors', currentFloor.id, { rotationOrder: newOrder })
+      // El aviso se crea ANTES de cerrar la propia membresía: la política
+      // RLS de "notifications" exige is_active_member(floor_id), que mira
+      // la membresía de quien llama (auth.uid()) — si se cerrara primero,
+      // este insert quedaría bloqueado justo para quien se está yendo.
+      await create('notifications', {
+        floorId: currentFloor.id,
+        userId: null,
+        type: 'member_left',
+        message: `${leavingName} ha dejado el piso`
+      })
       // Cerrar la membresía, no borrar el perfil: el usuario queda en
       // historial y podrá reactivarla más adelante con aprobación de un
       // admin de ese piso.
@@ -505,12 +515,6 @@ export function DataProvider({ children }) {
         leftAt: new Date().toISOString(),
         removalRequestedBy: null,
         removalRequestedAt: null
-      })
-      await create('notifications', {
-        floorId: currentFloor.id,
-        userId: null,
-        type: 'member_left',
-        message: `${leavingName} ha dejado el piso`
       })
     },
     [currentFloor, members]

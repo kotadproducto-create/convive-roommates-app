@@ -229,6 +229,41 @@ export function AuthProvider({ children }) {
     if (error) throw new Error(traduceErrorAuth(error))
   }
 
+  // Cambia el email de la cuenta: Supabase manda un correo de
+  // confirmación a la dirección NUEVA (y, según la config del
+  // proyecto, también un aviso a la vieja); el cambio no se aplica
+  // hasta que se confirme desde ese correo.
+  async function updateEmail(newEmail) {
+    const { error } = await supabase.auth.updateUser({ email: newEmail })
+    if (error) throw new Error(traduceErrorAuth(error))
+  }
+
+  // Reverifica la contraseña actual (mismo motivo que changePassword:
+  // una acción irreversible no debería depender solo de tener una
+  // sesión abierta sin vigilar). Separado de banAccount() a propósito:
+  // Ajustes.jsx necesita confirmar la contraseña ANTES de dejar el
+  // piso y anonimizar el perfil — si se hiciera todo en una sola
+  // función, una contraseña incorrecta dejaría esos pasos ya
+  // aplicados sin poder deshacerlos.
+  async function verifyPassword(currentPassword) {
+    if (!session?.user?.email) throw new Error('No hay sesión activa.')
+    const { error } = await supabase.auth.signInWithPassword({
+      email: session.user.email,
+      password: currentPassword
+    })
+    if (error) throw new Error('La contraseña actual no es correcta.')
+  }
+
+  // Banea la cuenta desde la Edge Function 'delete-account' (necesita
+  // permisos de administrador que el cliente nunca tiene). Se llama
+  // DESPUÉS de verifyPassword() y de que Ajustes.jsx ya dejó el piso y
+  // anonimizó el perfil — acá solo se bloquea el login para siempre.
+  // Quien llama a esto debe cerrar sesión (logout()) apenas termine.
+  async function banAccount() {
+    const { error } = await supabase.functions.invoke('delete-account')
+    if (error) throw new Error('No se pudo eliminar la cuenta. Inténtalo de nuevo en un momento.')
+  }
+
   // Envía el código de recuperación de contraseña. Usa nuestra propia
   // Edge Function (send-recovery-code) en vez de
   // supabase.auth.resetPasswordForEmail(): el mailer integrado de
@@ -282,6 +317,9 @@ export function AuthProvider({ children }) {
         requestJoinFloor,
         withdrawRequest,
         changePassword,
+        updateEmail,
+        verifyPassword,
+        banAccount,
         requestPasswordReset,
         updatePasswordWithRecovery,
         confirmPasswordResetWithCode,
