@@ -44,9 +44,10 @@ export default function Activities() {
   }
 
   function handleDelete(activity) {
-    if (!confirm(t('activities.confirmDelete', { title: activity.title }))) return
+    if (!confirm(t('activities.confirmDelete', { title: activity.title }))) return false
     removeActivity(activity.id)
     showToast(t('activities.deletedToast'), 'default')
+    return true
   }
 
   function renderCard(activity, i) {
@@ -99,6 +100,13 @@ export default function Activities() {
               setEditing(null)
             }}
             onSubmit={handleFormSubmit}
+            onDelete={
+              editing
+                ? () => {
+                    if (handleDelete(editing)) setEditing(null)
+                  }
+                : null
+            }
             t={t}
             dateLocale={dateLocale}
           />
@@ -331,7 +339,7 @@ function RecurrenceEditor({
   )
 }
 
-function ActivityForm({ initial, members, onCancel, onSubmit, t, dateLocale }) {
+function ActivityForm({ initial, members, onCancel, onSubmit, onDelete, t, dateLocale }) {
   const [title, setTitle] = useState(initial?.title || '')
   const [frequencyType, setFrequencyType] = useState(initial?.frequencyType || 'recurring')
   const [recurrenceUnit, setRecurrenceUnit] = useState(initial?.recurrenceUnit || 'week')
@@ -485,6 +493,16 @@ function ActivityForm({ initial, members, onCancel, onSubmit, t, dateLocale }) {
           {submitting ? t('activities.saving') : initial ? t('activities.saveChanges') : t('activities.createActivity')}
         </button>
       </div>
+
+      {initial && !isFixed && onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className="text-sm font-semibold text-clay-500 hover:underline self-center"
+        >
+          {t('activities.deleteActivity')}
+        </button>
+      )}
     </form>
   )
 }

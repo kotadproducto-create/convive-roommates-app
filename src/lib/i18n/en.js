@@ -246,6 +246,7 @@ export default {
     notThisPeriod: "Doesn't apply this period.",
     edit: 'Edit',
     delete: 'Delete',
+    deleteActivity: 'Delete activity',
     unassigned: 'Unassigned',
     everyone: 'Everyone',
     rotationTag: '(rotation)',

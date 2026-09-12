@@ -247,6 +247,7 @@ export default {
     notThisPeriod: 'No aplica este período.',
     edit: 'Editar',
     delete: 'Eliminar',
+    deleteActivity: 'Eliminar actividad',
     unassigned: 'Sin asignar',
     everyone: 'Todos',
     rotationTag: '(rotación)',
