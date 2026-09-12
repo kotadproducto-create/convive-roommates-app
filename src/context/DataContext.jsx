@@ -12,7 +12,7 @@ import {
   claimPendingJoinRequests,
   subscribePendingRequests
 } from '../lib/db'
-import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation } from '../lib/rotation'
+import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
 import { ensureActivityPeriods, currentPeriodKey } from '../lib/activities'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
@@ -322,13 +322,13 @@ export function DataProvider({ children }) {
     (req) => {
       if (req.targetType === 'task') {
         const task = tasks.find((ts) => ts.id === req.targetId)
-        return task ? t(`taskTypes.${task.type}`) : t('convives.swapTargetTask')
+        return task ? fixedTaskOverride(currentFloor, task.type)?.title || t(`taskTypes.${task.type}`) : t('convives.swapTargetTask')
       }
       const completion = activityCompletions.find((c) => c.id === req.targetId)
       const activity = completion ? activities.find((a) => a.id === completion.activityId) : null
       return activity?.title || t('convives.swapTargetActivity')
     },
-    [tasks, activities, activityCompletions, t]
+    [tasks, activities, activityCompletions, t, currentFloor]
   )
 
   // Solicitudes de intercambio de turno que me llegaron a mí (para
@@ -939,11 +939,17 @@ export function DataProvider({ children }) {
   const addActivity = useCallback(
     async (input) => {
       if (!currentFloor || !user) return
+      const isWeekRecurrence = input.frequencyType === 'recurring' && input.recurrenceUnit === 'week'
       const activity = await create('activities', {
         floorId: currentFloor.id,
         title: input.title,
         frequencyType: input.frequencyType,
-        timesPerWeek: input.frequencyType === 'weekly' ? input.timesPerWeek || 1 : null,
+        recurrenceUnit: input.frequencyType === 'recurring' ? input.recurrenceUnit : null,
+        recurrenceInterval: input.frequencyType === 'recurring' ? Number(input.recurrenceInterval) || 1 : 1,
+        weekdays: isWeekRecurrence ? input.weekdays || [] : null,
+        startDate: input.startDate || new Date().toISOString().slice(0, 10),
+        untilDate: input.frequencyType === 'recurring' ? input.untilDate || null : null,
+        timesPerWeek: isWeekRecurrence ? Math.max(1, (input.weekdays || []).length) : null,
         specificDate: input.frequencyType === 'once' ? input.specificDate : null,
         assignmentMode: input.frequencyType === 'once' ? 'manual' : input.assignmentMode,
         assignedUserId: input.assignmentMode === 'manual' || input.frequencyType === 'once' ? input.assignedUserId : null,

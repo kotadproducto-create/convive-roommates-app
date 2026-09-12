@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Avatar from './Avatar'
 import { getMemberColor, getOrbMotion } from '../lib/roomieColors'
+import { fixedTaskOverride } from '../lib/rotation'
 import { useLanguage } from '../context/LanguageContext'
 import { CloseIcon } from './icons'
 
@@ -13,7 +14,7 @@ import { CloseIcon } from './icons'
  * punto — o su avatar en la fila de debajo — abre una tarjetita con su
  * progreso de la semana.
  */
-export default function RoomieOrb({ members, tasks = [] }) {
+export default function RoomieOrb({ members, tasks = [], floor }) {
   const { t } = useLanguage()
   const [selectedId, setSelectedId] = useState(null)
 
@@ -84,6 +85,7 @@ export default function RoomieOrb({ members, tasks = [] }) {
           key={selectedMember.id}
           member={selectedMember}
           tasks={tasks}
+          floor={floor}
           t={t}
           onClose={() => setSelectedId(null)}
         />
@@ -92,7 +94,7 @@ export default function RoomieOrb({ members, tasks = [] }) {
   )
 }
 
-function RoomieCard({ member, tasks, t, onClose }) {
+function RoomieCard({ member, tasks, floor, t, onClose }) {
   const memberTasks = tasks.filter((task) => task.assignedUserId === member.id)
   const doneCount = memberTasks.filter((task) => task.completed).length
   const pendingTasks = memberTasks.filter((task) => !task.completed)
@@ -127,7 +129,7 @@ function RoomieCard({ member, tasks, t, onClose }) {
               {pendingTasks.map((task) => (
                 <li key={task.id} className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-coral-500 shrink-0" />
-                  {t(`taskTypes.${task.type}`)}
+                  {fixedTaskOverride(floor, task.type)?.title || t(`taskTypes.${task.type}`)}
                 </li>
               ))}
             </ul>

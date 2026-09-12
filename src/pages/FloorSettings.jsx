@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
 import { update, getRotationHistory } from '../lib/db'
-import { TASK_TYPES, getWeekKey, getMondayOfWeek, whoIsAssigned } from '../lib/rotation'
+import { TASK_TYPES, getWeekKey, getMondayOfWeek, whoIsAssigned, fixedTaskOverride } from '../lib/rotation'
 import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, TASK_ICONS } from '../components/icons'
 import { format, addDays } from 'date-fns'
 
@@ -206,6 +206,7 @@ export default function FloorSettings() {
             weekKey={weekKey}
             awayUserIds={awayUserIds}
             floorId={floor?.id}
+            floor={floor}
             myAbsenceRequests={myAbsenceRequests}
             pendingAbsenceRequests={pendingAbsenceRequests}
             requestAbsence={requestAbsence}
@@ -314,6 +315,7 @@ function RotationSection({
   weekKey,
   awayUserIds,
   floorId,
+  floor,
   myAbsenceRequests,
   pendingAbsenceRequests,
   requestAbsence,
@@ -361,7 +363,7 @@ function RotationSection({
           const Icon = TASK_ICONS[type.icon]
           const currentId = whoIsAssigned(order, weekKey, type.offset)
           const nextId = whoIsAssigned(order, nextWeekKey, type.offset)
-          const typeLabel = t(`taskTypes.${type.key}`)
+          const typeLabel = fixedTaskOverride(floor, type.key)?.title || t(`taskTypes.${type.key}`)
           return (
             <div key={type.key} className="flex items-center justify-between text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
               {type.key === 'compras' ? (
@@ -484,13 +486,13 @@ function RotationSection({
           <p className="text-sm font-medium">{t('floorSettings.rotationHistoryTitle')}</p>
           <span className="text-xs font-semibold text-violet-500">{showHistory ? t('floorSettings.hide') : t('floorSettings.show')}</span>
         </button>
-        {showHistory && <RotationHistory history={history} memberById={memberById} t={t} dateLocale={dateLocale} />}
+        {showHistory && <RotationHistory history={history} memberById={memberById} floor={floor} t={t} dateLocale={dateLocale} />}
       </div>
     </div>
   )
 }
 
-function RotationHistory({ history, memberById, t, dateLocale }) {
+function RotationHistory({ history, memberById, floor, t, dateLocale }) {
   const grouped = useMemo(() => {
     if (!history) return []
     const byWeek = new Map()
@@ -516,7 +518,7 @@ function RotationHistory({ history, memberById, t, dateLocale }) {
               const type = TASK_TYPES.find((tt) => tt.key === task.type)
               return (
                 <li key={task.id} className="flex items-center justify-between text-sm px-2.5 py-1.5 rounded-lg bg-cream-100 dark:bg-ink-700">
-                  <span>{type ? t(`taskTypes.${type.key}`) : task.type} · {memberById[task.assignedUserId]?.name || t('floorSettings.unassigned')}</span>
+                  <span>{type ? fixedTaskOverride(floor, type.key)?.title || t(`taskTypes.${type.key}`) : task.type} · {memberById[task.assignedUserId]?.name || t('floorSettings.unassigned')}</span>
                   <span className={task.completed ? 'text-sage-500 text-xs font-semibold' : 'text-ink-900/40 dark:text-cream-100/40 text-xs'}>
                     {task.completed ? t('floorSettings.done') : t('floorSettings.notCompleted')}
                   </span>

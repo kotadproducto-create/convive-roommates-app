@@ -8,6 +8,7 @@ import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { currentPeriodKey } from '../lib/activities'
+import { fixedTaskOverride } from '../lib/rotation'
 import { getMemberColor } from '../lib/roomieColors'
 import { CoinIcon, SunIcon, HomeIcon, PhoneIcon, EditIcon, PlusIcon, MinusIcon, ChevronDownIcon } from '../components/icons'
 import { formatDistanceToNowStrict } from 'date-fns'
@@ -15,6 +16,7 @@ import { formatDistanceToNowStrict } from 'date-fns'
 export default function Convives() {
   const { user, membership } = useAuth()
   const {
+    floor,
     members,
     tasks,
     weekKey,
@@ -60,6 +62,7 @@ export default function Convives() {
               currentUserId={user.id}
               isAdmin={isAdmin}
               members={members}
+              floor={floor}
               tasks={tasks}
               weekKey={weekKey}
               activities={activities}
@@ -83,10 +86,16 @@ export default function Convives() {
  * (activityCompletions), ambas sin completar — una sola lista, con lo
  * necesario para poder marcar hecho o proponer un intercambio sobre
  * cada ítem (mismo target_type/target_id que espera requestSwap). */
-function getPendingItems(memberId, tasks, activities, activityCompletions, weekKey, t) {
+function getPendingItems(memberId, tasks, activities, activityCompletions, weekKey, t, floor) {
   const fixed = tasks
     .filter((task) => task.assignedUserId === memberId && !task.completed)
-    .map((task) => ({ targetType: 'task', targetId: task.id, title: t(`taskTypes.${task.type}`), completion: task, activity: null }))
+    .map((task) => ({
+      targetType: 'task',
+      targetId: task.id,
+      title: fixedTaskOverride(floor, task.type)?.title || t(`taskTypes.${task.type}`),
+      completion: task,
+      activity: null
+    }))
 
   const custom = activities
     .map((a) => {
@@ -219,6 +228,7 @@ function ConviveCard({
   currentUserId,
   isAdmin,
   members,
+  floor,
   tasks,
   weekKey,
   activities,
@@ -234,7 +244,7 @@ function ConviveCard({
   const [adjusting, setAdjusting] = useState(false)
 
   const isSelf = member.id === currentUserId
-  const pendingItems = getPendingItems(member.id, tasks, activities, activityCompletions, weekKey, t)
+  const pendingItems = getPendingItems(member.id, tasks, activities, activityCompletions, weekKey, t, floor)
   const canManage = isSelf || isAdmin
   const onVacation = member.potActive === false
   const isActive = member.activeStatus !== false

@@ -14,11 +14,14 @@ import {
   isSameDay,
   isToday
 } from 'date-fns'
-import { TASK_TYPES, TASK_DAY_OFFSET, getWeekKey, whoIsAssigned } from '../lib/rotation'
-import { TASK_ICONS, JarIcon, CartIcon, StoreIcon, WasherIcon } from './icons'
+import { TASK_TYPES, TASK_DAY_OFFSET, getWeekKey, whoIsAssigned, fixedTaskOverride } from '../lib/rotation'
+import { currentPeriodKey, isDueOnDate } from '../lib/activities'
+import { TASK_ICONS, JarIcon, CartIcon, StoreIcon, WasherIcon, SparkleIcon } from './icons'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { TASK_TONE_CLASSES } from './TaskCard'
+
+const ACTIVITY_TONE_CLASS = 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
 
 /**
  * Calendario gráfico con vistas mes/semana/día y navegación.
@@ -27,12 +30,23 @@ import { TASK_TONE_CLASSES } from './TaskCard'
  * Solo la semana ACTUAL tiene tareas reales cargadas (tasks), así que solo
  * ahí se puede marcar/deshacer; el resto del calendario es el horario
  * previsto (quién le toca), no un historial de si se cumplió o no.
+ *
+ * Cada día puede traer MÁS DE UN ítem (una de las 3 tareas fijas Y una o
+ * más actividades propias recurrentes/de una sola vez que caigan ese
+ * día — ver isDueOnDate en lib/activities.js). Por eso `dayInfo(date)`
+ * devuelve una LISTA, no un solo objeto: Mes/Semana muestran el primero
+ * (con un "+N" si hay más) por espacio, y Día los lista todos. Las
+ * actividades propias se muestran de solo lectura acá (marcarlas hecha
+ * sigue siendo cosa de Actividades) — las 3 fijas conservan su botón de
+ * marcar/deshacer de siempre.
  */
 export default function CalendarView({
   floor,
   memberById,
   currentWeekKey,
   tasks,
+  activities = [],
+  activityCompletions = [],
   completeTask,
   uncompleteTask,
   potContributions = [],
@@ -56,17 +70,57 @@ export default function CalendarView({
   }
 
   function dayInfo(date) {
+    const items = []
     const dow = (date.getDay() + 6) % 7 // 0=lunes .. 6=domingo
-    const type = TASK_TYPES.find((t) => TASK_DAY_OFFSET[t.key] === dow)
-    if (!type || !floor) return {}
-    const wk = getWeekKey(date)
-    const isCurrentWeek = wk === currentWeekKey
-    const assignedUserId = isCurrentWeek
-      ? tasks.find((t) => t.type === type.key)?.assignedUserId
-      : whoIsAssigned(floor.rotationOrder, wk, type.offset)
-    const task = isCurrentWeek ? tasks.find((t) => t.type === type.key) : null
-    const isMine = Boolean(currentUserId) && assignedUserId === currentUserId
-    return { type, assignee: memberById[assignedUserId], task, isCurrentWeek, isMine }
+    const type = TASK_TYPES.find((tt) => TASK_DAY_OFFSET[tt.key] === dow)
+    if (type && floor) {
+      const wk = getWeekKey(date)
+      const isCurrentWeek = wk === currentWeekKey
+      const assignedUserId = isCurrentWeek
+        ? tasks.find((tk) => tk.type === type.key)?.assignedUserId
+        : whoIsAssigned(floor.rotationOrder, wk, type.offset)
+      const task = isCurrentWeek ? tasks.find((tk) => tk.type === type.key) : null
+      const isMine = Boolean(currentUserId) && assignedUserId === currentUserId
+      const override = fixedTaskOverride(floor, type.key)
+      items.push({
+        kind: 'fixed',
+        key: type.key,
+        type,
+        icon: TASK_ICONS[type.icon],
+        label: override?.title || t(`taskTypes.${type.key}`),
+        points: override?.points ?? type.points,
+        assignee: memberById[assignedUserId],
+        task,
+        isCurrentWeek,
+        isMine,
+        done: Boolean(task?.completed),
+        pending: isCurrentWeek && isMine && !task?.completed,
+        toneClass: TASK_TONE_CLASSES[type.key]
+      })
+    }
+
+    for (const activity of activities) {
+      if (!isDueOnDate(activity, date)) continue
+      const period = currentPeriodKey(activity, getWeekKey(date))
+      const completion = period ? activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === period) : null
+      const assignedUserId = completion?.assignedUserId || activity.assignedUserId
+      const isMine = Boolean(currentUserId) && assignedUserId === currentUserId
+      items.push({
+        kind: 'activity',
+        key: activity.id,
+        icon: SparkleIcon,
+        label: activity.title,
+        assignee: memberById[assignedUserId],
+        activity,
+        completion,
+        isMine,
+        done: Boolean(completion?.completed),
+        pending: isMine && completion && !completion.completed,
+        toneClass: ACTIVITY_TONE_CLASS
+      })
+    }
+
+    return items
   }
 
   const title = useMemo(() => {
@@ -121,12 +175,8 @@ export default function CalendarView({
         </div>
       </div>
 
-      {view === 'month' && (
-        <MonthGrid cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} t={t} dateLocale={dateLocale} />
-      )}
-      {view === 'week' && (
-        <WeekStrip cursor={cursor} dayInfo={dayInfo} completeTask={completeTask} uncompleteTask={uncompleteTask} t={t} dateLocale={dateLocale} />
-      )}
+      {view === 'month' && <MonthGrid cursor={cursor} dayInfo={dayInfo} t={t} dateLocale={dateLocale} />}
+      {view === 'week' && <WeekStrip cursor={cursor} dayInfo={dayInfo} t={t} dateLocale={dateLocale} />}
       {view === 'day' && (
         <DayDetail
           cursor={cursor}
@@ -146,7 +196,7 @@ export default function CalendarView({
   )
 }
 
-function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask, t, dateLocale }) {
+function MonthGrid({ cursor, dayInfo, t, dateLocale }) {
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(cursor), { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(cursor), { weekStartsOn: 1 })
@@ -171,10 +221,10 @@ function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask, t, dateLocal
       </div>
       <div className="grid grid-cols-7 gap-1">
         {days.map((date) => {
-          const { type, assignee, task, isMine } = dayInfo(date)
-          const Icon = type ? TASK_ICONS[type.icon] : null
+          const items = dayInfo(date)
+          const first = items[0]
+          const Icon = first?.icon
           const inMonth = isSameMonth(date, cursor)
-          const mineePending = isMine && !task?.completed
           return (
             <div
               key={date.toISOString()}
@@ -183,18 +233,25 @@ function MonthGrid({ cursor, dayInfo, completeTask, uncompleteTask, t, dateLocal
               } ${!inMonth ? 'opacity-30' : ''}`}
             >
               <span className="text-[10px] font-semibold">{format(date, 'd')}</span>
-              {type && (
-                <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center border ${
-                    task?.completed
-                      ? 'bg-gold-400 border-ink-900'
-                      : mineePending
-                        ? 'bg-coral-500 border-ink-900'
-                        : 'bg-violet-100 dark:bg-violet-700/25 border-violet-200 dark:border-violet-600/40'
-                  }`}
-                  title={`${t(`taskTypes.${type.key}`)} · ${assignee?.name || t('calendar.unassigned')}${mineePending ? t('calendar.yourTurnParen') : ''}`}
-                >
-                  {Icon && <Icon className={`w-3 h-3 ${mineePending ? 'text-white' : 'text-violet-600 dark:text-violet-100'}`} />}
+              {first && (
+                <div className="relative">
+                  <div
+                    className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                      first.done
+                        ? 'bg-gold-400 border-ink-900'
+                        : first.pending
+                          ? 'bg-coral-500 border-ink-900'
+                          : `${first.toneClass} border-transparent`
+                    }`}
+                    title={`${first.label} · ${first.assignee?.name || t('calendar.unassigned')}${first.pending ? t('calendar.yourTurnParen') : ''}`}
+                  >
+                    {Icon && <Icon className={`w-3 h-3 ${first.done || first.pending ? 'text-white' : ''}`} />}
+                  </div>
+                  {items.length > 1 && (
+                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-ink-900 dark:bg-cream-100 text-cream-100 dark:text-ink-900 text-[8px] font-bold flex items-center justify-center">
+                      +{items.length - 1}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -214,9 +271,9 @@ function WeekStrip({ cursor, dayInfo, t, dateLocale }) {
   return (
     <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
       {days.map((date) => {
-        const { type, assignee, task, isCurrentWeek, isMine } = dayInfo(date)
-        const Icon = type ? TASK_ICONS[type.icon] : null
-        const minePending = isMine && !task?.completed
+        const items = dayInfo(date)
+        const first = items[0]
+        const Icon = first?.icon
         return (
           <div
             key={date.toISOString()}
@@ -224,28 +281,35 @@ function WeekStrip({ cursor, dayInfo, t, dateLocale }) {
           >
             <span className="text-[10px] font-bold uppercase text-ink-900/40 dark:text-cream-100/40">{format(date, 'EEEEE', { locale: dateLocale })}</span>
             <span className="text-xs font-bold">{format(date, 'd')}</span>
-            {type ? (
-              <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center border-2 mt-1 ${
-                  task?.completed
-                    ? 'bg-gold-400 border-ink-900'
-                    : minePending
-                      ? 'bg-coral-500 border-ink-900 ring-2 ring-coral-500/40'
-                      : 'bg-cream-100 dark:bg-ink-700 border-dashed border-ink-900/30 dark:border-cream-100/30'
-                }`}
-                title={`${t(`taskTypes.${type.key}`)} · ${assignee?.name || t('calendar.unassigned')}${!isCurrentWeek ? t('calendar.plannedParen') : ''}${minePending ? t('calendar.yourTurnDash') : ''}`}
-              >
-                {Icon && <Icon className={`w-4 h-4 ${minePending ? 'text-white' : 'text-ink-900/70 dark:text-cream-100/70'}`} />}
+            {first ? (
+              <div className="relative mt-1">
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center border-2 ${
+                    first.done
+                      ? 'bg-gold-400 border-ink-900'
+                      : first.pending
+                        ? 'bg-coral-500 border-ink-900 ring-2 ring-coral-500/40'
+                        : `${first.toneClass} border-transparent`
+                  }`}
+                  title={`${first.label} · ${first.assignee?.name || t('calendar.unassigned')}${first.kind === 'fixed' && !first.isCurrentWeek ? t('calendar.plannedParen') : ''}${first.pending ? t('calendar.yourTurnDash') : ''}`}
+                >
+                  {Icon && <Icon className={`w-4 h-4 ${first.done || first.pending ? 'text-white' : ''}`} />}
+                </div>
+                {items.length > 1 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-ink-900 dark:bg-cream-100 text-cream-100 dark:text-ink-900 text-[9px] font-bold flex items-center justify-center">
+                    +{items.length - 1}
+                  </span>
+                )}
               </div>
             ) : (
               <div className="w-9 h-9 mt-1" />
             )}
             <span
               className={`text-[10px] text-center leading-tight ${
-                minePending ? 'font-bold text-coral-600 dark:text-coral-400' : 'text-ink-900/50 dark:text-cream-100/50'
+                first?.pending ? 'font-bold text-coral-600 dark:text-coral-400' : 'text-ink-900/50 dark:text-cream-100/50'
               }`}
             >
-              {minePending ? t('calendar.yourTurn') : assignee?.name?.split(' ')[0] || ''}
+              {first?.pending ? t('calendar.yourTurn') : first?.assignee?.name?.split(' ')[0] || ''}
             </span>
           </div>
         )
@@ -325,87 +389,97 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
   }, [cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t])
 }
 
-function DayDetail({
-  cursor,
-  dayInfo,
-  completeTask,
-  uncompleteTask,
-  memberById,
-  potContributions,
-  shoppingPurchases,
-  shoppingItems,
-  notifications,
-  t
-}) {
-  const { type, assignee, task, isCurrentWeek, isMine } = dayInfo(cursor)
-  const Icon = type ? TASK_ICONS[type.icon] : null
-  const minePending = isMine && !task?.completed
-  const toneClass = minePending
-    ? 'bg-coral-500 text-white'
-    : TASK_TONE_CLASSES[type?.key] || 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
-  const badgeBorderClass = minePending ? 'border-coral-600' : 'border-ink-900/70 dark:border-cream-100/30'
+function DayDetail({ cursor, dayInfo, completeTask, uncompleteTask, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t }) {
+  const items = dayInfo(cursor)
   const { showToast } = useToast()
   const events = useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t)
-  const typeLabel = type ? t(`taskTypes.${type.key}`) : ''
 
-  function handleToggle() {
-    if (task.completed) {
-      uncompleteTask(task.id)
+  function handleToggle(item) {
+    if (item.task.completed) {
+      uncompleteTask(item.task.id)
     } else {
-      completeTask(task.id)
-      showToast(t('taskCard.completedToast', { label: typeLabel, points: type.points }), 'success')
+      completeTask(item.task.id)
+      showToast(t('taskCard.completedToast', { label: item.label, points: item.points }), 'success')
     }
   }
 
   return (
     <div className="py-2">
-      {type ? (
-        <div className="flex items-center gap-4 py-4 border-b border-ink-900/10 dark:border-cream-100/15">
-          {type.key === 'compras' ? (
-            <Link
-              to="/compras"
-              className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0 hover:opacity-80`}
-              title={t('calendar.goToShoppingList')}
-            >
-              {Icon && <Icon className="w-7 h-7" />}
-            </Link>
-          ) : (
-            <div className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0`}>
-              {Icon && <Icon className="w-7 h-7" />}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            {type.key === 'compras' ? (
-              <Link to="/compras" className="font-display font-semibold underline decoration-dotted underline-offset-2 hover:opacity-80">
-                {typeLabel}
-              </Link>
-            ) : (
-              <p className="font-display font-semibold">{typeLabel}</p>
-            )}
-            <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
-              {minePending ? (
-                <span className="font-bold text-coral-600 dark:text-coral-400">{t('calendar.yourTurnBold')}</span>
-              ) : (
-                assignee?.name || t('calendar.unassigned')
-              )}{' '}
-              · {t('taskCard.rewards', { points: type.points })}
-              {isCurrentWeek && task && (
-                <span className={task.completed ? 'text-sage-500' : 'text-gold-500'}>
-                  {' '}
-                  · {task.completed ? t('calendar.doneStatus') : t('calendar.pendingStatus')}
-                </span>
-              )}
-            </p>
-            {!isCurrentWeek && <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">{t('calendar.plannedHint')}</p>}
-          </div>
-          {isCurrentWeek && task && (
-            <button type="button" onClick={handleToggle} className={task.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}>
-              {task.completed ? t('calendar.undo') : t('calendar.markDone')}
-            </button>
-          )}
-        </div>
-      ) : (
+      {items.length === 0 ? (
         <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">{t('calendar.noTaskToday')}</p>
+      ) : (
+        items.map((item, i) => {
+          const Icon = item.icon
+          const toneClass = item.pending ? 'bg-coral-500 text-white' : item.toneClass
+          const badgeBorderClass = item.pending ? 'border-coral-600' : 'border-ink-900/70 dark:border-cream-100/30'
+          const isShopping = item.kind === 'fixed' && item.type.key === 'compras'
+          return (
+            <div
+              key={item.key}
+              className={`flex items-center gap-4 py-4 ${i < items.length - 1 ? 'border-b border-ink-900/10 dark:border-cream-100/15' : ''}`}
+            >
+              {isShopping ? (
+                <Link
+                  to="/compras"
+                  className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0 hover:opacity-80`}
+                  title={t('calendar.goToShoppingList')}
+                >
+                  {Icon && <Icon className="w-7 h-7" />}
+                </Link>
+              ) : (
+                <div className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0`}>
+                  {Icon && <Icon className="w-7 h-7" />}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                {isShopping ? (
+                  <Link to="/compras" className="font-display font-semibold underline decoration-dotted underline-offset-2 hover:opacity-80">
+                    {item.label}
+                  </Link>
+                ) : (
+                  <p className="font-display font-semibold">{item.label}</p>
+                )}
+                <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
+                  {item.pending ? (
+                    <span className="font-bold text-coral-600 dark:text-coral-400">{t('calendar.yourTurnBold')}</span>
+                  ) : (
+                    item.assignee?.name || t('calendar.unassigned')
+                  )}
+                  {item.kind === 'fixed' && (
+                    <>
+                      {' '}
+                      · {t('taskCard.rewards', { points: item.points })}
+                    </>
+                  )}
+                  {item.kind === 'fixed' && item.isCurrentWeek && item.task && (
+                    <span className={item.task.completed ? 'text-sage-500' : 'text-gold-500'}>
+                      {' '}
+                      · {item.task.completed ? t('calendar.doneStatus') : t('calendar.pendingStatus')}
+                    </span>
+                  )}
+                  {item.kind === 'activity' && item.completion && (
+                    <span className={item.completion.completed ? 'text-sage-500' : 'text-gold-500'}>
+                      {' '}
+                      · {item.completion.completed ? t('calendar.doneStatus') : t('calendar.pendingStatus')}
+                    </span>
+                  )}
+                </p>
+                {item.kind === 'fixed' && !item.isCurrentWeek && (
+                  <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">{t('calendar.plannedHint')}</p>
+                )}
+              </div>
+              {item.kind === 'fixed' && item.isCurrentWeek && item.task && (
+                <button
+                  type="button"
+                  onClick={() => handleToggle(item)}
+                  className={item.task.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}
+                >
+                  {item.task.completed ? t('calendar.undo') : t('calendar.markDone')}
+                </button>
+              )}
+            </div>
+          )
+        })
       )}
 
       <div className="mt-4">

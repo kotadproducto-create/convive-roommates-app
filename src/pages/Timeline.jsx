@@ -105,7 +105,7 @@ export default function Timeline() {
 
       <section className="mb-8">
         <h3 className="font-display text-lg font-bold mb-3 text-center sm:text-left">{t('timeline.roomiesTitle')}</h3>
-        <RoomieOrb members={members} tasks={tasks} />
+        <RoomieOrb members={members} tasks={tasks} floor={floor} />
       </section>
 
       <div className="grid lg:grid-cols-3 gap-5 items-start mb-8">

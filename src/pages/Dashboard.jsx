@@ -7,7 +7,7 @@ import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
-import { TASK_TYPES, getMondayOfWeek } from '../lib/rotation'
+import { TASK_TYPES, getMondayOfWeek, fixedTaskOverride } from '../lib/rotation'
 import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
 import { AlertIcon, ChatIcon } from '../components/icons'
 import { format } from 'date-fns'
@@ -18,6 +18,8 @@ export default function Dashboard() {
     floor,
     members,
     tasks,
+    activities,
+    activityCompletions,
     shoppingItems,
     shoppingPurchases,
     potContributions,
@@ -74,6 +76,8 @@ export default function Dashboard() {
           memberById={memberById}
           currentWeekKey={weekKey}
           tasks={tasks}
+          activities={activities}
+          activityCompletions={activityCompletions}
           completeTask={completeTask}
           uncompleteTask={uncompleteTask}
           potContributions={potContributions}
@@ -109,17 +113,22 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
-            {weekTasks.map((task, i) => (
-              <Reveal key={task.id} delay={i * 70}>
-                <TaskCard
-                  task={task}
-                  typeInfo={TASK_TYPES.find((t) => t.key === task.type)}
-                  assignee={memberById[task.assignedUserId]}
-                  currentUserId={user?.id}
-                  onToggle={(id, undo) => (undo ? uncompleteTask(id) : completeTask(id))}
-                />
-              </Reveal>
-            ))}
+            {weekTasks.map((task, i) => {
+              const override = fixedTaskOverride(floor, task.type)
+              return (
+                <Reveal key={task.id} delay={i * 70}>
+                  <TaskCard
+                    task={task}
+                    typeInfo={TASK_TYPES.find((t) => t.key === task.type)}
+                    overrideLabel={override?.title}
+                    overridePoints={override?.points}
+                    assignee={memberById[task.assignedUserId]}
+                    currentUserId={user?.id}
+                    onToggle={(id, undo) => (undo ? uncompleteTask(id) : completeTask(id))}
+                  />
+                </Reveal>
+              )
+            })}
           </div>
         </section>
 

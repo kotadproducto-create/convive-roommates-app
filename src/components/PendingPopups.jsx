@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../context/LanguageContext'
+import { fixedTaskOverride } from '../lib/rotation'
 import { CartIcon, SparkleIcon, CloseIcon } from './icons'
 
 function todayKey() {
@@ -80,13 +81,13 @@ export default function PendingPopups({ user, floor, tasks, shoppingItems }) {
         tone: 'sky',
         title: t('pendingPopups.activitiesTitle'),
         bigNumber: pendingActivities.length,
-        items: pendingActivities.map((task) => t(`taskTypes.${task.type}`))
+        items: pendingActivities.map((task) => fixedTaskOverride(floor, task.type)?.title || t(`taskTypes.${task.type}`))
       })
     }
 
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, tasks, shoppingItems, language])
+  }, [user, tasks, shoppingItems, language, floor])
 
   // Cerrar una categoría la saca de `popups` (queda marcada en
   // localStorage), y la siguiente pendiente pasa a ser la primera

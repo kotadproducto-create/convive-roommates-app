@@ -17,6 +17,18 @@ export const TASK_TYPES = [
  * RoomieOrb). */
 export const TASK_LABEL = Object.fromEntries(TASK_TYPES.map((t) => [t.key, t.label]))
 
+/** Puntos por defecto de cada tarea fija, por clave. */
+export const TASK_POINTS = Object.fromEntries(TASK_TYPES.map((t) => [t.key, t.points]))
+
+/** Sobrescritura de nombre/puntos de una tarea fija para un piso
+ * concreto (`floors.fixed_task_overrides`, editable desde Actividades)
+ * — null si el piso no la personalizó, en cuyo caso el llamador usa el
+ * texto/valor por defecto (i18n `taskTypes.<key>` / TASK_POINTS). La
+ * rotación en sí (quién le toca, qué día) nunca pasa por acá. */
+export function fixedTaskOverride(floor, key) {
+  return floor?.fixedTaskOverrides?.[key] || null
+}
+
 /**
  * Día de la semana (0=lunes..6=domingo) en el que se muestra cada tipo de
  * tarea en las vistas de calendario. Es solo de presentación — la

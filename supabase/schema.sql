@@ -60,6 +60,12 @@ create table if not exists floors (
   notes text, -- nota compartida del piso, editable por cualquier miembro (ver /actividades)
   notes_updated_by uuid references profiles(id) on delete set null,
   notes_updated_at timestamptz,
+  -- Sobrescritura opcional de nombre/puntos de las 3 tareas fijas
+  -- (compras/basura/lavadora, ver rotation.js), por piso. Forma:
+  -- { compras: { title, points }, basura: {...}, lavadora: {...} } —
+  -- cualquier clave ausente usa el valor por defecto de TASK_TYPES/i18n.
+  -- La rotación en sí (quién le toca, qué día) no pasa por acá.
+  fixed_task_overrides jsonb not null default '{}',
   created_at timestamptz not null default now()
 );
 
@@ -306,16 +312,21 @@ create table if not exists room_partners (
 
 -- Gestor de actividades del piso: aparte del sistema fijo de
 -- Compras/Basura/Lavadora (tasks + rotation.js, que no se toca), esto
--- permite crear actividades propias con frecuencia flexible (semanal
--- con N veces, mensual, o evento único con fecha) y asignación manual
--- o por rotación automática (mismo rotationOrder del piso). Ver
--- src/lib/activities.js.
+-- permite crear actividades propias — recurrentes (cada N
+-- semanas/meses, con días de la semana elegibles si es semanal) o de
+-- una sola vez con fecha — y asignación manual o por rotación
+-- automática (mismo rotationOrder del piso). Ver src/lib/activities.js.
 create table if not exists activities (
   id uuid primary key default gen_random_uuid(),
   floor_id uuid not null references floors(id) on delete cascade,
   title text not null,
-  frequency_type text not null check (frequency_type in ('weekly','monthly','once')),
-  times_per_week integer check (times_per_week is null or (times_per_week between 1 and 7)),
+  frequency_type text not null check (frequency_type in ('recurring','once')),
+  recurrence_unit text check (recurrence_unit in ('week','month')), -- solo si frequency_type = 'recurring'
+  recurrence_interval integer not null default 1, -- "cada N semanas/meses"
+  weekdays integer[], -- 0=lunes..6=domingo; solo si recurrence_unit = 'week' (también define en qué día del Calendario aparece)
+  start_date date not null default current_date, -- ancla para calcular qué semanas/meses son "ocurrencia" cuando recurrence_interval > 1
+  until_date date, -- fin opcional de la recurrencia
+  times_per_week integer check (times_per_week is null or (times_per_week between 1 and 7)), -- contador del stepper; se deriva de weekdays al crear/editar
   specific_date date, -- solo si frequency_type = 'once'
   assignment_mode text not null default 'manual' check (assignment_mode in ('manual','rotation')),
   assigned_user_id uuid references profiles(id) on delete set null, -- fijo, solo si assignment_mode = 'manual'
