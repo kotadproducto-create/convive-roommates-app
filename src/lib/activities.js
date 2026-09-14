@@ -150,6 +150,38 @@ export function isDueOnDate(activity, date) {
   return (activity.weekdays || []).includes(isoWeekday(date))
 }
 
+/**
+ * Fecha y responsable de la PRÓXIMA ocurrencia de una actividad
+ * recurrente, buscando día por día después de `fromDate` (por defecto
+ * hoy) — para mostrar "próximo turno" una vez que la actual ya se
+ * completó. `skipPeriodKey` (opcional, normalmente el período recién
+ * completado) descarta cualquier fecha que caiga en ESE MISMO período
+ * — necesario para las semanales con varios días elegidos (ej. "3
+ * veces a la semana"): esos días comparten una sola finalización por
+ * semana, así que el próximo turno de verdad es la semana siguiente,
+ * no el segundo día de ocurrencia de esta misma semana. `null` si es
+ * de una sola vez (no tiene "próxima vez") o si no se encuentra
+ * ninguna dentro de los próximos 2 años (p.ej. una semanal sin ningún
+ * día de la semana elegido).
+ */
+export function nextOccurrence(activity, rotationOrder, fromDate = new Date(), skipPeriodKey = null) {
+  if (activity.frequencyType !== 'recurring') return null
+  const start = toDateOnly(fromDate)
+  for (let i = 1; i <= 730; i++) {
+    const date = new Date(start)
+    date.setDate(date.getDate() + i)
+    if (!isDueOnDate(activity, date)) continue
+    const period =
+      activity.recurrenceUnit === 'month' ? getMonthKey(date) : activity.recurrenceUnit === 'day' ? getDateKey(date) : getWeekKeyOf(date)
+    if (period === skipPeriodKey) continue
+    const index =
+      activity.recurrenceUnit === 'month' ? monthIndexFromKey(period) : activity.recurrenceUnit === 'day' ? dayIndexFromKey(period) : weekIndexFromKey(period)
+    const assignedUserId = activity.assignmentMode === 'manual' ? activity.assignedUserId || null : rotationPick(rotationOrder, index)
+    return { date, periodKey: period, assignedUserId }
+  }
+  return null
+}
+
 /** Actividades (con su finalización del período que corresponda, si
  * ya existe) que caen en una fecha concreta — usado por el Calendario
  * y por el "stamp" semanal de Inicio, para no duplicar esta lógica en

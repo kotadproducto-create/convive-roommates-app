@@ -97,6 +97,24 @@ export async function upsertIgnoreDuplicates(table, docs, conflictColumns) {
 }
 
 /**
+ * UUID estable a partir de un texto: mismo `input` siempre da el mismo
+ * id (formato UUID válido, aunque no sea un v4/v5 "de verdad" — a
+ * Postgres solo le importa la forma). Sirve para poder usar
+ * `upsertIgnoreDuplicates` sobre `id` (la primary key, que nunca es
+ * null) en filas generadas automáticamente por un efecto — así, si ese
+ * efecto llega a dispararse más de una vez seguida (dos pestañas,
+ * StrictMode en desarrollo, una reconexión), la propia BD ignora el
+ * duplicado en vez de crear una fila repetida.
+ */
+export async function deterministicUuid(input) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
+  const hex = Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+}
+
+/**
  * Se suscribe a cambios en tiempo real de una tabla (filtrados por
  * floor_id si se pasa). Llama a `onChange` con la lista completa y
  * actualizada cada vez que algo cambia (incluida la primera carga).

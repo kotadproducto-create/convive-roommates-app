@@ -7,8 +7,8 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { update } from '../lib/db'
 import { currentPeriodKey } from '../lib/activities'
-import ActivityCard from '../components/ActivityCard'
-import { CloseIcon } from '../components/icons'
+import ActivityCard, { FIXED_ICONS } from '../components/ActivityCard'
+import { CloseIcon, ChevronUpIcon, ChevronDownIcon, SparkleIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict, startOfWeek, addDays } from 'date-fns'
 
 /**
@@ -21,15 +21,38 @@ import { format, formatDistanceToNowStrict, startOfWeek, addDays } from 'date-fn
  * para el modelo de datos.
  */
 export default function Activities() {
-  const { members, activities, activityCompletions, weekKey, addActivity, updateActivity, removeActivity, setActivityProgress } = useData()
+  const { floor, members, activities, activityCompletions, weekKey, addActivity, updateActivity, removeActivity, setActivityProgress } = useData()
   const { showToast } = useToast()
   const { t, dateLocale } = useLanguage()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]))
   const recurringActivities = activities.filter((a) => a.frequencyType === 'recurring')
-  const oneTimeActivities = activities.filter((a) => a.frequencyType === 'once')
+  // Un evento único solo tiene una fila de finalización (creada junto
+  // con la actividad, ver addActivity) — una vez marcada como hecha,
+  // pasa al historial y deja de ocupar espacio en "De una sola vez".
+  const oneTimeActivities = activities
+    .filter((a) => a.frequencyType === 'once')
+    .filter((a) => !activityCompletions.find((c) => c.activityId === a.id)?.completed)
+
+  // Historial: una fila por cada finalización YA completada (de
+  // cualquier período, no solo el actual) — así las recurrentes van
+  // acumulando su propio registro semana a semana, sin dejar de
+  // aparecer arriba en "Frecuentes" (siguen recurriendo).
+  const historyEntries = useMemo(
+    () =>
+      activityCompletions
+        .filter((c) => c.completed && c.completedAt)
+        .map((completion) => {
+          const activity = activities.find((a) => a.id === completion.activityId)
+          return activity ? { activity, completion } : null
+        })
+        .filter(Boolean)
+        .sort((a, b) => new Date(b.completion.completedAt) - new Date(a.completion.completedAt)),
+    [activityCompletions, activities]
+  )
 
   async function handleFormSubmit(input) {
     if (editing) {
@@ -59,6 +82,7 @@ export default function Activities() {
           activity={activity}
           completion={completion}
           memberById={memberById}
+          rotationOrder={floor?.rotationOrder}
           onEdit={() => {
             setEditing(activity)
             setShowForm(false)
@@ -122,7 +146,7 @@ export default function Activities() {
         )}
       </section>
 
-      <section>
+      <section className="mb-6">
         <h3 className="font-display font-semibold mb-3">{t('activities.onceTitle')}</h3>
         {oneTimeActivities.length === 0 ? (
           <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('activities.emptyOnce')}</p>
@@ -130,7 +154,59 @@ export default function Activities() {
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">{oneTimeActivities.map(renderCard)}</div>
         )}
       </section>
+
+      <section>
+        <button
+          type="button"
+          onClick={() => setShowHistory((s) => !s)}
+          className="w-full flex items-center justify-between gap-2 py-2 text-left"
+        >
+          <h3 className="font-display font-semibold">{t('activities.historyTitle')}</h3>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-violet-500 shrink-0">
+            {showHistory ? t('activities.hideHistory') : t('activities.showHistory')}
+            {showHistory ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+          </span>
+        </button>
+
+        {showHistory && (
+          <Reveal>
+            {historyEntries.length === 0 ? (
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-2">{t('activities.historyEmpty')}</p>
+            ) : (
+              <div className="card p-4 mt-2 flex flex-col divide-y divide-ink-900/10 dark:divide-cream-100/10">
+                {historyEntries.map(({ activity, completion }) => (
+                  <HistoryEntry key={completion.id} activity={activity} completion={completion} memberById={memberById} t={t} dateLocale={dateLocale} />
+                ))}
+              </div>
+            )}
+          </Reveal>
+        )}
+      </section>
     </AppLayout>
+  )
+}
+
+/** Una fila del historial: actividad, quién la hizo, y cuándo. */
+function HistoryEntry({ activity, completion, memberById, t, dateLocale }) {
+  const assignee = memberById[completion.assignedUserId]
+  const Icon = (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon
+  const date = new Date(completion.completedAt)
+  return (
+    <div className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+      <div className="w-8 h-8 rounded-lg border-2 border-ink-900/70 dark:border-cream-100/30 bg-cream-100 dark:bg-ink-700 text-ink-900/50 dark:text-cream-100/60 flex items-center justify-center shrink-0">
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">{activity.title}</p>
+        <p className="text-xs text-ink-900/50 dark:text-cream-100/50">
+          {t('activities.historyEntry', {
+            name: assignee ? assignee.name : t('activities.everyone'),
+            date: format(date, t('calendar.dayMonthFormat'), { locale: dateLocale }),
+            time: format(date, 'HH:mm')
+          })}
+        </p>
+      </div>
+    </div>
   )
 }
 

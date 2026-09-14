@@ -10,7 +10,9 @@ import {
   uploadShoppingItemImage,
   uploadAvatar,
   claimPendingJoinRequests,
-  subscribePendingRequests
+  subscribePendingRequests,
+  upsertIgnoreDuplicates,
+  deterministicUuid
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
 import { ensureActivityPeriods, currentPeriodKey } from '../lib/activities'
@@ -224,6 +226,14 @@ export function DataProvider({ children }) {
   // histórico) — son actividades reales con `fixedKey`, así que este
   // efecto se apoya en ensureActivityPeriods/currentPeriodKey de
   // lib/activities.js igual que cualquier otra actividad recurrente.
+  //
+  // Las notificaciones de turno/pote usan `dedupeKey` (ver notifyUser)
+  // en vez de "leer lo que existe y crear lo que falta": ese patrón
+  // tenía una ventana de carrera real — si este efecto se disparaba
+  // más de una vez seguida (StrictMode en desarrollo, dos pestañas
+  // abiertas, una reconexión), cada disparo llegaba a ver "todavía no
+  // se avisó" antes de que el anterior terminara de escribir, y el
+  // resultado era una ráfaga de notificaciones duplicadas.
   useEffect(() => {
     if (!currentFloor) return
     let cancelled = false
@@ -233,31 +243,40 @@ export function DataProvider({ children }) {
       await ensureActivityPeriods(activities, effectiveRotationOrder, weekKey)
       if (cancelled) return
 
-      const existingNotifs = await getAll('notifications', { floorId: currentFloor.id })
-      const alreadyNotifiedTurno = existingNotifs.some((n) => n.weekKey === weekKey && n.type === 'turno')
-
-      if (!alreadyNotifiedTurno) {
-        const fixedActivities = activities.filter((a) => a.fixedKey)
-        const periodCompletions = await getAll('activity_completions', { floorId: currentFloor.id })
-        for (const activity of fixedActivities) {
-          const period = currentPeriodKey(activity, weekKey)
-          if (!period) continue
-          const completion = periodCompletions.find((c) => c.activityId === activity.id && c.periodKey === period)
-          if (!completion?.assignedUserId) continue
-          await notifyUser(currentFloor.id, completion.assignedUserId, 'turno', `Esta semana te toca: ${activity.title}`, weekKey)
-        }
+      const fixedActivities = activities.filter((a) => a.fixedKey)
+      const periodCompletions = await getAll('activity_completions', { floorId: currentFloor.id })
+      for (const activity of fixedActivities) {
+        const period = currentPeriodKey(activity, weekKey)
+        if (!period) continue
+        const completion = periodCompletions.find((c) => c.activityId === activity.id && c.periodKey === period)
+        if (!completion?.assignedUserId) continue
+        await notifyUser(
+          currentFloor.id,
+          completion.assignedUserId,
+          'turno',
+          `Esta semana te toca: ${activity.title}`,
+          weekKey,
+          `turno:${currentFloor.id}:${weekKey}:${activity.id}`
+        )
       }
 
-      const alreadyNotifiedPote = existingNotifs.some((n) => n.weekKey === weekKey && n.type === 'pote')
-      if (currentFloor.potAmount < currentFloor.potThreshold && !alreadyNotifiedPote) {
-        await create('notifications', {
-          floorId: currentFloor.id,
-          userId: null,
-          type: 'pote',
-          weekKey,
-          read: false,
-          message: `El pote de compras está bajo (${currentFloor.potAmount}€). Sugerido: ${currentFloor.potPerPerson}€ por persona.`
-        })
+      if (currentFloor.potAmount < currentFloor.potThreshold) {
+        const id = await deterministicUuid(`notif:pote:${currentFloor.id}:${weekKey}`)
+        await upsertIgnoreDuplicates(
+          'notifications',
+          [
+            {
+              id,
+              floorId: currentFloor.id,
+              userId: null,
+              type: 'pote',
+              weekKey,
+              read: false,
+              message: `El pote de compras está bajo (${currentFloor.potAmount}€). Sugerido: ${currentFloor.potPerPerson}€ por persona.`
+            }
+          ],
+          ['id']
+        )
       }
     }
 
@@ -364,9 +383,28 @@ export function DataProvider({ children }) {
   // otro. Usar esto en vez de create('notifications', ...) directo
   // para cualquier notificación dirigida a UNA sola persona (las de
   // todo el piso ya le llegan a la pareja igual, por ser miembro activo).
+  //
+  // `dedupeKey` (opcional) es para notificaciones AUTOMÁTICAS que un
+  // efecto podría llegar a generar más de una vez seguida (dos
+  // pestañas abiertas, StrictMode en desarrollo, una reconexión): en
+  // vez de un create() plano, arma un id determinístico a partir de
+  // esa clave y hace upsert-ignorando-duplicados sobre `id` — así, si
+  // el efecto se dispara dos veces, la segunda no crea una fila
+  // repetida. No usar para notificaciones que sí pueden repetirse
+  // legítimamente (ej. varias propuestas de intercambio).
   const notifyUser = useCallback(
-    async (targetFloorId, userId, type, message, weekKeyArg = null) => {
-      await create('notifications', { floorId: targetFloorId, userId, type, weekKey: weekKeyArg, read: false, message })
+    async (targetFloorId, userId, type, message, weekKeyArg = null, dedupeKey = null) => {
+      async function insertOne(forUserId) {
+        const row = { floorId: targetFloorId, userId: forUserId, type, weekKey: weekKeyArg, read: false, message }
+        if (dedupeKey) {
+          const id = await deterministicUuid(`notif:${dedupeKey}:${forUserId ?? 'floor'}`)
+          await upsertIgnoreDuplicates('notifications', [{ id, ...row }], ['id'])
+        } else {
+          await create('notifications', row)
+        }
+      }
+
+      await insertOne(userId)
       const partnership = roomPartners.find(
         (p) =>
           p.status === 'accepted' &&
@@ -375,7 +413,7 @@ export function DataProvider({ children }) {
       )
       if (partnership) {
         const partnerUserId = partnership.requesterId === userId ? partnership.partnerId : partnership.requesterId
-        await create('notifications', { floorId: targetFloorId, userId: partnerUserId, type, weekKey: weekKeyArg, read: false, message })
+        await insertOne(partnerUserId)
       }
     },
     [roomPartners]

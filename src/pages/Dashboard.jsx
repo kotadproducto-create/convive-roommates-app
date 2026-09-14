@@ -127,6 +127,7 @@ export default function Dashboard() {
                   activity={activity}
                   completion={completion}
                   memberById={memberById}
+                  rotationOrder={floor?.rotationOrder}
                   onProgress={(delta) => completion && setActivityProgress(completion, delta)}
                   t={t}
                   dateLocale={dateLocale}

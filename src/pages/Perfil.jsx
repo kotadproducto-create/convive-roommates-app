@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
 import Avatar from '../components/Avatar'
@@ -209,20 +209,32 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved, t }) {
   const [saving, setSaving] = useState(false)
   const [color, setColor] = useState(getMemberColor(user))
   const [savingColor, setSavingColor] = useState(false)
+  const colorSaveTimeout = useRef(null)
 
-  async function handleColorChange(e) {
+  useEffect(() => () => clearTimeout(colorSaveTimeout.current), [])
+
+  // El <input type="color"> dispara onChange en cada frame mientras se
+  // arrastra en el selector nativo (React lo mapea al evento "input",
+  // no a un "change" único al cerrar), así que sin debounce cada
+  // arrastre disparaba decenas de guardados y de toasts "seguidos" —
+  // acá se ve el swatch actualizarse en vivo, pero solo se guarda (y
+  // se avisa una vez) el color en el que la persona se queda quieta.
+  function handleColorChange(e) {
     const next = e.target.value
     setColor(next)
+    clearTimeout(colorSaveTimeout.current)
     setSavingColor(true)
-    try {
-      await updateProfile(user.id, { color: next })
-      await onSaved()
-      showToast(t('perfil.colorUpdatedToast'), 'success')
-    } catch (err) {
-      showToast(t('perfil.colorErrorToast', { error: err.message }), 'default')
-    } finally {
-      setSavingColor(false)
-    }
+    colorSaveTimeout.current = setTimeout(async () => {
+      try {
+        await updateProfile(user.id, { color: next })
+        await onSaved()
+        showToast(t('perfil.colorUpdatedToast'), 'success')
+      } catch (err) {
+        showToast(t('perfil.colorErrorToast', { error: err.message }), 'default')
+      } finally {
+        setSavingColor(false)
+      }
+    }, 400)
   }
 
   async function handleSubmit(e) {
