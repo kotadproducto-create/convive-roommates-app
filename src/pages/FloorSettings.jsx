@@ -31,7 +31,8 @@ export default function FloorSettings() {
     weekKey,
     activities,
     activityCompletions,
-    absenceRequests,
+    myAbsenceRequests,
+    pendingAbsenceRequests,
     awayUserIds,
     reorderRotation,
     initiateRemoval,
@@ -136,9 +137,6 @@ export default function FloorSettings() {
       }
     }
   }
-
-  const myAbsenceRequests = absenceRequests.filter((r) => r.userId === user.id)
-  const pendingAbsenceRequests = absenceRequests.filter((r) => r.status === 'pending')
 
   return (
     <AppLayout title={t('floorSettings.title')}>

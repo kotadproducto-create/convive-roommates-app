@@ -21,6 +21,7 @@ export default function Perfil() {
   const {
     updateProfile,
     removeMember,
+    rejectMyRemoval,
     members,
     potContributions,
     myRoomPartner,
@@ -48,6 +49,7 @@ export default function Perfil() {
               members={members}
               potContributions={potContributions}
               removeMember={removeMember}
+              rejectMyRemoval={rejectMyRemoval}
               showToast={showToast}
               t={t}
             />
@@ -91,8 +93,9 @@ export default function Perfil() {
   )
 }
 
-function RemovalPendingCard({ floorName, membership, userId, members, potContributions, removeMember, showToast, t }) {
+function RemovalPendingCard({ floorName, membership, userId, members, potContributions, removeMember, rejectMyRemoval, showToast, t }) {
   const [confirming, setConfirming] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
 
   const activeMembers = members.filter((m) => m.potActive !== false)
   const aportes = potContributions.filter((c) => Number(c.amount) > 0)
@@ -114,6 +117,17 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
     } catch (err) {
       showToast(t('perfil.exitErrorToast', { error: err.message }), 'default')
       setConfirming(false)
+    }
+  }
+
+  async function handleReject() {
+    setRejecting(true)
+    try {
+      await rejectMyRemoval(membership.id)
+      showToast(t('perfil.removalRejectedToast'), 'default')
+    } catch (err) {
+      showToast(t('perfil.exitErrorToast', { error: err.message }), 'default')
+      setRejecting(false)
     }
   }
 
@@ -139,9 +153,14 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
             </p>
             <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-1">{t('perfil.potBalanceDisclaimer')}</p>
           </div>
-          <button type="button" className="btn-danger text-sm mt-3" onClick={handleConfirm} disabled={confirming}>
-            {confirming ? t('perfil.confirmingExit') : t('perfil.confirmExit')}
-          </button>
+          <div className="flex gap-2 mt-3">
+            <button type="button" className="btn-secondary text-sm" onClick={handleReject} disabled={confirming || rejecting}>
+              {rejecting ? t('perfil.confirmingExit') : t('perfil.rejectExit')}
+            </button>
+            <button type="button" className="btn-danger text-sm" onClick={handleConfirm} disabled={confirming || rejecting}>
+              {confirming ? t('perfil.confirmingExit') : t('perfil.confirmExit')}
+            </button>
+          </div>
         </div>
       </div>
     </div>

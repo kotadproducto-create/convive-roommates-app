@@ -369,6 +369,16 @@ export function InfoIcon(props) {
   )
 }
 
+export function VoteIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M3.5 9.4 10 3.3l6.5 6.1" />
+      <path d="M4.6 8.3v6.9a1 1 0 0 0 1 1h8.8a1 1 0 0 0 1-1V8.3" />
+      <path d="M7.6 11.3 9.3 13l3.1-3.4" />
+    </IconBase>
+  )
+}
+
 export const TASK_ICONS = {
   cart: CartIcon,
   trash: TrashIcon,

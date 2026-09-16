@@ -24,6 +24,7 @@ import Ajustes from './pages/Ajustes'
 import Terminos from './pages/Terminos'
 import Privacidad from './pages/Privacidad'
 import FloorSettings from './pages/FloorSettings'
+import Votaciones from './pages/Votaciones'
 
 function AuthedData({ children }) {
   // DataProvider depende del piso del usuario autenticado, así que vive
@@ -120,6 +121,16 @@ export default function App() {
                 <ProtectedRoute>
                   <AuthedData>
                     <Shopping />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/votaciones"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Votaciones />
                   </AuthedData>
                 </ProtectedRoute>
               }

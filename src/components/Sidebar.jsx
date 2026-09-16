@@ -1,7 +1,23 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
-import { StampIcon, CalendarIcon, PinIcon, CoinIcon, JarIcon, HomeIcon, UsersIcon, CartIcon, SparkleIcon, MoreIcon, CloseIcon, PersonIcon } from './icons'
+import {
+  StampIcon,
+  CalendarIcon,
+  PinIcon,
+  CoinIcon,
+  JarIcon,
+  HomeIcon,
+  UsersIcon,
+  CartIcon,
+  SparkleIcon,
+  MoreIcon,
+  CloseIcon,
+  PersonIcon,
+  VoteIcon
+} from './icons'
 
 // `labelKey` en vez de texto fijo — se traduce con t() en el propio
 // componente (ver src/lib/i18n/{es,en}.js, namespace `nav`).
@@ -12,6 +28,7 @@ const NAV_ITEMS = [
   { to: '/compras', labelKey: 'nav.compras', Icon: CartIcon },
   { to: '/incidencias', labelKey: 'nav.muro', Icon: PinIcon },
   { to: '/convives', labelKey: 'nav.convives', Icon: UsersIcon },
+  { to: '/votaciones', labelKey: 'nav.votaciones', Icon: VoteIcon },
   { to: '/recompensas', labelKey: 'nav.recompensas', Icon: CoinIcon },
   { to: '/pote', labelKey: 'nav.pote', Icon: JarIcon },
   { to: '/piso', labelKey: 'nav.piso', Icon: HomeIcon },
@@ -26,6 +43,32 @@ export default function Sidebar() {
   const [showMore, setShowMore] = useState(false)
   const location = useLocation()
   const { t } = useLanguage()
+  const { user, membership } = useAuth()
+  const {
+    members,
+    polls,
+    pollVotes,
+    incomingSwapRequests,
+    incomingPartnerRequests,
+    pendingJoinRequests,
+    pendingAbsenceRequests
+  } = useData()
+
+  const isAdmin = membership?.role === 'admin'
+  // "Cosas que me tocan a mí": consultas sin mi voto, intercambios y
+  // pareja entrantes, mi propia salida pendiente de confirmar, y (solo
+  // si soy admin) uniones/ausencias por decidir — mismo criterio que
+  // usará la bandeja de Votaciones para "Pendientes".
+  const myPendingCount = useMemo(() => {
+    if (!user) return 0
+    const myUnvotedPolls = polls.filter(
+      (p) => p.status === 'pending' && !pollVotes.some((v) => v.pollId === p.id && v.userId === user.id)
+    ).length
+    const myRemovalPending = members.find((m) => m.id === user.id)?.removalRequestedBy ? 1 : 0
+    let total = myUnvotedPolls + incomingSwapRequests.length + incomingPartnerRequests.length + myRemovalPending
+    if (isAdmin) total += pendingJoinRequests.length + pendingAbsenceRequests.length
+    return total
+  }, [user, isAdmin, members, polls, pollVotes, incomingSwapRequests, incomingPartnerRequests, pendingJoinRequests, pendingAbsenceRequests])
 
   const primaryItems = NAV_ITEMS.filter((item) => MOBILE_PRIMARY_PATHS.includes(item.to))
   const moreItems = NAV_ITEMS.filter((item) => !MOBILE_PRIMARY_PATHS.includes(item.to))
@@ -40,7 +83,12 @@ export default function Sidebar() {
         <Brand />
         <nav className="mt-8 landscape-sm:mt-3 flex flex-col gap-1">
           {NAV_ITEMS.map((item) => (
-            <NavItem key={item.to} {...item} label={t(item.labelKey)} />
+            <NavItem
+              key={item.to}
+              {...item}
+              label={t(item.labelKey)}
+              badge={item.to === '/votaciones' ? myPendingCount : 0}
+            />
           ))}
         </nav>
       </aside>
@@ -115,14 +163,21 @@ export default function Sidebar() {
                   end={end}
                   onClick={() => setShowMore(false)}
                   className={({ isActive }) =>
-                    `flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold border-2 ${
+                    `relative flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold border-2 ${
                       isActive
                         ? 'bg-gold-100 dark:bg-gold-400/25 border-ink-900 dark:border-cream-100/50 text-ink-900 dark:text-cream-100'
                         : 'border-transparent text-ink-900/70 dark:text-cream-100/70 hover:bg-cream-200 dark:hover:bg-ink-700'
                     }`
                   }
                 >
-                  <Icon className="w-5 h-5" />
+                  <span className="relative">
+                    <Icon className="w-5 h-5" />
+                    {to === '/votaciones' && myPendingCount > 0 && (
+                      <span className="absolute -top-1.5 -right-2 bg-coral-500 border border-cream-100 dark:border-ink-900 text-white text-[10px] leading-none rounded-full w-4 h-4 flex items-center justify-center">
+                        {myPendingCount}
+                      </span>
+                    )}
+                  </span>
                   {t(labelKey)}
                 </NavLink>
               ))}
@@ -149,7 +204,7 @@ function Brand() {
   )
 }
 
-function NavItem({ to, label, Icon, end }) {
+function NavItem({ to, label, Icon, end, badge = 0 }) {
   return (
     <NavLink
       to={to}
@@ -163,7 +218,12 @@ function NavItem({ to, label, Icon, end }) {
       }
     >
       <Icon className="w-[18px] h-[18px]" />
-      {label}
+      <span className="flex-1">{label}</span>
+      {badge > 0 && (
+        <span className="bg-coral-500 text-white text-[10px] font-bold leading-none rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">
+          {badge}
+        </span>
+      )}
     </NavLink>
   )
 }

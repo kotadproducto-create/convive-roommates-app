@@ -16,6 +16,7 @@ import {
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
 import { ensureActivityPeriods, currentPeriodKey } from '../lib/activities'
+import { resolvePoll } from '../lib/polls'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
 
@@ -51,6 +52,8 @@ export function DataProvider({ children }) {
   const [activities, setActivities] = useState([])
   const [activityCompletions, setActivityCompletions] = useState([])
   const [swapRequests, setSwapRequests] = useState([])
+  const [polls, setPolls] = useState([])
+  const [pollVotes, setPollVotes] = useState([])
 
   const weekKey = getWeekKey()
 
@@ -187,6 +190,22 @@ export function DataProvider({ children }) {
     return subscribeTable('swap_requests', { floorId }, setSwapRequests)
   }, [floorId])
 
+  useEffect(() => {
+    if (!floorId) {
+      setPolls([])
+      return
+    }
+    return subscribeTable('polls', { floorId }, setPolls)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setPollVotes([])
+      return
+    }
+    return subscribeTable('poll_votes', { floorId }, setPollVotes)
+  }, [floorId])
+
   // IDs de quienes tienen una ausencia aprobada que cubre hoy — se
   // excluyen de la generación de tareas de la semana (whoIsAssigned salta
   // a la siguiente persona en rotationOrder). Solo afecta a la semana que
@@ -231,6 +250,56 @@ export function DataProvider({ children }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [members, todayISO, currentFloor?.id])
+
+  // Resolución oportunista de consultas (Votaciones): igual que las dos
+  // expiraciones de arriba, no hay cron — se revisa cada vez que alguien
+  // del piso tiene la app abierta. resolvePoll es pura (ver lib/polls.js);
+  // acá solo se traduce su resultado a un update() + una notificación
+  // floor-wide idempotente (mismo patrón deterministic-id que "pote bajo"),
+  // para que un efecto que se dispare más de una vez no duplique el aviso.
+  useEffect(() => {
+    if (!currentFloor) return
+    const activeMemberIds = members.map((m) => m.id)
+    const pending = polls.filter((p) => p.status === 'pending')
+    if (!pending.length) return
+
+    async function run() {
+      for (const poll of pending) {
+        const votesForPoll = pollVotes.filter((v) => v.pollId === poll.id)
+        const outcome = resolvePoll(poll, votesForPoll, activeMemberIds, todayISO)
+        if (!outcome) continue
+        await update('polls', poll.id, {
+          status: outcome.status,
+          resolvedOption: outcome.resolvedOption,
+          resolvedAt: new Date().toISOString()
+        })
+        const id = await deterministicUuid(`notif:poll-resolved:${poll.id}:${outcome.status}`)
+        const message =
+          outcome.status === 'resolved'
+            ? `Se resolvió la consulta "${poll.question}": ganó "${outcome.resolvedOption}"`
+            : outcome.status === 'closed'
+              ? `La consulta "${poll.question}" se cerró sin mayoría clara.`
+              : `La consulta "${poll.question}" expiró: no todos votaron a tiempo.`
+        await upsertIgnoreDuplicates(
+          'notifications',
+          [
+            {
+              id,
+              floorId: currentFloor.id,
+              userId: null,
+              type: 'poll_resolved',
+              read: false,
+              message
+            }
+          ],
+          ['id']
+        )
+      }
+    }
+
+    run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [polls, pollVotes, members, todayISO, currentFloor?.id])
 
   // Genera (una sola vez, de forma idempotente) las finalizaciones de
   // la semana actual de las 3 fijas y las notificaciones de
@@ -387,6 +456,14 @@ export function DataProvider({ children }) {
         .map((r) => ({ ...r, toMember: members.find((m) => m.id === r.toUserId), title: describeSwapTarget(r) })),
     [swapRequests, user, members, describeSwapTarget]
   )
+
+  // Selectores reutilizados por Votaciones (bandeja unificada) además de
+  // por sus pantallas originales — antes se recalculaban solo con un
+  // filter local en cada pantalla, ahora viven acá para no duplicar la
+  // lógica.
+  const myAbsenceRequests = useMemo(() => absenceRequests.filter((r) => r.userId === user?.id), [absenceRequests, user])
+  const pendingAbsenceRequests = useMemo(() => absenceRequests.filter((r) => r.status === 'pending'), [absenceRequests])
+  const removalPending = useMemo(() => members.filter((m) => m.removalRequestedBy), [members])
 
   // --- Acciones ---
 
@@ -610,6 +687,29 @@ export function DataProvider({ children }) {
       )
     },
     [currentFloor, notifyUser]
+  )
+
+  // El propio afectado rechaza la solicitud de salida que un admin
+  // inició sobre él: sigue en el piso sin ningún cambio. Distinta de
+  // cancelRemoval (que es el admin cancelándola él mismo) porque el
+  // aviso tiene que ir al lado correcto: acá se le avisa a quien la
+  // inició, no al afectado (que ya sabe que la rechazó él mismo).
+  const rejectMyRemoval = useCallback(
+    async (membershipId) => {
+      if (!currentFloor || !user) return
+      const membership = members.find((m) => m.membershipId === membershipId)
+      const requestedBy = membership?.removalRequestedBy
+      await update('floor_memberships', membershipId, { removalRequestedBy: null, removalRequestedAt: null })
+      if (requestedBy) {
+        await notifyUser(
+          currentFloor.id,
+          requestedBy,
+          'removal_rejected',
+          `${user.name} rechazó la solicitud de salida del piso. Sigue en ${currentFloor.name} sin cambios.`
+        )
+      }
+    },
+    [currentFloor, user, members, notifyUser]
   )
 
   const setMemberRole = useCallback((membershipId, role) => update('floor_memberships', membershipId, { role }), [])
@@ -1072,6 +1172,51 @@ export function DataProvider({ children }) {
     [currentFloor, user, shoppingItems, activities, activityCompletions, weekKey, addPotExpense, setActivityProgress]
   )
 
+  // Consulta nueva (Votaciones): notificación floor-wide de una, no hace
+  // falta el fan-out de notifyUser porque ya le llega a todo el piso
+  // (userId: null) igual que "pote bajo" o "se unió un nuevo miembro".
+  const createPoll = useCallback(
+    async ({ question, options, resolutionMode, deadline }) => {
+      if (!currentFloor || !user) return
+      const poll = await create('polls', {
+        floorId: currentFloor.id,
+        createdBy: user.id,
+        question,
+        options,
+        resolutionMode: resolutionMode || 'majority',
+        deadline: deadline || null
+      })
+      await create('notifications', {
+        floorId: currentFloor.id,
+        userId: null,
+        type: 'poll_created',
+        message: `${user.name} propuso una consulta: "${question}"`
+      })
+      return poll
+    },
+    [currentFloor, user]
+  )
+
+  // Un voto por persona por consulta: si ya votó, cambia de opción
+  // (update); si no, crea el suyo. Corta en seco si la consulta ya no
+  // está pendiente (RLS también lo bloquea, esto solo evita el viaje).
+  const castVote = useCallback(
+    async (pollId, option) => {
+      if (!currentFloor || !user) return
+      const poll = polls.find((p) => p.id === pollId)
+      if (!poll || poll.status !== 'pending') return
+      const existing = pollVotes.find((v) => v.pollId === pollId && v.userId === user.id)
+      if (existing) {
+        await update('poll_votes', existing.id, { option })
+      } else {
+        await create('poll_votes', { pollId, floorId: currentFloor.id, userId: user.id, option })
+      }
+    },
+    [currentFloor, user, polls, pollVotes]
+  )
+
+  const closePoll = useCallback((pollId) => update('polls', pollId, { status: 'closed', resolvedAt: new Date().toISOString() }), [])
+
   const leaderboard = useMemo(() => [...members].sort((a, b) => (b.points || 0) - (a.points || 0)), [members])
 
   const value = {
@@ -1098,6 +1243,9 @@ export function DataProvider({ children }) {
     removeShoppingItem,
     setItemStock,
     absenceRequests,
+    myAbsenceRequests,
+    pendingAbsenceRequests,
+    removalPending,
     awayUserIds,
     requestAbsence,
     decideAbsenceRequest,
@@ -1121,12 +1269,18 @@ export function DataProvider({ children }) {
     updateActivity,
     removeActivity,
     setActivityProgress,
+    polls,
+    pollVotes,
+    createPoll,
+    castVote,
+    closePoll,
     completeTask,
     uncompleteTask,
     reorderRotation,
     removeMember,
     initiateRemoval,
     cancelRemoval,
+    rejectMyRemoval,
     setMemberRole,
     setMemberPotActive,
     setMemberActiveStatus,

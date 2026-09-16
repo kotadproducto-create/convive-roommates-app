@@ -311,6 +311,47 @@ create table if not exists room_partners (
   decided_at timestamptz
 );
 
+-- Votaciones (Consultas): cualquier miembro propone una pregunta con
+-- 2-4 opciones para que el resto vote. `options` va como array plano
+-- (mismo espíritu que activities.weekdays) en vez de una tabla aparte
+-- — no hace falta más que el texto de cada opción. `resolution_mode`
+-- 'majority' (por defecto, mayoría simple en cuanto vota todo el
+-- mundo activo) o 'unanimity' (todos deben elegir la misma opción).
+-- La resolución NO la decide un admin: es automática, ver
+-- resolvePoll() en src/lib/polls.js y el efecto que la invoca en
+-- DataContext.jsx (mismo patrón oportunista que expira
+-- absence_requests, sin cron).
+create table if not exists polls (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  created_by uuid references profiles(id) on delete set null,
+  question text not null check (char_length(question) <= 240),
+  options text[] not null check (array_length(options, 1) between 2 and 4),
+  resolution_mode text not null default 'majority' check (resolution_mode in ('majority', 'unanimity')),
+  deadline date,
+  status text not null default 'pending' check (status in ('pending', 'resolved', 'closed', 'expired')),
+  resolved_option text,
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists polls_floor_idx on polls (floor_id);
+
+-- Un voto por persona por consulta (unique) — re-votar es un UPDATE de
+-- la fila propia, no una fila nueva. `floor_id` va denormalizado
+-- (mismo patrón que shopping_purchases) para que subscribeTable pueda
+-- filtrar por piso sin un join.
+create table if not exists poll_votes (
+  id uuid primary key default gen_random_uuid(),
+  poll_id uuid not null references polls(id) on delete cascade,
+  floor_id uuid not null references floors(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  option text not null,
+  created_at timestamptz not null default now(),
+  unique (poll_id, user_id)
+);
+create index if not exists poll_votes_floor_idx on poll_votes (floor_id);
+create index if not exists poll_votes_poll_idx on poll_votes (poll_id);
+
 -- Gestor de actividades del piso — incluye tanto las actividades
 -- propias como las 3 "fijas" (Compras/Basura/Lavadora, identificadas
 -- por `fixed_key`, no borrables, con `points`): recurrentes (cada N
@@ -579,6 +620,32 @@ create policy "partner decide room_partner" on room_partners for update using (p
 create policy "requester cancel own pending room_partner" on room_partners for update using (requester_id = auth.uid() and status = 'pending') with check (requester_id = auth.uid());
 create policy "either side unlink accepted room_partner" on room_partners for update using ((requester_id = auth.uid() or partner_id = auth.uid()) and status = 'accepted') with check (requester_id = auth.uid() or partner_id = auth.uid());
 
+-- polls/poll_votes: mismo modelo de confianza que activities/shopping_items
+-- — cualquier miembro activo puede transicionar el estado de una consulta
+-- 'pending' (cubre tanto la resolución automática oportunista desde
+-- cualquier cliente abierto, igual que el efecto de expiración de
+-- absence_requests, como el cierre manual — la UI acota ese botón a
+-- autor/admin, no hay distinción a nivel de RLS). Los votos son de cada
+-- quien mientras la consulta siga pendiente; sin política de delete en
+-- ninguna de las dos, solo transicionan status.
+alter table polls enable row level security;
+create policy "select floor polls" on polls for select using (is_active_member(floor_id));
+create policy "insert own poll" on polls for insert with check (is_active_member(floor_id) and created_by = auth.uid());
+create policy "floor member update pending poll" on polls
+  for update using (is_active_member(floor_id) and status = 'pending')
+  with check (is_active_member(floor_id));
+
+alter table poll_votes enable row level security;
+create policy "select floor poll_votes" on poll_votes for select using (is_active_member(floor_id));
+create policy "insert own poll_vote" on poll_votes
+  for insert with check (
+    is_active_member(floor_id) and user_id = auth.uid()
+    and exists (select 1 from polls p where p.id = poll_id and p.status = 'pending')
+  );
+create policy "update own poll_vote while pending" on poll_votes
+  for update using (user_id = auth.uid() and exists (select 1 from polls p where p.id = poll_id and p.status = 'pending'))
+  with check (user_id = auth.uid());
+
 alter table password_reset_attempts enable row level security;
 
 -- activities/activity_completions: mismo modelo colaborativo que
@@ -619,6 +686,8 @@ alter publication supabase_realtime add table shopping_purchases;
 alter publication supabase_realtime add table purchase_sessions;
 alter publication supabase_realtime add table absence_requests;
 alter publication supabase_realtime add table room_partners;
+alter publication supabase_realtime add table polls;
+alter publication supabase_realtime add table poll_votes;
 alter publication supabase_realtime add table activities;
 alter publication supabase_realtime add table activity_completions;
 alter publication supabase_realtime add table swap_requests;
