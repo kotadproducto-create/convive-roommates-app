@@ -223,7 +223,9 @@ function ConviveCard({
 
   const isSelf = member.id === currentUserId
   const pendingItems = getPendingItems(member.id, activities, activityCompletions, weekKey)
-  const canManage = isSelf || isAdmin
+  // Cualquier compañero activo puede marcar a otro como "fuera" (dato de
+  // bajo riesgo y autocorregible), no solo la propia persona o un admin.
+  const canManage = true
   const isAway = member.potActive === false
   const showAge = member.age && (isSelf || member.agePublic !== false)
   const showPhone = member.phone && (isSelf || member.phonePublic !== false)
@@ -267,7 +269,7 @@ function ConviveCard({
   }
 
   async function handleConfirmAway(untilDate) {
-    await declareAway(member.membershipId, untilDate)
+    await declareAway(member.membershipId, member.id, untilDate)
     setShowAwayPopup(false)
   }
 
@@ -367,7 +369,9 @@ function ConviveCard({
         )}
       </div>
 
-      {showAwayPopup && <AwayPopup onCancel={() => setShowAwayPopup(false)} onConfirm={handleConfirmAway} t={t} />}
+      {showAwayPopup && (
+        <AwayPopup onCancel={() => setShowAwayPopup(false)} onConfirm={handleConfirmAway} isSelf={isSelf} targetName={member.name} t={t} />
+      )}
 
       <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="overflow-hidden">
@@ -447,8 +451,10 @@ const SWIPE_REVEAL = 64
 /** Pop-up de "Estoy fuera": elige desde/hasta y confirma — no hace
  * falta que nadie más lo apruebe, el estado cambia al instante y vuelve
  * solo a "En el piso" en cuanto pasa la fecha de regreso (ver el efecto
- * en DataContext.jsx). */
-function AwayPopup({ onCancel, onConfirm, t }) {
+ * en DataContext.jsx). Reutilizado también cuando un compañero marca a
+ * OTRA persona como fuera (isSelf=false): cambia el texto a tercera
+ * persona y el afectado recibe una notificación (ver declareAway). */
+function AwayPopup({ onCancel, onConfirm, isSelf, targetName, t }) {
   const todayISO = new Date().toISOString().slice(0, 10)
   const [startDate, setStartDate] = useState(todayISO)
   const [endDate, setEndDate] = useState('')
@@ -481,8 +487,12 @@ function AwayPopup({ onCancel, onConfirm, t }) {
           <CloseIcon className="w-4 h-4" />
         </button>
 
-        <h3 className="font-display text-lg font-bold mb-1 pr-8">{t('convives.awayPopupTitle')}</h3>
-        <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">{t('convives.awayPopupSubtitle')}</p>
+        <h3 className="font-display text-lg font-bold mb-1 pr-8">
+          {isSelf ? t('convives.awayPopupTitle') : t('convives.awayPopupTitleOther', { name: targetName })}
+        </h3>
+        <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">
+          {isSelf ? t('convives.awayPopupSubtitle') : t('convives.awayPopupSubtitleOther', { name: targetName })}
+        </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           <label className="text-sm">

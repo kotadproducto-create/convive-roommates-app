@@ -266,16 +266,34 @@ export function DataProvider({ children }) {
     async function run() {
       for (const poll of pending) {
         const votesForPoll = pollVotes.filter((v) => v.pollId === poll.id)
-        const outcome = resolvePoll(poll, votesForPoll, activeMemberIds, todayISO)
+        const outcome = resolvePoll(poll, votesForPoll, activeMemberIds, todayISO, Date.now())
         if (!outcome) continue
+
+        // Las consultas de tipo 'rotation_order' (propuesta de nuevo
+        // orden de rotación, ver proposeRotationOrder) solo aplican el
+        // cambio de verdad si se resolvió con la opción "Aprobar" — un
+        // "Rechazar", un cierre sin mayoría o un vencimiento del plazo
+        // dejan floors.rotation_order intacto.
+        const isRotationOrder = poll.kind === 'rotation_order'
+        if (isRotationOrder && outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar' && poll.payload?.newOrder) {
+          await update('floors', currentFloor.id, { rotationOrder: poll.payload.newOrder, rotationEpoch: todayISO })
+        }
+
         await update('polls', poll.id, {
           status: outcome.status,
           resolvedOption: outcome.resolvedOption,
           resolvedAt: new Date().toISOString()
         })
         const id = await deterministicUuid(`notif:poll-resolved:${poll.id}:${outcome.status}`)
-        const message =
-          outcome.status === 'resolved'
+        const message = isRotationOrder
+          ? outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar'
+            ? 'El piso aprobó el nuevo orden de rotación — ya está activo.'
+            : outcome.status === 'resolved'
+              ? 'El piso rechazó la propuesta de nuevo orden de rotación. Sigue el orden anterior.'
+              : outcome.status === 'closed'
+                ? 'La propuesta de nuevo orden de rotación se cerró sin mayoría clara. Sigue el orden anterior.'
+                : 'La propuesta de nuevo orden de rotación venció sin que todos votaran. Sigue el orden anterior.'
+          : outcome.status === 'resolved'
             ? `Se resolvió la consulta "${poll.question}": ganó "${outcome.resolvedOption}"`
             : outcome.status === 'closed'
               ? `La consulta "${poll.question}" se cerró sin mayoría clara.`
@@ -322,7 +340,7 @@ export function DataProvider({ children }) {
 
     async function run() {
       const effectiveRotationOrder = (currentFloor.rotationOrder || []).filter((id) => !awayUserIds.has(id))
-      await ensureActivityPeriods(activities, effectiveRotationOrder, weekKey)
+      await ensureActivityPeriods(activities, effectiveRotationOrder, weekKey, currentFloor)
       if (cancelled) return
 
       const fixedActivities = activities.filter((a) => a.fixedKey)
@@ -367,7 +385,17 @@ export function DataProvider({ children }) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFloor?.id, currentFloor?.rotationOrder?.length, currentFloor?.potAmount, weekKey, awayUserIds, activities])
+  }, [
+    currentFloor?.id,
+    currentFloor?.rotationOrder?.length,
+    currentFloor?.rotationMode,
+    currentFloor?.rotationPeriodUnit,
+    currentFloor?.rotationPeriodInterval,
+    currentFloor?.potAmount,
+    weekKey,
+    awayUserIds,
+    activities
+  ])
 
   // Igual que arriba pero para el gestor de actividades propias: arma
   // (idempotente) la fila de activity_completions del período actual de
@@ -376,9 +404,9 @@ export function DataProvider({ children }) {
   useEffect(() => {
     if (!currentFloor) return
     const effectiveRotationOrder = (currentFloor.rotationOrder || []).filter((id) => !awayUserIds.has(id))
-    ensureActivityPeriods(activities, effectiveRotationOrder, weekKey)
+    ensureActivityPeriods(activities, effectiveRotationOrder, weekKey, currentFloor)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFloor?.id, currentFloor?.rotationOrder?.length, weekKey, activities.length, awayUserIds])
+  }, [currentFloor?.id, currentFloor?.rotationOrder?.length, currentFloor?.rotationMode, currentFloor?.rotationPeriodUnit, currentFloor?.rotationPeriodInterval, weekKey, activities.length, awayUserIds])
 
   const floorTasks = useMemo(() => tasks.filter((t) => t.weekKey === weekKey), [tasks, weekKey])
 
@@ -769,14 +797,27 @@ export function DataProvider({ children }) {
     []
   )
 
-  // "Estoy fuera" de Convives: toggle propio e instantáneo (nadie tiene
-  // que aprobarlo), con fecha de regreso — ver el efecto de arriba que
-  // revierte solo al pasar esa fecha. declareAway también apaga
-  // pot_active (misma exclusión del reparto del pote que ya usaba el
-  // toggle viejo de "vacaciones"), para no duplicar ese mecanismo.
+  // "Estoy fuera" de Convives: instantáneo, nadie tiene que aprobarlo —
+  // ni siquiera cuando lo marca OTRO compañero sobre un tercero (dato de
+  // bajo riesgo, autocorregible: si está mal, cualquiera lo revierte en
+  // un toque). declareAway también apaga pot_active (misma exclusión del
+  // reparto del pote que ya usaba el toggle viejo de "vacaciones"), para
+  // no duplicar ese mecanismo. Si quien lo marca no es la propia persona,
+  // se le avisa — nunca debe enterarse por su cuenta de que otro cambió
+  // su estado.
   const declareAway = useCallback(
-    (membershipId, untilDate) => update('floor_memberships', membershipId, { potActive: false, awayUntil: untilDate }),
-    []
+    async (membershipId, targetUserId, untilDate) => {
+      await update('floor_memberships', membershipId, { potActive: false, awayUntil: untilDate })
+      if (currentFloor && user && targetUserId && targetUserId !== user.id) {
+        await notifyUser(
+          currentFloor.id,
+          targetUserId,
+          'marked_away',
+          `${user.name} te marcó como "Fuera del piso" hasta el ${untilDate}. Si ya estás de vuelta, corrígelo tocando tu estado en Convives.`
+        )
+      }
+    },
+    [currentFloor, user, notifyUser]
   )
   const returnFromAway = useCallback(
     (membershipId) => update('floor_memberships', membershipId, { potActive: true, awayUntil: null }),
@@ -1176,7 +1217,7 @@ export function DataProvider({ children }) {
   // falta el fan-out de notifyUser porque ya le llega a todo el piso
   // (userId: null) igual que "pote bajo" o "se unió un nuevo miembro".
   const createPoll = useCallback(
-    async ({ question, options, resolutionMode, deadline }) => {
+    async ({ question, options, resolutionMode, deadline, kind, payload, deadlineAt }) => {
       if (!currentFloor || !user) return
       const poll = await create('polls', {
         floorId: currentFloor.id,
@@ -1184,7 +1225,10 @@ export function DataProvider({ children }) {
         question,
         options,
         resolutionMode: resolutionMode || 'majority',
-        deadline: deadline || null
+        deadline: deadline || null,
+        kind: kind || 'custom',
+        payload: payload || null,
+        deadlineAt: deadlineAt || null
       })
       await create('notifications', {
         floorId: currentFloor.id,
@@ -1195,6 +1239,57 @@ export function DataProvider({ children }) {
       return poll
     },
     [currentFloor, user]
+  )
+
+  // Propone un nuevo orden de rotación: no toca floors.rotation_order
+  // todavía — crea una consulta de aprobación (kind:'rotation_order') con
+  // un plazo de menos de 24h. Solo si el piso la aprueba por mayoría se
+  // aplica de verdad (ver el efecto de arriba que invoca resolvePoll).
+  // Mientras haya una de estas pendiente, pendingRotationOrderPoll (más
+  // abajo) evita que se proponga una segunda.
+  const proposeRotationOrder = useCallback(
+    (newOrder) =>
+      createPoll({
+        question: `¿Apruebas el nuevo orden de rotación propuesto por ${user?.name || 'un admin'}?`,
+        options: ['Aprobar', 'Rechazar'],
+        resolutionMode: 'majority',
+        kind: 'rotation_order',
+        payload: { newOrder },
+        deadlineAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
+      }),
+    [createPoll, user]
+  )
+
+  // Modo/período de rotación: configuración de piso, se guarda al
+  // instante (no requiere consulta — no mueve a nadie por sí solo). Se
+  // resetea rotationEpoch para que el reloj de turnos en modo 'period'
+  // arranque limpio desde el cambio, sin arrastrar índices calculados
+  // con la cadencia anterior.
+  const setRotationMode = useCallback(
+    (mode) => {
+      if (!currentFloor) return
+      update('floors', currentFloor.id, { rotationMode: mode, rotationEpoch: todayISO })
+    },
+    [currentFloor, todayISO]
+  )
+  const setRotationPeriod = useCallback(
+    (unit, interval) => {
+      if (!currentFloor) return
+      update('floors', currentFloor.id, {
+        rotationPeriodUnit: unit,
+        rotationPeriodInterval: Math.max(1, Number(interval) || 1),
+        rotationEpoch: todayISO
+      })
+    },
+    [currentFloor, todayISO]
+  )
+
+  // Consulta pendiente de aprobar un cambio de orden — usado para
+  // deshabilitar el lápiz de edición mientras haya una en curso, y para
+  // mostrar el banner con su plazo en FloorSettings.
+  const pendingRotationOrderPoll = useMemo(
+    () => polls.find((p) => p.kind === 'rotation_order' && p.status === 'pending') || null,
+    [polls]
   )
 
   // Un voto por persona por consulta: si ya votó, cambia de opción
@@ -1274,6 +1369,10 @@ export function DataProvider({ children }) {
     createPoll,
     castVote,
     closePoll,
+    proposeRotationOrder,
+    setRotationMode,
+    setRotationPeriod,
+    pendingRotationOrderPoll,
     completeTask,
     uncompleteTask,
     reorderRotation,

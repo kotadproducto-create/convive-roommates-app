@@ -83,6 +83,7 @@ export default function Activities() {
           completion={completion}
           memberById={memberById}
           rotationOrder={floor?.rotationOrder}
+          floor={floor}
           onEdit={() => {
             setEditing(activity)
             setShowForm(false)

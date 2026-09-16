@@ -49,6 +49,18 @@ function toDateOnly(dateLike) {
   return dateLike instanceof Date ? dateLike : new Date(`${dateLike}T00:00:00`)
 }
 
+// Mismo cálculo que getMondayOfWeek en rotation.js — repetido acá (una
+// línea) para no crear una dependencia cruzada entre módulos.
+function mondayOfWeekKey(weekKey) {
+  const [year, week] = weekKey.split('-W').map(Number)
+  const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7))
+  const dow = simple.getUTCDay()
+  const monday = new Date(simple)
+  if (dow <= 4) monday.setUTCDate(simple.getUTCDate() - dow + 1)
+  else monday.setUTCDate(simple.getUTCDate() + 8 - dow)
+  return monday
+}
+
 // Mismo cálculo de clave de semana ISO que getWeekKey en rotation.js —
 // repetido acá para no crear una dependencia cruzada entre módulos.
 export function getWeekKeyOf(date) {
@@ -110,20 +122,56 @@ export function rotationPick(rotationOrder, periodIndex) {
   return rotationOrder[periodIndex % rotationOrder.length]
 }
 
+/**
+ * Índice de turno "global" del piso, para el modo de rotación
+ * `Determinado` (`floor.rotationMode === 'period'`): en vez de que cada
+ * actividad avance el turno según SU PROPIA frecuencia (semanal/
+ * mensual/diaria), todas comparten un único reloj — cada N
+ * días/semanas/meses/años (`rotationPeriodUnit`/`rotationPeriodInterval`)
+ * el turno completo avanza una posición, contado desde
+ * `rotationEpoch` (se resetea cada vez que cambia el orden o la
+ * cadencia, para que el conteo arranque limpio).
+ */
+export function globalPeriodIndex(floor, date) {
+  const unit = floor.rotationPeriodUnit || 'week'
+  const interval = floor.rotationPeriodInterval || 1
+  const epoch = toDateOnly(floor.rotationEpoch || date)
+  if (unit === 'year') {
+    return Math.floor((date.getFullYear() - epoch.getFullYear()) / interval)
+  }
+  if (unit === 'month') {
+    return Math.floor((monthIndexFromKey(getMonthKey(date)) - monthIndexFromKey(getMonthKey(epoch))) / interval)
+  }
+  if (unit === 'day') {
+    return Math.floor((dayIndexFromKey(getDateKey(date)) - dayIndexFromKey(getDateKey(epoch))) / interval)
+  }
+  return Math.floor((weekIndexFromKey(getWeekKeyOf(date)) - weekIndexFromKey(getWeekKeyOf(epoch))) / interval)
+}
+
+/** Índice de turno a usar para una actividad en un período dado — en
+ * modo `period` (Determinado), el reloj global del piso reemplaza el
+ * cálculo por-actividad de abajo; en modo `random` (Aleatorio, o pisos
+ * sin configurar) el comportamiento es exactamente el de siempre. */
+function rotationIndexFor(activity, period, weekKey, floor) {
+  if (floor?.rotationMode === 'period' && floor.rotationPeriodUnit) {
+    return globalPeriodIndex(floor, mondayOfWeekKey(weekKey))
+  }
+  return activity.recurrenceUnit === 'month' ? monthIndexFromKey(period) : activity.recurrenceUnit === 'day' ? dayIndexFromKey(period) : weekIndexFromKey(period)
+}
+
 /** ¿Quién le toca a esta actividad en este período? (manual: la
  * persona fija, o nadie en particular si se dejó en "Todos"; rotation:
  * según el rotationOrder del piso). Los eventos únicos ('once')
  * siempre son manuales — la rotación no aplica cuando solo hay un
- * turno. */
-export function assigneeFor(activity, rotationOrder, weekKey) {
+ * turno. `floor` es opcional: sin él (o en modo 'random'), el índice
+ * se calcula igual que siempre, por-actividad. */
+export function assigneeFor(activity, rotationOrder, weekKey, floor) {
   if (activity.frequencyType === 'once' || activity.assignmentMode === 'manual') {
     return activity.assignedUserId || null
   }
   const period = currentPeriodKey(activity, weekKey)
   if (!period) return null
-  const index =
-    activity.recurrenceUnit === 'month' ? monthIndexFromKey(period) : activity.recurrenceUnit === 'day' ? dayIndexFromKey(period) : weekIndexFromKey(period)
-  return rotationPick(rotationOrder, index)
+  return rotationPick(rotationOrder, rotationIndexFor(activity, period, weekKey, floor))
 }
 
 /**
@@ -162,9 +210,9 @@ export function isDueOnDate(activity, date) {
  * no el segundo día de ocurrencia de esta misma semana. `null` si es
  * de una sola vez (no tiene "próxima vez") o si no se encuentra
  * ninguna dentro de los próximos 2 años (p.ej. una semanal sin ningún
- * día de la semana elegido).
+ * día de la semana elegido). `floor` es opcional (ver rotationIndexFor).
  */
-export function nextOccurrence(activity, rotationOrder, fromDate = new Date(), skipPeriodKey = null) {
+export function nextOccurrence(activity, rotationOrder, fromDate = new Date(), skipPeriodKey = null, floor) {
   if (activity.frequencyType !== 'recurring') return null
   const start = toDateOnly(fromDate)
   for (let i = 1; i <= 730; i++) {
@@ -175,7 +223,13 @@ export function nextOccurrence(activity, rotationOrder, fromDate = new Date(), s
       activity.recurrenceUnit === 'month' ? getMonthKey(date) : activity.recurrenceUnit === 'day' ? getDateKey(date) : getWeekKeyOf(date)
     if (period === skipPeriodKey) continue
     const index =
-      activity.recurrenceUnit === 'month' ? monthIndexFromKey(period) : activity.recurrenceUnit === 'day' ? dayIndexFromKey(period) : weekIndexFromKey(period)
+      floor?.rotationMode === 'period' && floor.rotationPeriodUnit
+        ? globalPeriodIndex(floor, date)
+        : activity.recurrenceUnit === 'month'
+          ? monthIndexFromKey(period)
+          : activity.recurrenceUnit === 'day'
+            ? dayIndexFromKey(period)
+            : weekIndexFromKey(period)
     const assignedUserId = activity.assignmentMode === 'manual' ? activity.assignedUserId || null : rotationPick(rotationOrder, index)
     return { date, periodKey: period, assignedUserId }
   }
@@ -208,7 +262,7 @@ export function dueActivitiesOnDate(date, activities, activityCompletions) {
  * vez (p.ej. React.StrictMode en desarrollo, o dos pestañas del mismo
  * piso reaccionando a la vez a un cambio en vivo).
  */
-export async function ensureActivityPeriods(activities, rotationOrder, weekKey) {
+export async function ensureActivityPeriods(activities, rotationOrder, weekKey, floor) {
   const recurring = activities.filter((a) => a.frequencyType === 'recurring')
   if (recurring.length === 0) return
   const rows = recurring
@@ -219,7 +273,7 @@ export async function ensureActivityPeriods(activities, rotationOrder, weekKey) 
         activityId: activity.id,
         floorId: activity.floorId,
         periodKey,
-        assignedUserId: assigneeFor(activity, rotationOrder, weekKey),
+        assignedUserId: assigneeFor(activity, rotationOrder, weekKey, floor),
         timesDone: 0,
         completed: false
       }

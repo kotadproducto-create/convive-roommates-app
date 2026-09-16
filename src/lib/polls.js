@@ -20,13 +20,21 @@
  * la destraben). Si el plazo vence y todavía faltaba gente por votar,
  * pasa a 'expired' en cambio.
  *
- * @param {{status:string, resolutionMode:'majority'|'unanimity', deadline:?string}} poll
+ * `deadlineAt` (opcional, timestamp preciso en vez de solo fecha) es para
+ * consultas que necesitan un plazo más corto que "un día calendario" —
+ * por ahora, la de aprobar un cambio de orden de rotación (<24h). Si el
+ * poll trae `deadlineAt`, se usa esa comparación exacta en vez de
+ * `deadline < todayISO`; si no, el comportamiento es idéntico al de
+ * siempre.
+ *
+ * @param {{status:string, resolutionMode:'majority'|'unanimity', deadline:?string, deadlineAt:?string}} poll
  * @param {{userId:string, option:string}[]} votesForPoll
  * @param {string[]} activeMemberIds
  * @param {string} todayISO - 'YYYY-MM-DD'
+ * @param {number} [nowMs] - solo necesario cuando el poll trae `deadlineAt`
  * @returns {null|{status:'resolved'|'closed'|'expired', resolvedOption:?string}}
  */
-export function resolvePoll(poll, votesForPoll, activeMemberIds, todayISO) {
+export function resolvePoll(poll, votesForPoll, activeMemberIds, todayISO, nowMs) {
   if (poll.status !== 'pending') return null
 
   const electorate = new Set(activeMemberIds)
@@ -52,7 +60,9 @@ export function resolvePoll(poll, votesForPoll, activeMemberIds, todayISO) {
   }
   if (winner) return { status: 'resolved', resolvedOption: winner }
 
-  const deadlinePassed = poll.deadline && poll.deadline < todayISO
+  const deadlinePassed = poll.deadlineAt
+    ? typeof nowMs === 'number' && nowMs >= new Date(poll.deadlineAt).getTime()
+    : poll.deadline && poll.deadline < todayISO
   if (deadlinePassed) {
     if (everyoneVoted) return { status: 'closed', resolvedOption: null }
     return { status: 'expired', resolvedOption: null }

@@ -87,6 +87,38 @@ describe('resolvePoll — plazo', () => {
   })
 })
 
+describe('resolvePoll — deadlineAt (plazo preciso, ej. aprobación de orden de rotación)', () => {
+  const NOW = new Date('2026-09-20T15:00:00Z').getTime()
+
+  it('plazo por timestamp vencido, con votos faltantes → expirada', () => {
+    const votes = [{ userId: 'A', option: 'Aprobar' }]
+    const result = resolvePoll(poll({ deadlineAt: '2026-09-20T14:00:00Z' }), votes, ['A', 'B'], TODAY, NOW)
+    expect(result).toEqual({ status: 'expired', resolvedOption: null })
+  })
+
+  it('plazo por timestamp todavía no vencido, aunque falten votos: no cambia nada', () => {
+    const votes = []
+    const result = resolvePoll(poll({ deadlineAt: '2026-09-20T16:00:00Z' }), votes, ['A', 'B'], TODAY, NOW)
+    expect(result).toBeNull()
+  })
+
+  it('deadlineAt tiene prioridad sobre deadline (fecha) cuando ambos están presentes', () => {
+    const votes = [{ userId: 'A', option: 'Aprobar' }]
+    // deadline (fecha) todavía no venció hoy, pero deadlineAt (hora exacta) sí.
+    const result = resolvePoll(poll({ deadline: '2026-09-21', deadlineAt: '2026-09-20T14:00:00Z' }), votes, ['A', 'B'], TODAY, NOW)
+    expect(result).toEqual({ status: 'expired', resolvedOption: null })
+  })
+
+  it('mayoría alcanzada antes del plazo se resuelve igual, sin necesitar nowMs', () => {
+    const votes = [
+      { userId: 'A', option: 'Aprobar' },
+      { userId: 'B', option: 'Aprobar' }
+    ]
+    const result = resolvePoll(poll({ deadlineAt: '2026-09-20T16:00:00Z' }), votes, ['A', 'B'], TODAY, NOW)
+    expect(result).toEqual({ status: 'resolved', resolvedOption: 'Aprobar' })
+  })
+})
+
 describe('resolvePoll — casos generales', () => {
   it('una consulta que ya no está pendiente devuelve null (idempotente)', () => {
     const votes = [{ userId: 'A', option: 'Sí' }]

@@ -254,12 +254,14 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
             <span>{t(`votaciones.${STATUS_KEY[poll.status]}`)}</span>
             <span>·</span>
             <span>{poll.resolutionMode === 'unanimity' ? t('votaciones.modeUnanimity') : t('votaciones.modeMajority')}</span>
-            {poll.deadline && (
+            {(poll.deadlineAt || poll.deadline) && (
               <>
                 <span>·</span>
                 <span>
                   {t('votaciones.deadlineLabel', {
-                    date: format(new Date(`${poll.deadline}T00:00:00`), t('calendar.dayMonthFormat'), { locale: dateLocale })
+                    date: poll.deadlineAt
+                      ? format(new Date(poll.deadlineAt), 'd MMM, HH:mm', { locale: dateLocale })
+                      : format(new Date(`${poll.deadline}T00:00:00`), t('calendar.dayMonthFormat'), { locale: dateLocale })
                   })}
                 </span>
               </>

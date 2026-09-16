@@ -36,6 +36,13 @@ export default function Wallet() {
   const activeMembers = useMemo(() => members.filter((m) => m.potActive !== false), [members])
   const inactiveMembers = useMemo(() => members.filter((m) => m.potActive === false), [members])
 
+  // Quien ya aportó o registró un gasto no puede marcarse "De baja": una
+  // vez que participó en el pote, ya está "adentro" — para salirse de
+  // verdad está el mecanismo de "Estoy fuera" en Convives (con fecha de
+  // regreso), no este toggle manual pensado para alguien que todavía no
+  // había empezado a participar.
+  const hasPotActivity = useMemo(() => new Set(potContributions.map((c) => c.userId)), [potContributions])
+
   // Solo los aportes (montos positivos) cuentan para el saldo personal de
   // cada quien. Los gastos son del grupo, no una deuda de quien los registra.
   const aportes = useMemo(() => potContributions.filter((c) => Number(c.amount) > 0), [potContributions])
@@ -140,10 +147,14 @@ export default function Wallet() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <input type="number" className="input w-24" value={amount} min={1} onChange={(e) => setAmount(e.target.value)} />
-              <button className="btn-primary text-sm" onClick={requestContribute}>
-                {t('wallet.contribute')}
-              </button>
+              {!showExpenseForm && (
+                <>
+                  <input type="number" className="input w-24" value={amount} min={1} onChange={(e) => setAmount(e.target.value)} />
+                  <button className="btn-primary text-sm" onClick={requestContribute}>
+                    {t('wallet.contribute')}
+                  </button>
+                </>
+              )}
               <button className="btn-secondary text-sm" onClick={() => setShowExpenseForm((s) => !s)}>
                 {showExpenseForm ? t('wallet.cancel') : t('wallet.expenses')}
               </button>
@@ -208,7 +219,7 @@ export default function Wallet() {
                       <span className={`text-sm font-bold ${positive ? 'text-sage-500' : negative ? 'text-clay-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
                         {b.balance > 0 ? '+' : ''}{b.balance.toFixed(2)}€
                       </span>
-                      {canToggle(m) && (
+                      {canToggle(m) && !hasPotActivity.has(m.id) && (
                         <button onClick={() => toggleActive(m)} className="text-xs font-semibold text-violet-500 hover:underline">
                           {t('wallet.setInactive')}
                         </button>

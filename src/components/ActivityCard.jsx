@@ -46,7 +46,7 @@ export function describeFrequency(activity, t, dateLocale) {
  * veces por semana, si no un botón simple de marcar hecho/deshacer).
  * Usada en Actividades y en Inicio (Dashboard) para las 3 fijas.
  */
-export default function ActivityCard({ activity, completion, memberById, rotationOrder, onEdit, onDelete, onProgress, t, dateLocale }) {
+export default function ActivityCard({ activity, completion, memberById, rotationOrder, floor, onEdit, onDelete, onProgress, t, dateLocale }) {
   const assignedUserId = completion?.assignedUserId || activity.assignedUserId
   const assignee = memberById[assignedUserId]
   const isEveryone = activity.assignmentMode === 'manual' && !assignedUserId
@@ -61,8 +61,8 @@ export default function ActivityCard({ activity, completion, memberById, rotatio
   // marcada como hecha — es ahí donde tiene sentido preguntarse "¿y la
   // próxima vez?" en vez de mostrarlo siempre.
   const next = useMemo(
-    () => (isDone ? nextOccurrence(activity, rotationOrder || [], new Date(), completion?.periodKey ?? null) : null),
-    [isDone, activity, rotationOrder, completion?.periodKey]
+    () => (isDone ? nextOccurrence(activity, rotationOrder || [], new Date(), completion?.periodKey ?? null, floor) : null),
+    [isDone, activity, rotationOrder, completion?.periodKey, floor]
   )
   const nextAssignee = next?.assignedUserId ? memberById[next.assignedUserId] : null
 

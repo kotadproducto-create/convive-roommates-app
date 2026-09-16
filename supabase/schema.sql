@@ -53,6 +53,17 @@ create table if not exists floors (
   name text not null,
   invite_code text unique not null,
   rotation_order uuid[] not null default '{}',
+  -- Modo de "Orden de rotación" (Tu piso): 'random' (por defecto,
+  -- compatible con el comportamiento de siempre — cada actividad avanza
+  -- el turno según SU PROPIA frecuencia) o 'period' (Determinado: el
+  -- turno completo avanza según una cadencia única de piso, ver
+  -- globalPeriodIndex en lib/activities.js). rotation_epoch es la fecha
+  -- de referencia de esa cadencia — se resetea cada vez que el orden o
+  -- el período cambian de verdad, para que el conteo arranque limpio.
+  rotation_mode text not null default 'random' check (rotation_mode in ('random', 'period')),
+  rotation_period_unit text check (rotation_period_unit in ('day', 'week', 'month', 'year')),
+  rotation_period_interval integer not null default 1,
+  rotation_epoch date,
   pot_amount numeric not null default 0,
   pot_threshold numeric not null default 30,
   pot_per_person numeric not null default 10,
@@ -329,6 +340,16 @@ create table if not exists polls (
   options text[] not null check (array_length(options, 1) between 2 and 4),
   resolution_mode text not null default 'majority' check (resolution_mode in ('majority', 'unanimity')),
   deadline date,
+  -- 'kind' distingue las consultas normales (cualquier roommate,
+  -- 'custom') de las que genera el propio sistema para pedir aprobación
+  -- de un cambio de orden de rotación ('rotation_order', ver
+  -- proposeRotationOrder en DataContext.jsx); 'payload' guarda los datos
+  -- que aplicar si se aprueba (ej. {newOrder:[...]}). 'deadline_at' es un
+  -- plazo con hora exacta (no solo fecha) para cuando "menos de 24h" de
+  -- verdad importa — las consultas normales siguen usando 'deadline'.
+  kind text not null default 'custom' check (kind in ('custom', 'rotation_order')),
+  payload jsonb,
+  deadline_at timestamptz,
   status text not null default 'pending' check (status in ('pending', 'resolved', 'closed', 'expired')),
   resolved_option text,
   resolved_at timestamptz,

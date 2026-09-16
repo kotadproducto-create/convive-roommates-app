@@ -9,7 +9,7 @@ import { update, getRotationHistory } from '../lib/db'
 import { TASK_LABEL, getWeekKey, getMondayOfWeek } from '../lib/rotation'
 import { assigneeFor } from '../lib/activities'
 import { FIXED_ICONS } from '../components/ActivityCard'
-import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon } from '../components/icons'
+import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon, SparkleIcon } from '../components/icons'
 import { format, addDays } from 'date-fns'
 
 /** Valida que sea una URL http(s) bien formada, igual que en la lista de
@@ -34,7 +34,10 @@ export default function FloorSettings() {
     myAbsenceRequests,
     pendingAbsenceRequests,
     awayUserIds,
-    reorderRotation,
+    proposeRotationOrder,
+    setRotationMode,
+    setRotationPeriod,
+    pendingRotationOrderPoll,
     initiateRemoval,
     cancelRemoval,
     setMemberRole,
@@ -57,14 +60,6 @@ export default function FloorSettings() {
 
   const order = floor?.rotationOrder || []
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]))
-
-  function move(idx, dir) {
-    const newOrder = [...order]
-    const target = idx + dir
-    if (target < 0 || target >= newOrder.length) return
-    ;[newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]]
-    reorderRotation(newOrder)
-  }
 
   function handleRemove(member) {
     if (member.id === user.id) {
@@ -203,8 +198,12 @@ export default function FloorSettings() {
           <RotationSection
             isAdmin={isAdmin}
             order={order}
+            floor={floor}
             memberById={memberById}
-            move={move}
+            proposeRotationOrder={proposeRotationOrder}
+            setRotationMode={setRotationMode}
+            setRotationPeriod={setRotationPeriod}
+            pendingRotationOrderPoll={pendingRotationOrderPoll}
             weekKey={weekKey}
             awayUserIds={awayUserIds}
             floorId={floor?.id}
@@ -315,8 +314,12 @@ const FIXED_ORDER = ['compras', 'basura', 'lavadora']
 function RotationSection({
   isAdmin,
   order,
+  floor,
   memberById,
-  move,
+  proposeRotationOrder,
+  setRotationMode,
+  setRotationPeriod,
+  pendingRotationOrderPoll,
   weekKey,
   awayUserIds,
   floorId,
@@ -333,20 +336,60 @@ function RotationSection({
   const [showAbsenceForm, setShowAbsenceForm] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState(null)
+  const [showEditConfirm, setShowEditConfirm] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(order)
 
   const monday = getMondayOfWeek(weekKey)
   const sunday = addDays(monday, 6)
   const nextMonday = addDays(monday, 7)
   const nextWeekKey = getWeekKey(nextMonday)
 
-  const fixedActivities = useMemo(
+  // Todas las actividades rotativas (no solo las 3 fijas) — antes esta
+  // sección solo mostraba el turno de Compras/Basura/Lavadora, aunque el
+  // resto de actividades propias no-manuales ya rotan por el mismo orden.
+  const rotatingActivities = useMemo(
     () =>
       activities
-        .filter((a) => a.fixedKey)
+        .filter((a) => a.frequencyType === 'recurring' && a.assignmentMode !== 'manual')
         .slice()
-        .sort((a, b) => FIXED_ORDER.indexOf(a.fixedKey) - FIXED_ORDER.indexOf(b.fixedKey)),
+        .sort((a, b) => {
+          const ia = a.fixedKey ? FIXED_ORDER.indexOf(a.fixedKey) : 99
+          const ib = b.fixedKey ? FIXED_ORDER.indexOf(b.fixedKey) : 99
+          return ia - ib
+        }),
     [activities]
   )
+
+  function startEditing() {
+    setDraft(order)
+    setEditing(true)
+    setShowEditConfirm(false)
+  }
+
+  function moveDraft(idx, dir) {
+    const next = [...draft]
+    const target = idx + dir
+    if (target < 0 || target >= next.length) return
+    ;[next[idx], next[target]] = [next[target], next[idx]]
+    setDraft(next)
+  }
+
+  function shuffleDraft() {
+    const next = [...draft]
+    for (let i = next.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[next[i], next[j]] = [next[j], next[i]]
+    }
+    setDraft(next)
+  }
+
+  const draftChanged = JSON.stringify(draft) !== JSON.stringify(order)
+
+  async function handlePropose() {
+    await proposeRotationOrder(draft)
+    setEditing(false)
+  }
 
   async function loadHistory() {
     if (history !== null || !floorId) return
@@ -356,11 +399,33 @@ function RotationSection({
 
   return (
     <div>
-      <h2 className="font-display font-semibold mb-1">{t('floorSettings.rotationOrderTitle')}</h2>
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <h2 className="font-display font-semibold">{t('floorSettings.rotationOrderTitle')}</h2>
+        {isAdmin && !editing && (
+          <button
+            type="button"
+            onClick={() => setShowEditConfirm(true)}
+            disabled={!!pendingRotationOrderPoll}
+            title={t('floorSettings.editRotation')}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 disabled:opacity-30 disabled:hover:bg-transparent shrink-0"
+          >
+            <EditIcon className="w-4 h-4" />
+          </button>
+        )}
+      </div>
       <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
         {t('floorSettings.rotationDesc')}
         {!isAdmin && t('floorSettings.adminOnlyReorder')}
       </p>
+
+      {pendingRotationOrderPoll && (
+        <div className="flex items-center justify-between gap-2 text-sm bg-gold-100 dark:bg-gold-400/15 rounded-xl px-3 py-2.5 mb-4">
+          <span className="min-w-0">{t('floorSettings.pendingProposalBanner')}</span>
+          <Link to="/votaciones" className="font-semibold text-violet-500 hover:underline shrink-0">
+            {t('floorSettings.voteNow')}
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-sm">
         <div className="bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2.5">
@@ -374,24 +439,24 @@ function RotationSection({
       </div>
 
       <div className="flex flex-col gap-1.5 mb-4">
-        {fixedActivities.map((activity) => {
-          const Icon = FIXED_ICONS[activity.fixedKey]
-          const currentId = assigneeFor(activity, order, weekKey)
-          const nextId = assigneeFor(activity, order, nextWeekKey)
+        {rotatingActivities.map((activity) => {
+          const Icon = (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon
+          const currentId = assigneeFor(activity, order, weekKey, floor)
+          const nextId = assigneeFor(activity, order, nextWeekKey, floor)
           return (
-            <div key={activity.id} className="flex items-center justify-between text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+            <div key={activity.id} className="flex items-center justify-between gap-2 text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
               {activity.fixedKey === 'compras' ? (
-                <Link to="/compras" className="flex items-center gap-2 hover:opacity-80" title={t('floorSettings.goToShoppingList')}>
-                  {Icon && <Icon className="w-4 h-4 text-violet-500" />}
-                  <span className="underline decoration-dotted underline-offset-2">{activity.title}</span>
+                <Link to="/compras" className="flex items-center gap-2 min-w-0 hover:opacity-80" title={t('floorSettings.goToShoppingList')}>
+                  <Icon className="w-4 h-4 text-violet-500 shrink-0" />
+                  <span className="underline decoration-dotted underline-offset-2 truncate">{activity.title}</span>
                 </Link>
               ) : (
-                <span className="flex items-center gap-2">
-                  {Icon && <Icon className="w-4 h-4 text-violet-500" />}
-                  {activity.title}
+                <span className="flex items-center gap-2 min-w-0">
+                  <Icon className="w-4 h-4 text-violet-500 shrink-0" />
+                  <span className="truncate">{activity.title}</span>
                 </span>
               )}
-              <span className="text-xs text-ink-900/50 dark:text-cream-100/50">
+              <span className="text-xs text-ink-900/50 dark:text-cream-100/50 shrink-0">
                 <strong className="text-ink-900 dark:text-cream-100">{memberById[currentId]?.name || t('floorSettings.unassigned')}</strong>
                 {t('floorSettings.nextArrow')}
                 {memberById[nextId]?.name || t('floorSettings.unassigned')}
@@ -401,32 +466,76 @@ function RotationSection({
         })}
       </div>
 
-      <ol className="flex flex-col gap-2 mb-4">
-        {order.map((id, idx) => {
-          const m = memberById[id]
-          if (!m) return null
-          const away = awayUserIds.has(id)
-          return (
-            <li key={id} className="flex items-center justify-between bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
-              <span className="text-sm font-medium flex items-center gap-1.5">
-                <span className="text-ink-900/40 dark:text-cream-100/40">{idx + 1}.</span>
-                {m.name} {m.role === 'admin' && <span className="text-[10px] uppercase font-bold text-violet-500">{t('floorSettings.admin')}</span>}
-                {away && (
-                  <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md">
-                    <SunIcon className="w-3 h-3" />{t('floorSettings.awayTag')}
+      {editing ? (
+        <div className="flex flex-col gap-3 mb-4 border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-xl p-3">
+          <RotationModePicker floor={floor} setRotationMode={setRotationMode} setRotationPeriod={setRotationPeriod} t={t} />
+
+          {(floor?.rotationMode || 'random') === 'random' && (
+            <button type="button" onClick={shuffleDraft} className="btn-secondary text-sm self-start">
+              {t('floorSettings.shuffleButton')}
+            </button>
+          )}
+
+          <ol className="flex flex-col gap-2">
+            {draft.map((id, idx) => {
+              const m = memberById[id]
+              if (!m) return null
+              const away = awayUserIds.has(id)
+              return (
+                <li key={id} className="flex items-center justify-between bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+                  <span className="text-sm font-medium flex items-center gap-1.5">
+                    <span className="text-ink-900/40 dark:text-cream-100/40">{idx + 1}.</span>
+                    {m.name} {m.role === 'admin' && <span className="text-[10px] uppercase font-bold text-violet-500">{t('floorSettings.admin')}</span>}
+                    {away && (
+                      <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md">
+                        <SunIcon className="w-3 h-3" />{t('floorSettings.awayTag')}
+                      </span>
+                    )}
                   </span>
-                )}
-              </span>
-              {isAdmin && (
-                <div className="flex gap-1">
-                  <button onClick={() => move(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
-                  <button onClick={() => move(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
-                </div>
-              )}
-            </li>
-          )
-        })}
-      </ol>
+                  <div className="flex gap-1">
+                    <button onClick={() => moveDraft(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
+                    <button onClick={() => moveDraft(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+
+          <div className="flex gap-2">
+            <button type="button" className="btn-secondary text-sm flex-1" onClick={() => setEditing(false)}>
+              {t('floorSettings.cancel')}
+            </button>
+            <button type="button" className="btn-primary text-sm flex-1" onClick={handlePropose} disabled={!draftChanged}>
+              {t('floorSettings.proposeChangeButton')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <ol className="flex flex-col gap-2 mb-4">
+          {order.map((id, idx) => {
+            const m = memberById[id]
+            if (!m) return null
+            const away = awayUserIds.has(id)
+            return (
+              <li key={id} className="flex items-center justify-between bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+                <span className="text-sm font-medium flex items-center gap-1.5">
+                  <span className="text-ink-900/40 dark:text-cream-100/40">{idx + 1}.</span>
+                  {m.name} {m.role === 'admin' && <span className="text-[10px] uppercase font-bold text-violet-500">{t('floorSettings.admin')}</span>}
+                  {away && (
+                    <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md">
+                      <SunIcon className="w-3 h-3" />{t('floorSettings.awayTag')}
+                    </span>
+                  )}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+
+      {showEditConfirm && (
+        <RotationEditConfirmPopup onCancel={() => setShowEditConfirm(false)} onConfirm={startEditing} t={t} />
+      )}
 
       <div className="border-t border-ink-900/10 dark:border-cream-100/15 pt-4 mb-4">
         <button type="button" className="btn-secondary text-sm" onClick={() => setShowAbsenceForm((s) => !s)}>
@@ -504,13 +613,111 @@ function RotationSection({
           <RotationHistory
             history={history}
             memberById={memberById}
-            activities={fixedActivities}
+            activities={rotatingActivities.filter((a) => a.fixedKey)}
             activityCompletions={activityCompletions}
             t={t}
             dateLocale={dateLocale}
           />
         )}
       </div>
+    </div>
+  )
+}
+
+/** Pop-up antes de entrar en modo edición del orden de rotación — deja
+ * claro de entrada que reordenar a las personas no aplica al instante,
+ * necesita que el piso lo apruebe (mismo patrón fixed-modal que
+ * AwayPopup/ConfirmPotDialog en otras pantallas). */
+function RotationEditConfirmPopup({ onCancel, onConfirm, t }) {
+  return (
+    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <button
+          type="button"
+          onClick={onCancel}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+        <h3 className="font-display text-lg font-bold mb-2 pr-8">{t('floorSettings.editRotationConfirmTitle')}</h3>
+        <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mb-5">{t('floorSettings.editRotationConfirmBody')}</p>
+        <div className="flex gap-2">
+          <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel}>
+            {t('floorSettings.cancel')}
+          </button>
+          <button type="button" className="btn-primary text-sm flex-1" onClick={onConfirm}>
+            {t('floorSettings.continueButton')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const PERIOD_UNITS = ['day', 'week', 'month', 'year']
+
+/** Selector de modo (Aleatorio/Determinado) +, en Determinado, el
+ * picker "Repetir cada N día/semana/mes/año" (mismo patrón visual que
+ * activities.repeatEvery en Activities.jsx). Ambos se guardan al
+ * instante — no requieren la consulta de aprobación, solo reordenar a
+ * las personas sí (ver proposeRotationOrder). */
+function RotationModePicker({ floor, setRotationMode, setRotationPeriod, t }) {
+  const mode = floor?.rotationMode || 'random'
+  const [intervalValue, setIntervalValue] = useState(floor?.rotationPeriodInterval || 1)
+  const [unit, setUnit] = useState(floor?.rotationPeriodUnit || 'week')
+
+  function commitPeriod(nextInterval, nextUnit) {
+    setIntervalValue(nextInterval)
+    setUnit(nextUnit)
+    setRotationPeriod(nextUnit, nextInterval)
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        {['random', 'period'].map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setRotationMode(m)}
+            className={`flex-1 text-left text-xs font-semibold px-3 py-2 rounded-xl border-2 ${
+              mode === m
+                ? 'bg-gold-100 dark:bg-gold-400/25 border-ink-900 dark:border-cream-100/50 text-ink-900 dark:text-cream-100'
+                : 'border-ink-900/15 dark:border-cream-100/20 text-ink-900/70 dark:text-cream-100/70'
+            }`}
+          >
+            <span className="block">{m === 'random' ? t('floorSettings.modeRandom') : t('floorSettings.modePeriod')}</span>
+            <span className="block font-normal text-[11px] opacity-70 mt-0.5">
+              {m === 'random' ? t('floorSettings.modeRandomDesc') : t('floorSettings.modePeriodDesc')}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {mode === 'period' && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm shrink-0">{t('floorSettings.repeatEvery')}</span>
+          <input
+            type="number"
+            min="1"
+            max="52"
+            className="input w-16 text-center"
+            value={intervalValue}
+            onChange={(e) => commitPeriod(e.target.value, unit)}
+          />
+          <select className="input flex-1" value={unit} onChange={(e) => commitPeriod(intervalValue, e.target.value)}>
+            {PERIOD_UNITS.map((u) => (
+              <option key={u} value={u}>
+                {t(`floorSettings.unit${u.charAt(0).toUpperCase()}${u.slice(1)}Option`)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   )
 }
