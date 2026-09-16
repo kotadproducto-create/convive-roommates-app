@@ -84,8 +84,9 @@ create table if not exists floor_memberships (
   status text not null default 'active' check (status in ('active', 'left', 'pending', 'rejected')),
   joined_at timestamptz not null default now(),
   left_at timestamptz,
-  pot_active boolean not null default true, -- baja temporal del reparto del pote (viaje, etc.); no afecta la membresía real del piso. Se muestra como "de vacaciones" en la tarjeta de Convives (invertido: vacaciones = pot_active false)
-  active_status boolean not null default true, -- indicador informativo de presencia en el piso ("Convives"); no afecta rotación de tareas ni el pote, solo visual
+  pot_active boolean not null default true, -- baja temporal del reparto del pote (viaje, etc.); no afecta la membresía real del piso. Se muestra como "Fuera del piso" en la tarjeta de Convives (invertido: fuera = pot_active false)
+  away_until date, -- hasta qué fecha vuelve, puesta por "Estoy fuera" en Convives; null = sin fecha conocida, o ya está en el piso. Un efecto en DataContext.jsx reactiva pot_active solo al pasar esta fecha.
+  active_status boolean not null default true, -- indicador informativo de presencia en el piso ("Convives"); ya no se usa en la UI, se deja por si hiciera falta
   first_seen_by uuid references profiles(id), -- quién de los miembros activos "reclamó" primero el pop-up de esta solicitud pendiente (para no mostrarla a todos a la vez)
   removal_requested_by uuid references profiles(id), -- salida iniciada por un admin: pendiente hasta que el propio afectado la confirme (o el admin la cancele). La salida voluntaria no usa esto, es instantánea.
   removal_requested_at timestamptz

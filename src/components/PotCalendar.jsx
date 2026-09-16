@@ -76,30 +76,30 @@ export default function PotCalendar({ contributions, memberById = {} }) {
 
   return (
     <div className="card p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => { setCursor((d) => addMonths(d, -1)); setSelected(null) }}
             aria-label={t('wallet.prevMonthAria')}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-90 transition-transform"
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-90 transition-transform shrink-0"
           >
             ‹
           </button>
-          <p className="font-display font-bold capitalize min-w-[9rem] text-center">{format(cursor, t('calendar.monthYearFormat'), { locale: dateLocale })}</p>
+          <p className="font-display font-bold capitalize text-center">{format(cursor, t('calendar.monthYearFormat'), { locale: dateLocale })}</p>
           <button
             type="button"
             onClick={() => { setCursor((d) => addMonths(d, 1)); setSelected(null) }}
             aria-label={t('wallet.nextMonthAria')}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-90 transition-transform"
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-90 transition-transform shrink-0"
           >
             ›
           </button>
         </div>
-        <div className="flex items-center gap-3 text-xs font-semibold text-ink-900/60 dark:text-cream-100/60">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sage-500 inline-block" />{t('wallet.contributionLegend')}</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-clay-500 inline-block" />{t('wallet.expenseLegend')}</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-ink-900/30 dark:border-cream-100/30 inline-block" />{t('wallet.noMovementLegend')}</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-ink-900/60 dark:text-cream-100/60">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sage-500 inline-block shrink-0" />{t('wallet.contributionLegend')}</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-clay-500 inline-block shrink-0" />{t('wallet.expenseLegend')}</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-ink-900/30 dark:border-cream-100/30 inline-block shrink-0" />{t('wallet.noMovementLegend')}</span>
         </div>
       </div>
 
@@ -149,9 +149,9 @@ export default function PotCalendar({ contributions, memberById = {} }) {
 
       {selected && (
         <div className="mt-4 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
-          <div className="flex items-center justify-between mb-2">
-            <p className="font-display font-semibold capitalize">{format(selected, t('calendar.dayTitleFormat'), { locale: dateLocale })}</p>
-            <div className="text-right">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-2">
+            <p className="font-display font-semibold capitalize min-w-0">{format(selected, t('calendar.dayTitleFormat'), { locale: dateLocale })}</p>
+            <div className="text-right shrink-0">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('wallet.balanceThatDay')}</p>
               <p className={`font-display font-bold ${potAmountColorClass(balanceAsOf(selected))}`}>
                 {balanceAsOf(selected).toFixed(2)}€

@@ -9,8 +9,8 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { currentPeriodKey } from '../lib/activities'
 import { getMemberColor } from '../lib/roomieColors'
-import { CoinIcon, SunIcon, HomeIcon, PhoneIcon, EditIcon, PlusIcon, MinusIcon, ChevronDownIcon } from '../components/icons'
-import { formatDistanceToNowStrict } from 'date-fns'
+import { CoinIcon, SunIcon, HomeIcon, PhoneIcon, EditIcon, PlusIcon, MinusIcon, ChevronDownIcon, CloseIcon } from '../components/icons'
+import { formatDistanceToNowStrict, format } from 'date-fns'
 
 export default function Convives() {
   const { user, membership } = useAuth()
@@ -50,7 +50,7 @@ export default function Convives() {
         </Reveal>
       )}
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {members.map((m, i) => (
           <Reveal key={m.id} delay={i * 60}>
             <ConviveCard
@@ -217,14 +217,14 @@ function ConviveCard({
   t,
   dateLocale
 }) {
-  const { setMemberPotActive, setMemberActiveStatus } = useData()
+  const { declareAway, returnFromAway } = useData()
   const [adjusting, setAdjusting] = useState(false)
+  const [showAwayPopup, setShowAwayPopup] = useState(false)
 
   const isSelf = member.id === currentUserId
   const pendingItems = getPendingItems(member.id, activities, activityCompletions, weekKey)
   const canManage = isSelf || isAdmin
-  const onVacation = member.potActive === false
-  const isActive = member.activeStatus !== false
+  const isAway = member.potActive === false
   const showAge = member.age && (isSelf || member.agePublic !== false)
   const showPhone = member.phone && (isSelf || member.phonePublic !== false)
   const showOccupation = member.occupation && (isSelf || member.occupationPublic !== false)
@@ -258,12 +258,17 @@ function ConviveCard({
     setDragX((x) => (x > SWIPE_REVEAL / 2 ? SWIPE_REVEAL : 0))
   }
 
-  function toggleVacation() {
-    setMemberPotActive(member.membershipId, onVacation)
+  // En "En el piso" (verde): pulsar abre el pop-up de fechas para
+  // declararse fuera. En "Fuera del piso" (gris): pulsar vuelve al
+  // instante, sin pop-up — salir se planea, volver es inmediato.
+  function handleStatusClick() {
+    if (isAway) returnFromAway(member.membershipId)
+    else setShowAwayPopup(true)
   }
 
-  function toggleActive() {
-    setMemberActiveStatus(member.membershipId, !isActive)
+  async function handleConfirmAway(untilDate) {
+    await declareAway(member.membershipId, untilDate)
+    setShowAwayPopup(false)
   }
 
   return (
@@ -331,32 +336,38 @@ function ConviveCard({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={!canManage}
-          onClick={toggleActive}
+          onClick={handleStatusClick}
           className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full transition-colors ${
-            isActive
-              ? 'bg-sage-500/15 text-sage-500'
-              : 'bg-ink-900/10 dark:bg-cream-100/10 text-ink-900/50 dark:text-cream-100/50'
+            isAway
+              ? 'bg-ink-900/10 dark:bg-cream-100/10 text-ink-900/50 dark:text-cream-100/50'
+              : 'bg-sage-500/15 text-sage-500'
           } ${canManage ? 'active:scale-95' : 'cursor-default'}`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-sage-500' : 'bg-ink-900/30 dark:bg-cream-100/30'}`} />
-          {isActive ? t('convives.active') : t('convives.inactive')}
+          {isAway ? <SunIcon className="w-3 h-3" /> : <HomeIcon className="w-3 h-3" />}
+          {isAway ? t('convives.awayFromFloor') : t('convives.inFloor')}
         </button>
-        <button
-          type="button"
-          disabled={!canManage}
-          onClick={toggleVacation}
-          className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full transition-colors ${
-            onVacation ? 'bg-gold-400/20 text-gold-500' : 'bg-violet-500/10 text-violet-500'
-          } ${canManage ? 'active:scale-95' : 'cursor-default'}`}
-        >
-          {onVacation ? <SunIcon className="w-3 h-3" /> : <HomeIcon className="w-3 h-3" />}
-          {onVacation ? t('convives.onVacation') : t('convives.inFloor')}
-        </button>
+        {isAway && member.awayUntil && (
+          <span className="text-[11px] text-ink-900/40 dark:text-cream-100/40">
+            {t('convives.awayUntilLabel', { date: format(new Date(`${member.awayUntil}T00:00:00`), t('calendar.dayMonthFormat'), { locale: dateLocale }) })}
+          </span>
+        )}
+        {isSelf && !isAway && (
+          <button
+            type="button"
+            onClick={() => setShowAwayPopup(true)}
+            className="ml-auto rounded-full bg-gold-500 text-ink-900 border-2 border-ink-900 dark:border-cream-100/40 px-3.5 py-1.5 text-[11px] font-bold flex items-center gap-1 active:scale-95 transition-transform shadow-sm"
+          >
+            <SunIcon className="w-3.5 h-3.5" />
+            {t('convives.imAway')}
+          </button>
+        )}
       </div>
+
+      {showAwayPopup && <AwayPopup onCancel={() => setShowAwayPopup(false)} onConfirm={handleConfirmAway} t={t} />}
 
       <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="overflow-hidden">
@@ -432,6 +443,70 @@ function ConviveCard({
 }
 
 const SWIPE_REVEAL = 64
+
+/** Pop-up de "Estoy fuera": elige desde/hasta y confirma — no hace
+ * falta que nadie más lo apruebe, el estado cambia al instante y vuelve
+ * solo a "En el piso" en cuanto pasa la fecha de regreso (ver el efecto
+ * en DataContext.jsx). */
+function AwayPopup({ onCancel, onConfirm, t }) {
+  const todayISO = new Date().toISOString().slice(0, 10)
+  const [startDate, setStartDate] = useState(todayISO)
+  const [endDate, setEndDate] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!endDate || endDate < startDate) return
+    setSubmitting(true)
+    try {
+      await onConfirm(endDate)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
+      <form
+        onSubmit={handleSubmit}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <button
+          type="button"
+          onClick={onCancel}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+
+        <h3 className="font-display text-lg font-bold mb-1 pr-8">{t('convives.awayPopupTitle')}</h3>
+        <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">{t('convives.awayPopupSubtitle')}</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          <label className="text-sm">
+            {t('convives.fromLabel')}
+            <input type="date" className="input mt-1" value={startDate} min={todayISO} onChange={(e) => setStartDate(e.target.value)} required />
+          </label>
+          <label className="text-sm">
+            {t('convives.toLabel')}
+            <input type="date" className="input mt-1" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} required />
+          </label>
+        </div>
+
+        <div className="flex gap-2">
+          <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel} disabled={submitting}>
+            {t('convives.cancel')}
+          </button>
+          <button type="submit" className="btn-primary text-sm flex-1" disabled={submitting}>
+            {submitting ? t('convives.saving') : t('convives.confirm')}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
 
 function PointsAdjustForm({ member, onDone, t }) {
   const { adjustMemberPoints } = useData()

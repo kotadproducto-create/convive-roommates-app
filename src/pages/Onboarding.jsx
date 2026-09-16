@@ -102,7 +102,7 @@ export default function Onboarding() {
             {t('perfil.nickname')}
             <input className="input mt-1" value={fields.nickname} onChange={(e) => set('nickname', e.target.value)} placeholder={t('perfil.nicknamePlaceholder')} />
           </label>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-sm block">
                 {t('perfil.age')}

@@ -23,7 +23,7 @@ export default function Rewards() {
 
   return (
     <AppLayout title={t('rewards.title')}>
-      <div className="grid md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <Reveal as="section" delay={0} className="card p-5">
           <h2 className="font-display font-semibold mb-4">{t('rewards.leaderboardTitle')}</h2>
           <ol className="flex flex-col gap-2">

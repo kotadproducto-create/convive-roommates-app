@@ -219,6 +219,19 @@ export function DataProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [absenceRequests, members, todayISO, currentFloor?.id])
 
+  // Mismo mecanismo que arriba, pero para el toggle rápido "Estoy fuera"
+  // de Convives (away_until en floor_memberships) — independiente de
+  // absence_requests, sin aprobación de nadie. Al pasar la fecha, vuelve
+  // sola a "En el piso" sin que nadie tenga que tocar nada.
+  useEffect(() => {
+    if (!currentFloor) return
+    const backToday = members.filter((m) => m.awayUntil && m.awayUntil < todayISO)
+    for (const m of backToday) {
+      update('floor_memberships', m.membershipId, { potActive: true, awayUntil: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members, todayISO, currentFloor?.id])
+
   // Genera (una sola vez, de forma idempotente) las finalizaciones de
   // la semana actual de las 3 fijas y las notificaciones de
   // recordatorio de turno / pote bajo. Las 3 fijas (Compras/Basura/
@@ -656,6 +669,20 @@ export function DataProvider({ children }) {
     []
   )
 
+  // "Estoy fuera" de Convives: toggle propio e instantáneo (nadie tiene
+  // que aprobarlo), con fecha de regreso — ver el efecto de arriba que
+  // revierte solo al pasar esa fecha. declareAway también apaga
+  // pot_active (misma exclusión del reparto del pote que ya usaba el
+  // toggle viejo de "vacaciones"), para no duplicar ese mecanismo.
+  const declareAway = useCallback(
+    (membershipId, untilDate) => update('floor_memberships', membershipId, { potActive: false, awayUntil: untilDate }),
+    []
+  )
+  const returnFromAway = useCallback(
+    (membershipId) => update('floor_memberships', membershipId, { potActive: true, awayUntil: null }),
+    []
+  )
+
   // Solicitud formal de "estar fuera del piso" (con fechas y motivo,
   // pendiente de aprobación de un admin) — distinta del toggle instantáneo
   // de vacaciones en Convives, que sigue existiendo tal cual.
@@ -874,36 +901,6 @@ export function DataProvider({ children }) {
     [shoppingItems, currentFloor]
   )
 
-  // Marca un producto como comprado: repone el stock a 'ok' (lo que
-  // automáticamente resuelve la alerta de "agotado"), deja constancia en
-  // el historial de compras y, si se pide, registra el gasto en el pote
-  // de dinero reutilizando addPotExpense — el enlace se guarda para que
-  // el historial de compras pueda mostrar "ver en el pote".
-  const markItemPurchased = useCallback(
-    async (itemId, { price, addToPot } = {}) => {
-      if (!currentFloor || !user) return
-      const item = shoppingItems.find((i) => i.id === itemId)
-      if (!item) return
-
-      let potContributionId = null
-      if (addToPot && price) {
-        const contribution = await addPotExpense(price, { note: `Compra: ${item.name}` })
-        potContributionId = contribution?.id || null
-      }
-
-      await update('shopping_items', itemId, { stockLevel: 'ok' })
-      await create('shopping_purchases', {
-        floorId: currentFloor.id,
-        itemId,
-        itemName: item.name,
-        userId: user.id,
-        price: price ? Number(price) : null,
-        potContributionId
-      })
-    },
-    [currentFloor, user, shoppingItems, addPotExpense]
-  )
-
   const redeemReward = useCallback(
     async (rewardKey) => {
       const reward = REWARD_CATALOG.find((r) => r.key === rewardKey)
@@ -1010,8 +1007,7 @@ export function DataProvider({ children }) {
   )
 
   // "Hacer la compra": registra de una vez varios productos comprados
-  // en un mismo viaje. A diferencia de markItemPurchased (precio por
-  // producto), aquí el monto es del viaje completo — se registra una
+  // en un mismo viaje — el monto es del viaje completo, se registra una
   // sola vez en el pote (reutilizando addPotExpense, con foto de
   // ticket si se adjunta) y purchase_sessions agrupa qué productos
   // fueron parte de esa compra. Si el período actual de la actividad
@@ -1038,7 +1034,9 @@ export function DataProvider({ children }) {
       for (const itemId of itemIds) {
         const item = shoppingItems.find((i) => i.id === itemId)
         if (!item) continue
-        await update('shopping_items', itemId, { stockLevel: 'ok' })
+        // El registro del historial se crea ANTES de tocar shopping_items:
+        // item_id todavía tiene que existir en ese momento (FK), aunque se
+        // borre la fila justo después para lo puntual.
         await create('shopping_purchases', {
           floorId: currentFloor.id,
           itemId,
@@ -1048,6 +1046,16 @@ export function DataProvider({ children }) {
           potContributionId,
           sessionId: session.id
         })
+        // Recurrente: vuelve a "con stock", sigue en la lista para el
+        // próximo ciclo. Puntual: ya cumplió su propósito — se borra de
+        // la lista activa (item_id queda null en shopping_purchases,
+        // pero item_name conserva el nombre, así que el historial no
+        // pierde nada).
+        if (item.recurring) {
+          await update('shopping_items', itemId, { stockLevel: 'ok' })
+        } else {
+          await remove('shopping_items', itemId)
+        }
       }
 
       const comprasActivity = activities.find((a) => a.fixedKey === 'compras')
@@ -1089,7 +1097,6 @@ export function DataProvider({ children }) {
     updateShoppingItem,
     removeShoppingItem,
     setItemStock,
-    markItemPurchased,
     absenceRequests,
     awayUserIds,
     requestAbsence,
@@ -1123,6 +1130,8 @@ export function DataProvider({ children }) {
     setMemberRole,
     setMemberPotActive,
     setMemberActiveStatus,
+    declareAway,
+    returnFromAway,
     updateProfile,
     adjustMemberPoints,
     addIncident,

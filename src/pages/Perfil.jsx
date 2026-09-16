@@ -301,7 +301,7 @@ function PersonalInfoCard({ user, updateProfile, showToast, onSaved, t }) {
         <input className="input mt-1" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder={t('perfil.nicknamePlaceholder')} />
       </label>
 
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-sm block">
             {t('perfil.age')}

@@ -142,7 +142,7 @@ export default function Timeline() {
         <RoomieOrb members={members} tasks={fixedProgress} />
       </section>
 
-      <div className="grid lg:grid-cols-3 gap-5 items-start mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start mb-8">
         {/* Calendario de racha */}
         <section className="lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
@@ -276,7 +276,7 @@ export default function Timeline() {
       <section>
         <h3 className="font-display text-lg font-bold mb-3">{t('timeline.themesTitle')}</h3>
         <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mb-3 sm:hidden">{t('timeline.swipeHint')}</p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Reveal delay={0}>
             <ThemeCard
               to="/actividades"

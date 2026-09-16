@@ -108,13 +108,13 @@ export default function ActivityCard({ activity, completion, memberById, rotatio
         <p className="text-xs text-ink-900/40 dark:text-cream-100/40">{t('activities.notThisPeriod')}</p>
       ) : (
         <>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             {isEveryone ? (
-              <span className="text-sm font-medium truncate">{t('activities.everyone')}</span>
+              <span className="text-sm font-medium truncate min-w-0">{t('activities.everyone')}</span>
             ) : (
               <>
                 <Avatar url={assignee?.avatarUrl} name={assignee?.name} size="w-7 h-7" textSize="text-xs" />
-                <span className="text-sm font-medium truncate">{assignee ? assignee.name : t('activities.unassigned')}</span>
+                <span className="text-sm font-medium truncate min-w-0">{assignee ? assignee.name : t('activities.unassigned')}</span>
               </>
             )}
             {activity.assignmentMode === 'rotation' && activity.frequencyType !== 'once' && (

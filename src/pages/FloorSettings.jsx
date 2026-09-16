@@ -142,7 +142,7 @@ export default function FloorSettings() {
 
   return (
     <AppLayout title={t('floorSettings.title')}>
-      <div className="grid md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <Reveal as="section" delay={0} className="card p-5">
           <h2 className="font-display font-semibold mb-1">{t('floorSettings.inviteTitle')}</h2>
           <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
@@ -364,7 +364,7 @@ function RotationSection({
         {!isAdmin && t('floorSettings.adminOnlyReorder')}
       </p>
 
-      <div className="grid sm:grid-cols-2 gap-3 mb-4 text-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-sm">
         <div className="bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40">{t('floorSettings.currentRotation')}</p>
           <p className="font-medium">{format(monday, 'd MMM', { locale: dateLocale })} – {format(sunday, 'd MMM', { locale: dateLocale })}</p>
@@ -606,7 +606,7 @@ function AbsenceRequestForm({ onCancel, onSubmit, t }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-3 pt-3 border-t border-ink-900/10 dark:border-cream-100/15">
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="text-sm">
           {t('floorSettings.fromLabel')}
           <input type="date" className="input mt-1" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />

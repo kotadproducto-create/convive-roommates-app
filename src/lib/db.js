@@ -164,7 +164,7 @@ export async function getFloorMembers(floorId) {
   const { data, error } = await supabase
     .from('floor_memberships')
     .select(
-      'id, role, joined_at, pot_active, active_status, removal_requested_by, removal_requested_at, profile:profiles!floor_memberships_user_id_fkey(*)'
+      'id, role, joined_at, pot_active, away_until, active_status, removal_requested_by, removal_requested_at, profile:profiles!floor_memberships_user_id_fkey(*)'
     )
     .eq('floor_id', floorId)
     .eq('status', 'active')
@@ -177,6 +177,7 @@ export async function getFloorMembers(floorId) {
       role: row.role,
       joinedAt: row.joined_at,
       potActive: row.pot_active,
+      awayUntil: row.away_until,
       activeStatus: row.active_status,
       removalRequestedBy: row.removal_requested_by,
       removalRequestedAt: row.removal_requested_at

@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { JarIcon, EditIcon, TrashIcon } from '../components/icons'
+import { JarIcon, EditIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons'
 import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
 import { format } from 'date-fns'
 
@@ -25,6 +25,13 @@ export default function Wallet() {
   const [receiptFile, setReceiptFile] = useState(null)
   const [receiptPreview, setReceiptPreview] = useState(null)
   const [submittingExpense, setSubmittingExpense] = useState(false)
+  // Acción de aporte/gasto pendiente de confirmar en el pop-up — no se
+  // toca el pote hasta que la persona confirma ahí (ver ConfirmPotDialog).
+  const [pendingAction, setPendingAction] = useState(null)
+  // Historial de movimientos: oculto por defecto para no ocupar espacio;
+  // se despliega/oculta sin perder ni afectar ningún movimiento (los datos
+  // ya están cargados, esto solo alterna si se muestran).
+  const [showHistory, setShowHistory] = useState(false)
 
   const activeMembers = useMemo(() => members.filter((m) => m.potActive !== false), [members])
   const inactiveMembers = useMemo(() => members.filter((m) => m.potActive === false), [members])
@@ -50,9 +57,12 @@ export default function Wallet() {
     return byId
   }, [aportes, activeMembers])
 
-  async function handleContribute() {
-    await addPotContribution(amount)
-    showToast(t('wallet.contributedToast', { amount }), 'success')
+  // El aporte y el gasto ya no ejecutan directo al pulsar el botón — solo
+  // abren el pop-up de confirmación (ConfirmPotDialog); la operación real
+  // vive en confirmPending(), que se dispara al pulsar "Confirmar" ahí.
+  function requestContribute() {
+    if (!amount || Number(amount) <= 0) return
+    setPendingAction({ type: 'contribute', amount })
   }
 
   function handleReceiptChange(e) {
@@ -64,20 +74,33 @@ export default function Wallet() {
     reader.readAsDataURL(file)
   }
 
-  async function handleSubmitExpense(e) {
+  function requestExpense(e) {
     e.preventDefault()
     if (!expenseAmount || Number(expenseAmount) <= 0) return
+    setPendingAction({ type: 'expense', amount: expenseAmount, note: expenseNote, receiptFile })
+  }
+
+  async function confirmPending() {
+    if (!pendingAction) return
+    if (pendingAction.type === 'contribute') {
+      await addPotContribution(pendingAction.amount)
+      showToast(t('wallet.contributedToast', { amount: pendingAction.amount }), 'success')
+      setPendingAction(null)
+      return
+    }
     setSubmittingExpense(true)
     try {
-      await addPotExpense(expenseAmount, { note: expenseNote.trim() || null, receiptFile })
-      showToast(t('wallet.expenseRecordedToast', { amount: expenseAmount }), 'default')
+      await addPotExpense(pendingAction.amount, { note: pendingAction.note.trim() || null, receiptFile: pendingAction.receiptFile })
+      showToast(t('wallet.expenseRecordedToast', { amount: pendingAction.amount }), 'default')
       setExpenseAmount('')
       setExpenseNote('')
       setReceiptFile(null)
       setReceiptPreview(null)
       setShowExpenseForm(false)
+      setPendingAction(null)
     } catch (err) {
       showToast(t('wallet.expenseErrorToast', { error: err.message }), 'default')
+      setPendingAction(null)
     } finally {
       setSubmittingExpense(false)
     }
@@ -118,7 +141,7 @@ export default function Wallet() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <input type="number" className="input w-24" value={amount} min={1} onChange={(e) => setAmount(e.target.value)} />
-              <button className="btn-primary text-sm" onClick={handleContribute}>
+              <button className="btn-primary text-sm" onClick={requestContribute}>
                 {t('wallet.contribute')}
               </button>
               <button className="btn-secondary text-sm" onClick={() => setShowExpenseForm((s) => !s)}>
@@ -128,8 +151,8 @@ export default function Wallet() {
           </div>
 
           {showExpenseForm && (
-            <form onSubmit={handleSubmitExpense} className="flex flex-col gap-3 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
-              <div className="grid sm:grid-cols-2 gap-3">
+            <form onSubmit={requestExpense} className="flex flex-col gap-3 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="number"
                   step="0.01"
@@ -160,7 +183,7 @@ export default function Wallet() {
         </div>
       </Reveal>
 
-      <div className="grid md:grid-cols-2 gap-5 mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
         <Reveal delay={80}>
           <section className="card p-5">
             <h2 className="font-display font-semibold mb-1">{t('wallet.balancePerPersonTitle')}</h2>
@@ -218,29 +241,91 @@ export default function Wallet() {
 
         <Reveal delay={140}>
           <section className="card p-5">
-            <h2 className="font-display font-semibold mb-3">{t('wallet.historyTitle')}</h2>
-            {history.length === 0 ? (
-              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('wallet.noHistoryYet')}</p>
-            ) : (
-              <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto">
-                {history.map((c) => (
-                  <HistoryRow
-                    key={c.id}
-                    contribution={c}
-                    authorName={memberById[c.userId]?.name || t('wallet.someone')}
-                    canManage={c.userId === user.id && Number(c.amount) < 0 && Date.now() - new Date(c.createdAt).getTime() < 24 * 60 * 60 * 1000}
-                    onUpdate={updatePotExpense}
-                    onDelete={deletePotExpense}
-                    t={t}
-                    dateLocale={dateLocale}
-                  />
-                ))}
-              </ul>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowHistory((s) => !s)}
+              className="w-full flex items-center justify-between gap-2 text-left"
+            >
+              <h2 className="font-display font-semibold">{t('wallet.historyTitle')}</h2>
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-violet-500 shrink-0">
+                {showHistory ? t('wallet.hideHistory') : t('wallet.showHistory')}
+                {showHistory ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+              </span>
+            </button>
+
+            {showHistory &&
+              (history.length === 0 ? (
+                <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">{t('wallet.noHistoryYet')}</p>
+              ) : (
+                <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto mt-3">
+                  {history.map((c) => (
+                    <HistoryRow
+                      key={c.id}
+                      contribution={c}
+                      authorName={memberById[c.userId]?.name || t('wallet.someone')}
+                      canManage={c.userId === user.id && Number(c.amount) < 0 && Date.now() - new Date(c.createdAt).getTime() < 24 * 60 * 60 * 1000}
+                      onUpdate={updatePotExpense}
+                      onDelete={deletePotExpense}
+                      t={t}
+                      dateLocale={dateLocale}
+                    />
+                  ))}
+                </ul>
+              ))}
           </section>
         </Reveal>
       </div>
+
+      {pendingAction && (
+        <ConfirmPotDialog action={pendingAction} onCancel={() => setPendingAction(null)} onConfirm={confirmPending} t={t} />
+      )}
     </AppLayout>
+  )
+}
+
+/** Pop-up de confirmación antes de tocar el pote de verdad — ni aportar
+ * ni registrar un gasto ejecutan hasta que la persona confirma acá. */
+function ConfirmPotDialog({ action, onCancel, onConfirm, t }) {
+  const [submitting, setSubmitting] = useState(false)
+  const isExpense = action.type === 'expense'
+
+  async function handleConfirmClick() {
+    setSubmitting(true)
+    try {
+      await onConfirm()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <h3 className="font-display text-lg font-bold mb-2">{t('wallet.confirmTitle')}</h3>
+        <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mb-5">
+          {isExpense
+            ? t('wallet.confirmExpenseBody', { amount: Number(action.amount).toFixed(2) })
+            : t('wallet.confirmContributeBody', { amount: Number(action.amount).toFixed(2) })}
+        </p>
+        <div className="flex gap-2">
+          <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel} disabled={submitting}>
+            {t('wallet.cancel')}
+          </button>
+          <button
+            type="button"
+            className={`text-sm flex-1 ${isExpense ? 'btn-danger' : 'btn-primary'}`}
+            onClick={handleConfirmClick}
+            disabled={submitting}
+          >
+            {submitting ? t('wallet.saving') : t('wallet.confirmAction')}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

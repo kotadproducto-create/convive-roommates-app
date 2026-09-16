@@ -16,8 +16,7 @@ import {
   CameraIcon,
   PlusIcon,
   MinusIcon,
-  CartIcon,
-  StampIcon
+  CartIcon
 } from '../components/icons'
 import { format } from 'date-fns'
 
@@ -65,7 +64,6 @@ export default function Shopping() {
     updateShoppingItem,
     removeShoppingItem,
     setItemStock,
-    markItemPurchased,
     recordPurchaseSession
   } = useData()
   const { showToast } = useToast()
@@ -94,8 +92,12 @@ export default function Shopping() {
         .sort((a, b) => STOCK_META[a.stockLevel].order - STOCK_META[b.stockLevel].order || a.name.localeCompare(b.name)),
     [shoppingItems]
   )
-  const outCount = shoppingItems.filter((i) => i.stockLevel === 'out').length
-  const pendingItems = useMemo(() => sortedItems.filter((i) => i.stockLevel !== 'ok'), [sortedItems])
+  // El status (con stock/por acabarse/agotado) solo tiene sentido para
+  // lo recurrente — una compra puntual no "vuelve a faltar", se compra
+  // una vez y listo (ver recordPurchaseSession, que la borra de la
+  // lista en cuanto se compra).
+  const outCount = shoppingItems.filter((i) => i.recurring && i.stockLevel === 'out').length
+  const pendingItems = useMemo(() => sortedItems.filter((i) => i.recurring && i.stockLevel !== 'ok'), [sortedItems])
 
   const history = useMemo(
     () => shoppingPurchases.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
@@ -139,15 +141,12 @@ export default function Shopping() {
       {mode === 'buy' && (
         <BuyScreen
           items={pendingItems}
+          catalogItems={sortedItems}
           onAddItem={handleAddOnTheFly}
           onConfirm={handleConfirmPurchase}
           onBack={() => setMode('menu')}
           t={t}
         />
-      )}
-
-      {mode === 'status' && (
-        <StatusScreen items={sortedItems} onSetStock={setItemStock} onBack={() => setMode('menu')} t={t} />
       )}
 
       {mode === 'edit' && (
@@ -192,7 +191,7 @@ export default function Shopping() {
             />
           )}
 
-          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
             {sortedItems.map((item, i) => (
               <Reveal key={item.id} delay={i * 40}>
                 <ShoppingCard
@@ -203,11 +202,6 @@ export default function Shopping() {
                   }}
                   onDelete={() => removeShoppingItem(item.id)}
                   onSetStock={(level) => setItemStock(item.id, level)}
-                  onPurchase={(payload) =>
-                    markItemPurchased(item.id, payload).then(() =>
-                      showToast(t('shopping.itemPurchasedToast', { name: item.name }), 'success')
-                    )
-                  }
                   t={t}
                 />
               </Reveal>
@@ -310,15 +304,6 @@ function MenuScreen({ pendingCount, outCount, totalCount, onSelect, t }) {
             onClick={() => onSelect('edit')}
           />
         </Reveal>
-        <Reveal delay={120}>
-          <MenuCard
-            tone="sage"
-            icon={StampIcon}
-            title={t('shopping.statusMenuTitle')}
-            subtitle={t('shopping.statusMenuSubtitle')}
-            onClick={() => onSelect('status')}
-          />
-        </Reveal>
       </div>
     </div>
   )
@@ -348,52 +333,18 @@ function MenuCard({ tone, icon: Icon, title, subtitle, onClick }) {
   )
 }
 
-/** "Status de productos": solo los 3 chips de stock, sin editar/borrar/
- * comprar — para que cualquier roomie actualice qué queda en casa sin
- * pasar por el flujo de compra. */
-function StatusScreen({ items, onSetStock, onBack, t }) {
-  return (
-    <div>
-      <BackButton onBack={onBack} t={t} />
-      <h2 className="font-display text-lg font-bold mb-1">{t('shopping.statusTitle')}</h2>
-      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">{t('shopping.statusSubtitle')}</p>
-
-      <div className="flex flex-col gap-2">
-        {items.map((item) => (
-          <div key={item.id} className="card p-3 flex items-center justify-between gap-2 flex-wrap">
-            <p className="font-display font-semibold">{item.name}</p>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {Object.entries(STOCK_META).map(([level, m]) => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => onSetStock(item.id, level)}
-                  className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full transition-transform active:scale-95 ${
-                    item.stockLevel === level ? m.chip : 'text-ink-900/40 dark:text-cream-100/40 hover:bg-cream-200 dark:hover:bg-ink-700'
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${item.stockLevel === level ? m.dot : 'bg-ink-900/20 dark:bg-cream-100/20'}`} />
-                  {t(m.labelKey)}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('shopping.noProductsYet')}</p>}
-      </div>
-    </div>
-  )
-}
-
 /** "Hacer la compra": lo agotado + por acabarse, con un contador de
- * cantidad por producto (en vez de checkbox), agregar algo no listado
- * sobre la marcha, un monto total del viaje y una foto de ticket
- * opcional — todo en un solo "Confirmar compra". */
-function BuyScreen({ items, onAddItem, onConfirm, onBack, t }) {
+ * cantidad por producto (en vez de checkbox), agregar algo sobre la
+ * marcha (eligiendo de TODA la lista de compras — con stock incluido
+ * — o escribiendo un nombre nuevo con "Otro"), un monto total del
+ * viaje y una foto de ticket opcional — todo en un solo "Confirmar
+ * compra". */
+function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, t }) {
   const { showToast } = useToast()
   const [quantities, setQuantities] = useState({})
   const [expanded, setExpanded] = useState(() => new Set())
   const [adHocItems, setAdHocItems] = useState([])
+  const [showPicker, setShowPicker] = useState(false)
   const [addingNew, setAddingNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [totalAmount, setTotalAmount] = useState('')
@@ -402,6 +353,11 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack, t }) {
   const [submitting, setSubmitting] = useState(false)
 
   const allItems = [...items, ...adHocItems]
+
+  // Lo que todavía tiene sentido ofrecer en el selector: el resto de
+  // la lista de compras (con stock incluido) que no esté ya en el
+  // carrito de este viaje.
+  const pickableItems = catalogItems.filter((ci) => !allItems.some((i) => i.id === ci.id))
 
   function inc(id) {
     setQuantities((q) => ({ ...q, [id]: (q[id] || 0) + 1 }))
@@ -415,6 +371,12 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack, t }) {
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+  }
+
+  function handlePickExisting(item) {
+    setAdHocItems((list) => [...list, item])
+    setQuantities((q) => ({ ...q, [item.id]: (q[item.id] || 0) + 1 }))
+    setShowPicker(false)
   }
 
   async function handleAddNew(e) {
@@ -494,13 +456,43 @@ function BuyScreen({ items, onAddItem, onConfirm, onBack, t }) {
             {t('shopping.add')}
           </button>
         </form>
+      ) : showPicker ? (
+        <div className="card p-2 mb-5 max-h-64 overflow-y-auto flex flex-col gap-0.5">
+          {pickableItems.length === 0 && (
+            <p className="text-sm text-ink-900/50 dark:text-cream-100/50 px-3 py-2">{t('shopping.noMoreToPick')}</p>
+          )}
+          {pickableItems.map((item) => {
+            const meta = STOCK_META[item.stockLevel]
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handlePickExisting(item)}
+                className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-cream-200 dark:hover:bg-ink-700 text-left"
+              >
+                <span className="text-sm font-medium truncate">{item.name}</span>
+                {item.recurring && meta && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${meta.chip}`}>{t(meta.labelKey)}</span>}
+              </button>
+            )
+          })}
+          <button
+            type="button"
+            onClick={() => {
+              setShowPicker(false)
+              setAddingNew(true)
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-cream-200 dark:hover:bg-ink-700 text-left text-sm font-semibold text-violet-500"
+          >
+            <PlusIcon className="w-3.5 h-3.5" /> {t('shopping.otherProduct')}
+          </button>
+        </div>
       ) : (
         <button
           type="button"
-          onClick={() => setAddingNew(true)}
+          onClick={() => setShowPicker(true)}
           className="btn-secondary text-sm w-full mb-5 flex items-center justify-center gap-1.5"
         >
-          <PlusIcon className="w-3.5 h-3.5" /> {t('shopping.addUnlistedProduct')}
+          <PlusIcon className="w-3.5 h-3.5" /> {t('shopping.addProductButton')}
         </button>
       )}
 
@@ -554,7 +546,7 @@ function BuyItemRow({ item, qty, onInc, onDec, expanded, onToggleInfo, t }) {
             <p className={`font-display font-semibold truncate ${qty > 0 ? 'line-through text-ink-900/40 dark:text-cream-100/40' : ''}`}>
               {item.name}
             </p>
-            {meta && item.stockLevel !== 'ok' && (
+            {item.recurring && meta && item.stockLevel !== 'ok' && (
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${meta.chip}`}>{t(meta.labelKey)}</span>
             )}
           </div>
@@ -711,13 +703,17 @@ function ItemForm({ initial, onCancel, onSubmit, t }) {
 
         {/* Tarjeta del producto: foto + nombre + supermercado, siempre visibles */}
         <div className="bg-cream-200/60 dark:bg-ink-700/60 rounded-2xl p-4 flex flex-col items-center text-center mb-4">
-          <div className="w-16 h-16 rounded-2xl border-2 border-ink-900/70 dark:border-cream-100/30 bg-coral-100 dark:bg-coral-500/20 flex items-center justify-center overflow-hidden mb-2">
+          <label
+            className="w-16 h-16 rounded-2xl border-2 border-ink-900/70 dark:border-cream-100/30 bg-coral-100 dark:bg-coral-500/20 flex items-center justify-center overflow-hidden mb-2 cursor-pointer"
+            aria-label={imagePreview ? t('shopping.changePhoto') : t('shopping.addPhoto')}
+          >
             {imagePreview ? (
               <img src={imagePreview} alt="" className="w-full h-full object-cover" />
             ) : (
               <CameraIcon className="w-6 h-6 text-coral-500" />
             )}
-          </div>
+            <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageChange} />
+          </label>
           <input
             className="font-display font-semibold text-center bg-transparent border-none focus-visible:outline-none w-full mb-1 placeholder:text-ink-900/30 dark:placeholder:text-cream-100/30"
             placeholder={t('shopping.productNamePlaceholder')}
@@ -731,10 +727,6 @@ function ItemForm({ initial, onCancel, onSubmit, t }) {
             value={store}
             onChange={(e) => setStore(e.target.value)}
           />
-          <label className="btn-secondary text-xs cursor-pointer mt-3">
-            {imagePreview ? t('shopping.changePhoto') : t('shopping.addPhoto')}
-            <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageChange} />
-          </label>
         </div>
 
         <div className="flex flex-col">
@@ -812,23 +804,8 @@ function ExpandRow({ label, open, onToggle, children }) {
   )
 }
 
-function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase, t }) {
-  const [buying, setBuying] = useState(false)
-  const [price, setPrice] = useState(item.estimatedPrice || '')
-  const [addToPot, setAddToPot] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+function ShoppingCard({ item, onEdit, onDelete, onSetStock, t }) {
   const [lightboxOpen, setLightboxOpen] = useState(false)
-
-  async function confirmPurchase(e) {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      await onPurchase({ price: price || null, addToPot: addToPot && !!price })
-      setBuying(false)
-    } finally {
-      setSubmitting(false)
-    }
-  }
 
   return (
     <div className={`card p-4 flex flex-col gap-3 relative ${item.stockLevel === 'out' ? 'border-clay-500/50' : ''}`}>
@@ -900,50 +877,22 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, onPurchase, t }) {
         </div>
       )}
 
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {Object.entries(STOCK_META).map(([level, m]) => (
-          <button
-            key={level}
-            type="button"
-            onClick={() => onSetStock(level)}
-            className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full transition-transform active:scale-95 ${
-              item.stockLevel === level ? m.chip : 'text-ink-900/40 dark:text-cream-100/40 hover:bg-cream-200 dark:hover:bg-ink-700'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${item.stockLevel === level ? m.dot : 'bg-ink-900/20 dark:bg-cream-100/20'}`} />
-            {t(m.labelKey)}
-          </button>
-        ))}
-      </div>
-
-      {buying ? (
-        <form onSubmit={confirmPurchase} className="flex flex-col gap-2 pt-2 border-t border-ink-900/10 dark:border-cream-100/15">
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            className="input text-sm"
-            placeholder={t('shopping.pricePaidPlaceholder')}
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
-          <label className="flex items-center gap-2 text-xs text-ink-900/60 dark:text-cream-100/60">
-            <input type="checkbox" checked={addToPot} disabled={!price} onChange={(e) => setAddToPot(e.target.checked)} />
-            {t('shopping.logAsPotExpense')}
-          </label>
-          <div className="flex gap-2">
-            <button type="button" className="btn-secondary text-xs flex-1" onClick={() => setBuying(false)}>
-              {t('shopping.cancel')}
+      {item.recurring && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {Object.entries(STOCK_META).map(([level, m]) => (
+            <button
+              key={level}
+              type="button"
+              onClick={() => onSetStock(level)}
+              className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full transition-transform active:scale-95 ${
+                item.stockLevel === level ? m.chip : 'text-ink-900/40 dark:text-cream-100/40 hover:bg-cream-200 dark:hover:bg-ink-700'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${item.stockLevel === level ? m.dot : 'bg-ink-900/20 dark:bg-cream-100/20'}`} />
+              {t(m.labelKey)}
             </button>
-            <button type="submit" className="btn-primary text-xs flex-1" disabled={submitting}>
-              {submitting ? t('shopping.saving') : t('shopping.confirm')}
-            </button>
-          </div>
-        </form>
-      ) : (
-        <button type="button" className="btn-secondary text-sm" onClick={() => setBuying(true)}>
-          {t('shopping.markPurchased')}
-        </button>
+          ))}
+        </div>
       )}
 
       {lightboxOpen && item.imageUrl && (
