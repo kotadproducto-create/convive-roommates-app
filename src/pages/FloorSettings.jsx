@@ -6,10 +6,8 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
 import { update, getRotationHistory } from '../lib/db'
-import { TASK_LABEL, getWeekKey, getMondayOfWeek } from '../lib/rotation'
-import { assigneeFor } from '../lib/activities'
-import { FIXED_ICONS } from '../components/ActivityCard'
-import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon, SparkleIcon } from '../components/icons'
+import { TASK_LABEL, getMondayOfWeek } from '../lib/rotation'
+import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon } from '../components/icons'
 import { format, addDays } from 'date-fns'
 
 /** Valida que sea una URL http(s) bien formada, igual que en la lista de
@@ -309,8 +307,6 @@ export default function FloorSettings() {
   )
 }
 
-const FIXED_ORDER = ['compras', 'basura', 'lavadora']
-
 function RotationSection({
   isAdmin,
   order,
@@ -343,23 +339,11 @@ function RotationSection({
   const monday = getMondayOfWeek(weekKey)
   const sunday = addDays(monday, 6)
   const nextMonday = addDays(monday, 7)
-  const nextWeekKey = getWeekKey(nextMonday)
 
-  // Todas las actividades rotativas (no solo las 3 fijas) — antes esta
-  // sección solo mostraba el turno de Compras/Basura/Lavadora, aunque el
-  // resto de actividades propias no-manuales ya rotan por el mismo orden.
-  const rotatingActivities = useMemo(
-    () =>
-      activities
-        .filter((a) => a.frequencyType === 'recurring' && a.assignmentMode !== 'manual')
-        .slice()
-        .sort((a, b) => {
-          const ia = a.fixedKey ? FIXED_ORDER.indexOf(a.fixedKey) : 99
-          const ib = b.fixedKey ? FIXED_ORDER.indexOf(b.fixedKey) : 99
-          return ia - ib
-        }),
-    [activities]
-  )
+  // Esta sección es solo para configurar el ORDEN/PERÍODO de rotación —
+  // el turno de cada actividad se ve en Actividades/Calendario. Acá solo
+  // se necesitan las 3 fijas para el historial de más abajo.
+  const fixedActivities = useMemo(() => activities.filter((a) => a.fixedKey), [activities])
 
   function startEditing() {
     setDraft(order)
@@ -436,34 +420,6 @@ function RotationSection({
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40">{t('floorSettings.nextChange')}</p>
           <p className="font-medium">{format(nextMonday, t('calendar.dayMonthFormat'), { locale: dateLocale })}</p>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5 mb-4">
-        {rotatingActivities.map((activity) => {
-          const Icon = (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon
-          const currentId = assigneeFor(activity, order, weekKey, floor)
-          const nextId = assigneeFor(activity, order, nextWeekKey, floor)
-          return (
-            <div key={activity.id} className="flex items-center justify-between gap-2 text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
-              {activity.fixedKey === 'compras' ? (
-                <Link to="/compras" className="flex items-center gap-2 min-w-0 hover:opacity-80" title={t('floorSettings.goToShoppingList')}>
-                  <Icon className="w-4 h-4 text-violet-500 shrink-0" />
-                  <span className="underline decoration-dotted underline-offset-2 truncate">{activity.title}</span>
-                </Link>
-              ) : (
-                <span className="flex items-center gap-2 min-w-0">
-                  <Icon className="w-4 h-4 text-violet-500 shrink-0" />
-                  <span className="truncate">{activity.title}</span>
-                </span>
-              )}
-              <span className="text-xs text-ink-900/50 dark:text-cream-100/50 shrink-0">
-                <strong className="text-ink-900 dark:text-cream-100">{memberById[currentId]?.name || t('floorSettings.unassigned')}</strong>
-                {t('floorSettings.nextArrow')}
-                {memberById[nextId]?.name || t('floorSettings.unassigned')}
-              </span>
-            </div>
-          )
-        })}
       </div>
 
       {editing ? (
@@ -613,7 +569,7 @@ function RotationSection({
           <RotationHistory
             history={history}
             memberById={memberById}
-            activities={rotatingActivities.filter((a) => a.fixedKey)}
+            activities={fixedActivities}
             activityCompletions={activityCompletions}
             t={t}
             dateLocale={dateLocale}
@@ -633,7 +589,7 @@ function RotationEditConfirmPopup({ onCancel, onConfirm, t }) {
     <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative"
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative max-h-[90vh] overflow-y-auto"
       >
         <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
         <button

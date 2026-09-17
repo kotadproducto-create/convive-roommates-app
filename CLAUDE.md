@@ -37,6 +37,14 @@ Esto se logra con patrones de CSS concretos, no ajustando tamaños a ojo:
 - Evitar anchos fijos (`min-w-[Nrem]`, `w-[Npx]`) en elementos que
   contienen texto traducible o variable (fechas, nombres) — el texto en
   español suele ser más largo que en inglés y puede no caber.
+- **Todo pop-up/modal fijo (`fixed inset-0 z-40 ... flex items-end`, el
+  patrón que ya usan `AwayPopup`, `ConfirmPotDialog`, `CreatePollModal`,
+  etc.) necesita `max-h-[90vh] overflow-y-auto` en el contenedor del
+  contenido.** Sin eso, si el contenido (título + campos + botones) es más
+  alto que la pantalla, como al abrir el teclado en móvil o con textos
+  largos, la parte de arriba queda empujada por encima del viewport y no
+  se puede ver ni cerrar — en vez de eso debe scrollear verticalmente
+  dentro del propio pop-up.
 
 ### Antes de dar por terminada una pantalla nueva
 

@@ -142,7 +142,7 @@ export default function Sidebar() {
       {showMore && (
         <div className="md:hidden fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end" onClick={() => setShowMore(false)}>
           <div
-            className="w-full bg-cream-100 dark:bg-ink-800 border-t-[2.5px] border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8"
+            className="w-full bg-cream-100 dark:bg-ink-800 border-t-[2.5px] border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
