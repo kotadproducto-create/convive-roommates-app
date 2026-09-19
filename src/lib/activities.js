@@ -236,6 +236,42 @@ export function nextOccurrence(activity, rotationOrder, fromDate = new Date(), s
   return null
 }
 
+/**
+ * Ocasiones de una actividad "N veces por semana" (con días elegidos) en
+ * su período: cada día elegido es UNA ocasión, y solo se puede marcar la
+ * siguiente cuando llega su día (o ya pasó — las atrasadas siguen
+ * pendientes hasta que se marquen). Así nadie marca las 3 de golpe.
+ *
+ * Solo aplica a semanales con más de un día elegido (`gated`); el resto
+ * (una vez por período, diarias, mensuales, eventos únicos) se marcan
+ * libremente mientras no estén completas. Las marcas EXTRA no pasan por
+ * acá: son aparte y no afectan la rutina.
+ *
+ * `completion.timesDone` dice cuántas ocasiones van cumplidas: se cumplen
+ * en orden, así que la siguiente pendiente es `slots[timesDone]`.
+ */
+export function occurrenceSlots(activity, completion, todayKey = getDateKey(new Date())) {
+  const timesDone = completion?.timesDone || 0
+  const weekdays = [...(activity.weekdays || [])].sort((a, b) => a - b)
+  const isWeekKey = /^\d{4}-W\d{2}$/.test(completion?.periodKey || '')
+  const gated = activity.frequencyType === 'recurring' && activity.recurrenceUnit === 'week' && weekdays.length > 1 && isWeekKey
+  if (!gated) {
+    const target = activity.timesPerWeek || 1
+    return { gated: false, slots: [], target, timesDone, nextDateKey: null, canMark: timesDone < target }
+  }
+
+  const monday = mondayOfWeekKey(completion.periodKey)
+  const pad = (n) => String(n).padStart(2, '0')
+  const slots = weekdays.map((weekday, i) => {
+    const d = new Date(monday)
+    d.setUTCDate(d.getUTCDate() + weekday)
+    const dateKey = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+    return { dateKey, done: i < timesDone, unlocked: dateKey <= todayKey }
+  })
+  const next = slots.find((s) => !s.done)
+  return { gated: true, slots, target: slots.length, timesDone, nextDateKey: next?.dateKey || null, canMark: Boolean(next?.unlocked) }
+}
+
 /** Actividades (con su finalización del período que corresponda, si
  * ya existe) que caen en una fecha concreta — usado por el Calendario
  * y por el "stamp" semanal de Inicio, para no duplicar esta lógica en

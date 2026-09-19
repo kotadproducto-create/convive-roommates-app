@@ -53,6 +53,7 @@ export default function CalendarView({
   shoppingPurchases = [],
   shoppingItems = [],
   notifications = [],
+  activityMarks = [],
   currentUserId,
   initialDate = null,
   initialView = 'month'
@@ -181,6 +182,7 @@ export default function CalendarView({
           notifications={notifications}
           activities={activities}
           activityCompletions={activityCompletions}
+          activityMarks={activityMarks}
           onSelectDay={selectDay}
           t={t}
           dateLocale={dateLocale}
@@ -327,7 +329,7 @@ const EVENT_TONE_CLASSES = {
  * aportes/gastos del pote, compras realizadas, productos agregados a la
  * lista, y avisos de lavadora — ordenado cronológicamente, como un
  * historial resumen del día. */
-function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, t) {
+function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t) {
   return useMemo(() => {
     const events = []
 
@@ -409,9 +411,24 @@ function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingI
       })
     }
 
+    // Marcas extra: una vez de más hecha durante el turno (reconocimiento).
+    for (const m of activityMarks) {
+      if (m.kind !== 'extra') continue
+      const activity = activities.find((a) => a.id === m.activityId)
+      if (!activity) continue
+      events.push({
+        id: `extra-${m.id}`,
+        time: m.createdAt,
+        icon: (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon,
+        tone: 'violet',
+        title: t('calendar.extraDone', { name: memberById[m.markedBy]?.name || t('calendar.someone'), title: activity.title }),
+        subtitle: null
+      })
+    }
+
     return events.sort((a, b) => new Date(a.time) - new Date(b.time))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, t])
+  }, [memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t])
 }
 
 function EventRow({ e }) {
@@ -512,19 +529,24 @@ function DayDetail({
   notifications,
   activities,
   activityCompletions,
+  activityMarks,
   onSelectDay,
   t,
   dateLocale
 }) {
   const items = dayInfo(cursor)
   const { showToast } = useToast()
-  const allEvents = useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, t)
+  const allEvents = useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t)
   const events = useMemo(() => allEvents.filter((e) => isSameDay(new Date(e.time), cursor)), [allEvents, cursor])
 
-  function handleToggle(item) {
+  async function handleToggle(item) {
     const wasCompleted = item.completion.completed
     const delta = wasCompleted ? -1 : 1
-    setActivityProgress(item.completion, delta)
+    const result = await setActivityProgress(item.completion, delta)
+    if (result?.ok === false) {
+      showToast(t('activities.notYetToast'), 'default')
+      return
+    }
     if (!wasCompleted) {
       const target = item.activity?.timesPerWeek || 1
       const timesDone = Math.min(target, Math.max(0, (item.completion.timesDone || 0) + delta))

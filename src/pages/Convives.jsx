@@ -101,8 +101,9 @@ function PendingItemRow({ item, members, currentUserId, setActivityProgress, req
 
   const isStepped = item.activity?.frequencyType === 'recurring' && item.activity.recurrenceUnit === 'week' && (item.activity.timesPerWeek || 1) > 1
 
-  function handleDone() {
-    setActivityProgress(item.completion, 1)
+  async function handleDone() {
+    const result = await setActivityProgress(item.completion, 1)
+    if (result?.ok === false) showToast(t('activities.notYetToast'), 'default')
   }
 
   async function handleSwap() {

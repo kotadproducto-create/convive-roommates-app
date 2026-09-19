@@ -27,6 +27,10 @@ export default function Dashboard() {
     potContributions,
     notifications,
     setActivityProgress,
+    activityMarks,
+    extraCounts,
+    addActivityExtra,
+    removeActivityExtra,
     requestWasher,
     addPotContribution,
     weekKey
@@ -108,6 +112,7 @@ export default function Dashboard() {
           shoppingPurchases={shoppingPurchases}
           shoppingItems={shoppingItems}
           notifications={notifications}
+          activityMarks={activityMarks}
           currentUserId={user?.id}
           initialDate={initialDate}
         />
@@ -145,7 +150,10 @@ export default function Dashboard() {
                   completion={completion}
                   memberById={memberById}
                   rotationOrder={floor?.rotationOrder}
+                  extras={completion ? extraCounts[completion.id] || 0 : 0}
                   onProgress={(delta) => completion && setActivityProgress(completion, delta)}
+                  onExtra={() => completion && addActivityExtra(completion)}
+                  onUndoExtra={() => completion && removeActivityExtra(completion.id)}
                   t={t}
                   dateLocale={dateLocale}
                 />

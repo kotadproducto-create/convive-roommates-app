@@ -15,7 +15,7 @@ import {
   deterministicUuid
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
-import { ensureActivityPeriods, currentPeriodKey } from '../lib/activities'
+import { ensureActivityPeriods, currentPeriodKey, occurrenceSlots } from '../lib/activities'
 import { resolvePoll } from '../lib/polls'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
@@ -52,6 +52,7 @@ export function DataProvider({ children }) {
   const [activities, setActivities] = useState([])
   const [activityCompletions, setActivityCompletions] = useState([])
   const [swapRequests, setSwapRequests] = useState([])
+  const [activityMarks, setActivityMarks] = useState([])
   const [polls, setPolls] = useState([])
   const [pollVotes, setPollVotes] = useState([])
 
@@ -188,6 +189,14 @@ export function DataProvider({ children }) {
       return
     }
     return subscribeTable('swap_requests', { floorId }, setSwapRequests)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setActivityMarks([])
+      return
+    }
+    return subscribeTable('activity_marks', { floorId }, setActivityMarks)
   }, [floorId])
 
   useEffect(() => {
@@ -1176,27 +1185,94 @@ export function DataProvider({ children }) {
   // acreditan al responsable de ESTE período justo al llegar al
   // objetivo — mismo patrón que ya usa completeTask para las tareas
   // viejas. No hay reversa al deshacer (tampoco la había antes).
+  // Devuelve { ok:false, reason:'not_yet', dateKey } si es una actividad
+  // "N veces por semana" y todavía no llega el día de la siguiente
+  // ocasión (ver occurrenceSlots) — quien llama avisa al usuario. `force`
+  // salta esa regla (la compra completa de "Hacer la compra" cumple todo).
+  // Cada ocasión sumada/restada queda además registrada en activity_marks
+  // (quién la marcó y cuándo).
   const setActivityProgress = useCallback(
-    async (completion, delta) => {
+    async (completion, delta, { force = false } = {}) => {
       const activity = activities.find((a) => a.id === completion.activityId)
       const target = activity?.timesPerWeek || 1
+      if (delta > 0 && !force && activity) {
+        const occ = occurrenceSlots(activity, completion)
+        if (occ.gated && !occ.canMark) return { ok: false, reason: 'not_yet', dateKey: occ.nextDateKey }
+      }
       const wasCompleted = completion.completed
-      const timesDone = Math.min(target, Math.max(0, (completion.timesDone || 0) + delta))
+      const before = completion.timesDone || 0
+      const timesDone = Math.min(target, Math.max(0, before + delta))
       const nowCompleted = timesDone >= target
       await update('activity_completions', completion.id, {
         timesDone,
         completed: nowCompleted,
         completedAt: nowCompleted ? new Date().toISOString() : null
       })
+
+      if (currentFloor && user) {
+        if (timesDone > before) {
+          for (let i = before; i < timesDone; i++) {
+            await create('activity_marks', {
+              floorId: currentFloor.id,
+              activityId: completion.activityId,
+              completionId: completion.id,
+              markedBy: user.id,
+              kind: 'routine'
+            })
+          }
+        } else if (timesDone < before) {
+          const latest = activityMarks
+            .filter((m) => m.completionId === completion.id && m.kind === 'routine')
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, before - timesDone)
+          for (const m of latest) await remove('activity_marks', m.id)
+        }
+      }
+
       if (nowCompleted && !wasCompleted && activity?.points && completion.assignedUserId) {
         const assignee = members.find((m) => m.id === completion.assignedUserId)
         if (assignee) {
           await update('profiles', assignee.id, { points: (assignee.points || 0) + activity.points })
         }
       }
+      return { ok: true }
     },
-    [activities, members]
+    [activities, members, currentFloor, user, activityMarks]
   )
+
+  // Marca EXTRA: una vez de más durante el turno (p. ej. la basura se
+  // llenó otra vez el mismo día). Va aparte de la rutina — no cuenta para
+  // el objetivo, no da puntos, solo queda como reconocimiento.
+  const addActivityExtra = useCallback(
+    async (completion) => {
+      if (!currentFloor || !user || !completion) return
+      await create('activity_marks', {
+        floorId: currentFloor.id,
+        activityId: completion.activityId,
+        completionId: completion.id,
+        markedBy: user.id,
+        kind: 'extra'
+      })
+    },
+    [currentFloor, user]
+  )
+
+  const removeActivityExtra = useCallback(
+    async (completionId) => {
+      const latest = activityMarks
+        .filter((m) => m.completionId === completionId && m.kind === 'extra')
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+      if (latest) await remove('activity_marks', latest.id)
+    },
+    [activityMarks]
+  )
+
+  // completionId → cuántas marcas extra lleva ese turno.
+  const extraCounts = useMemo(() => {
+    const counts = {}
+    for (const m of activityMarks) if (m.kind === 'extra') counts[m.completionId] = (counts[m.completionId] || 0) + 1
+    return counts
+  }, [activityMarks])
 
   // "Hacer la compra": registra de una vez varios productos comprados
   // en un mismo viaje — el monto es del viaje completo, se registra una
@@ -1257,7 +1333,7 @@ export function DataProvider({ children }) {
           ? activityCompletions.find((c) => c.activityId === comprasActivity.id && c.periodKey === periodKey)
           : null
         if (completion && !completion.completed) {
-          await setActivityProgress(completion, comprasActivity.timesPerWeek || 1)
+          await setActivityProgress(completion, comprasActivity.timesPerWeek || 1, { force: true })
         }
       }
     },
@@ -1450,6 +1526,10 @@ export function DataProvider({ children }) {
     updateActivity,
     removeActivity,
     setActivityProgress,
+    activityMarks,
+    extraCounts,
+    addActivityExtra,
+    removeActivityExtra,
     polls,
     pollVotes,
     createPoll,

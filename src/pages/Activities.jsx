@@ -21,7 +21,20 @@ import { format, formatDistanceToNowStrict, startOfWeek, addDays } from 'date-fn
  * para el modelo de datos.
  */
 export default function Activities() {
-  const { floor, members, activities, activityCompletions, weekKey, addActivity, updateActivity, removeActivity, setActivityProgress } = useData()
+  const {
+    floor,
+    members,
+    activities,
+    activityCompletions,
+    weekKey,
+    addActivity,
+    updateActivity,
+    removeActivity,
+    setActivityProgress,
+    extraCounts,
+    addActivityExtra,
+    removeActivityExtra
+  } = useData()
   const { showToast } = useToast()
   const { t, dateLocale } = useLanguage()
   const [showForm, setShowForm] = useState(false)
@@ -89,7 +102,14 @@ export default function Activities() {
             setShowForm(false)
           }}
           onDelete={() => handleDelete(activity)}
-          onProgress={(delta) => completion && setActivityProgress(completion, delta)}
+          extras={completion ? extraCounts[completion.id] || 0 : 0}
+          onProgress={async (delta) => {
+            if (!completion) return
+            const r = await setActivityProgress(completion, delta)
+            if (r?.ok === false) showToast(t('activities.notYetToast'), 'default')
+          }}
+          onExtra={() => completion && addActivityExtra(completion)}
+          onUndoExtra={() => completion && removeActivityExtra(completion.id)}
           t={t}
           dateLocale={dateLocale}
         />

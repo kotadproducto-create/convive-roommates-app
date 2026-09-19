@@ -1,8 +1,13 @@
 import { useMemo } from 'react'
 import Avatar from './Avatar'
-import { SparkleIcon, EditIcon, TrashIcon, PlusIcon, MinusIcon, CartIcon, WasherIcon } from './icons'
-import { nextOccurrence } from '../lib/activities'
+import { SparkleIcon, EditIcon, TrashIcon, CartIcon, WasherIcon } from './icons'
+import { nextOccurrence, occurrenceSlots } from '../lib/activities'
 import { format, startOfWeek, addDays } from 'date-fns'
+
+// "2026-09-17" → "jueves" (nombre del día en el idioma activo).
+function dayName(dateKey, dateLocale) {
+  return format(new Date(`${dateKey}T00:00:00`), 'EEEE', { locale: dateLocale })
+}
 
 // Ícono de las 3 fijas, por `fixedKey` — el resto de las actividades
 // propias usan el genérico SparkleIcon.
@@ -46,14 +51,28 @@ export function describeFrequency(activity, t, dateLocale) {
  * veces por semana, si no un botón simple de marcar hecho/deshacer).
  * Usada en Actividades y en Inicio (Dashboard) para las 3 fijas.
  */
-export default function ActivityCard({ activity, completion, memberById, rotationOrder, floor, onEdit, onDelete, onProgress, t, dateLocale }) {
+export default function ActivityCard({
+  activity,
+  completion,
+  memberById,
+  rotationOrder,
+  floor,
+  extras = 0,
+  onEdit,
+  onDelete,
+  onProgress,
+  onExtra,
+  onUndoExtra,
+  t,
+  dateLocale
+}) {
   const assignedUserId = completion?.assignedUserId || activity.assignedUserId
   const assignee = memberById[assignedUserId]
   const isEveryone = activity.assignmentMode === 'manual' && !assignedUserId
-  const target = activity.timesPerWeek || 1
+  const occ = occurrenceSlots(activity, completion)
+  const target = occ.target
   const timesDone = completion?.timesDone || 0
   const isDone = completion?.completed || false
-  const isStepper = activity.frequencyType === 'recurring' && activity.recurrenceUnit === 'week' && target > 1
   const notThisPeriod = activity.frequencyType === 'recurring' && !completion
   const Icon = (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon
 
@@ -123,40 +142,68 @@ export default function ActivityCard({ activity, completion, memberById, rotatio
           </div>
 
           {onProgress && (
-            <div className="flex flex-col gap-1">
-              {isStepper ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">{t('activities.stepProgress', { done: timesDone, target })}</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => onProgress(-1)}
-                      disabled={timesDone <= 0}
-                      className="w-7 h-7 rounded-lg border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center disabled:opacity-40"
-                    >
-                      <MinusIcon className="w-3.5 h-3.5" />
+            <div className="flex flex-col gap-2">
+              {/* Barra por ocasiones: un tramo por cada vez prevista. */}
+              <div
+                className="flex gap-1"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={target}
+                aria-valuenow={Math.min(timesDone, target)}
+              >
+                {Array.from({ length: target }).map((_, i) => (
+                  <span
+                    key={i}
+                    className={`h-2 flex-1 rounded-full ${i < timesDone ? 'bg-sage-500' : 'bg-ink-900/10 dark:bg-cream-100/15'}`}
+                  />
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+                <p className={`text-xs min-w-0 ${isDone ? 'font-semibold text-sage-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
+                  {isDone
+                    ? t('activities.completed')
+                    : occ.gated && occ.nextDateKey
+                      ? occ.canMark
+                        ? t('activities.readyToMark')
+                        : t('activities.nextTime', { day: dayName(occ.nextDateKey, dateLocale) })
+                      : ''}
+                </p>
+                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                  {timesDone > 0 && (
+                    <button type="button" onClick={() => onProgress(-1)} className="text-[11px] text-ink-900/40 dark:text-cream-100/40 hover:underline">
+                      {t('activities.undo')}
                     </button>
+                  )}
+                  {!isDone && (
                     <button
                       type="button"
+                      className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={!occ.canMark}
                       onClick={() => onProgress(1)}
-                      disabled={timesDone >= target}
-                      className="w-7 h-7 rounded-lg border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center disabled:opacity-40"
                     >
-                      <PlusIcon className="w-3.5 h-3.5" />
+                      {t('activities.markDone')}
                     </button>
-                  </div>
+                  )}
+                  {onExtra && activity.frequencyType === 'recurring' && completion && (
+                    <button type="button" className="btn-secondary text-xs px-2.5 py-1.5" onClick={onExtra} title={t('activities.extraHint')}>
+                      {t('activities.extraButton')}
+                    </button>
+                  )}
                 </div>
-              ) : isDone ? (
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-sage-500">{t('activities.completed')}</p>
-                  <button type="button" onClick={() => onProgress(-1)} className="text-xs text-ink-900/40 dark:text-cream-100/40 hover:underline">
-                    {t('activities.undo')}
-                  </button>
+              </div>
+
+              {extras > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-gold-100 dark:bg-gold-400/20 text-gold-500">
+                    {t('activities.extraCount', { count: extras })}
+                  </span>
+                  {onUndoExtra && (
+                    <button type="button" onClick={onUndoExtra} className="text-[11px] text-ink-900/40 dark:text-cream-100/40 hover:underline">
+                      {t('activities.undoExtra')}
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <button type="button" className="btn-primary text-sm w-full" onClick={() => onProgress(1)}>
-                  {t('activities.markDone')}
-                </button>
               )}
               {isDone && next && (
                 <p className="text-xs text-ink-900/50 dark:text-cream-100/50">

@@ -61,11 +61,15 @@ export default function Timeline() {
     [fixedActivities, activityCompletions, weekKey]
   )
 
-  function handleStamp(item) {
+  async function handleStamp(item) {
     if (!item?.completion) return
     const wasCompleted = item.completion.completed
     const delta = wasCompleted ? -1 : 1
-    setActivityProgress(item.completion, delta)
+    const result = await setActivityProgress(item.completion, delta)
+    if (result?.ok === false) {
+      showToast(t('activities.notYetToast'), 'default')
+      return
+    }
     if (!wasCompleted) {
       const activity = fixedActivities.find((a) => a.id === item.completion.activityId)
       const target = activity?.timesPerWeek || 1

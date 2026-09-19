@@ -429,6 +429,25 @@ create index if not exists activities_floor_idx on activities (floor_id);
 create index if not exists activity_completions_floor_idx on activity_completions (floor_id);
 create index if not exists activity_completions_activity_idx on activity_completions (activity_id);
 
+-- Cada vez que alguien marca una actividad: 'routine' = una ocasión
+-- prevista de la rutina (suma al progreso, ver setActivityProgress);
+-- 'extra' = una vez de más durante el turno, solo reconocimiento (sin
+-- puntos, no afecta la rutina). marked_by = quien lo hizo de verdad
+-- (puede no ser el responsable del turno). replica identity full para
+-- que Realtime sí entregue los borrados con el filtro por piso.
+create table if not exists activity_marks (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  activity_id uuid not null references activities(id) on delete cascade,
+  completion_id uuid not null references activity_completions(id) on delete cascade,
+  marked_by uuid references profiles(id) on delete set null,
+  kind text not null default 'routine' check (kind in ('routine', 'extra')),
+  created_at timestamptz not null default now()
+);
+create index if not exists activity_marks_floor_idx on activity_marks (floor_id);
+create index if not exists activity_marks_completion_idx on activity_marks (completion_id);
+alter table activity_marks replica identity full;
+
 -- "Intercambiar turno" (Convives): target_type/target_id son
 -- polimórficos (apuntan a una fila de tasks o de activity_completions
 -- según el caso) — sin FK cruzada, se valida en la app. No es
@@ -692,6 +711,11 @@ create policy "select floor activity_completions" on activity_completions for se
 create policy "insert floor activity_completions" on activity_completions for insert with check (is_active_member(floor_id));
 create policy "update floor activity_completions" on activity_completions for update using (is_active_member(floor_id));
 
+alter table activity_marks enable row level security;
+create policy "select floor activity_marks" on activity_marks for select using (is_active_member(floor_id));
+create policy "insert own activity_marks" on activity_marks for insert with check (is_active_member(floor_id) and marked_by = auth.uid());
+create policy "delete floor activity_marks" on activity_marks for delete using (is_active_member(floor_id));
+
 -- swap_requests: cualquier miembro ve las del piso; solo quien
 -- propone crea; quien recibe decide (aceptar/rechazar) mientras siga
 -- pendiente; quien propuso puede cancelar su propia pendiente.
@@ -721,6 +745,7 @@ alter publication supabase_realtime add table polls;
 alter publication supabase_realtime add table poll_votes;
 alter publication supabase_realtime add table activities;
 alter publication supabase_realtime add table activity_completions;
+alter publication supabase_realtime add table activity_marks;
 alter publication supabase_realtime add table swap_requests;
 
 -- =========================================================
