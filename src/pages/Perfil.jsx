@@ -8,7 +8,7 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { getFloorHistory } from '../lib/db'
 import { getMemberColor } from '../lib/roomieColors'
-import { isPotAdjustment } from '../lib/pot'
+import { computeWallets } from '../lib/wallets'
 import { CameraIcon, AlertIcon, MailIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict } from 'date-fns'
 
@@ -98,14 +98,12 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
   const [confirming, setConfirming] = useState(false)
   const [rejecting, setRejecting] = useState(false)
 
-  const activeMembers = members.filter((m) => m.potActive !== false)
-  const aportes = potContributions.filter((c) => Number(c.amount) > 0 && !isPotAdjustment(c))
-  const myContributed = aportes.filter((c) => c.userId === userId).reduce((sum, c) => sum + Number(c.amount), 0)
-  const totalAmongActive = aportes
-    .filter((c) => activeMembers.some((m) => m.id === c.userId))
-    .reduce((sum, c) => sum + Number(c.amount), 0)
-  const fairShare = activeMembers.length ? totalAmongActive / activeMembers.length : 0
-  const balance = myContributed - fairShare
+  // Misma wallet que se ve en el Pote (lib/wallets.js): aportes menos tu
+  // parte de cada gasto.
+  const myWallet = computeWallets(members, potContributions)[userId] || { contributed: 0, expenseShare: 0, balance: 0 }
+  const myContributed = myWallet.contributed
+  const fairShare = myWallet.expenseShare
+  const balance = myWallet.balance
 
   async function handleConfirm() {
     if (!confirm(t('perfil.confirmExitDialog', { floorName }))) {
