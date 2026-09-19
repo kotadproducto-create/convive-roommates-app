@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
@@ -21,8 +22,16 @@ export function ConfirmDialog({ title, body, confirmLabel, onCancel, onConfirm, 
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
+  // En document.body: si se abre dentro de una tarjeta con transform (Convives,
+  // animaciones de entrada), un ancestro con transform encierra a los
+  // elementos `fixed` y el pop-up quedaba del tamaño de la tarjeta. Los
+  // eventos de puntero no deben subir al arrastre de esa tarjeta.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center"
+      onClick={onCancel}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       <div
         onClick={(e) => e.stopPropagation()}
         className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 max-h-[90vh] overflow-y-auto"
@@ -39,7 +48,8 @@ export function ConfirmDialog({ title, body, confirmLabel, onCancel, onConfirm, 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

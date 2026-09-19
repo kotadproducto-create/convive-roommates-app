@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
@@ -243,15 +244,22 @@ function ConviveCard({
   const [isDragging, setIsDragging] = useState(false)
   const drag = useRef({ startX: 0, active: false, moved: false })
 
+  // OJO: el puntero solo se "captura" cuando el gesto ya es un arrastre
+  // (más de 4px). Capturarlo desde pointerdown hace que pointerup y click
+  // se redirijan a la tarjeta y los botones/enlaces de adentro (lápiz,
+  // Estoy fuera / Vuelta al piso, Intercambiar, Ajustar…) nunca reciban el
+  // toque.
   function handlePointerDown(e) {
     drag.current = { startX: e.clientX, active: true, moved: false }
     setIsDragging(true)
-    e.currentTarget.setPointerCapture(e.pointerId)
   }
   function handlePointerMove(e) {
     if (!drag.current.active) return
     const delta = drag.current.startX - e.clientX
-    if (Math.abs(delta) > 4) drag.current.moved = true
+    if (Math.abs(delta) > 4 && !drag.current.moved) {
+      drag.current.moved = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+    }
     setDragX(Math.min(Math.max(delta, 0), SWIPE_REVEAL))
   }
   function handlePointerUp() {
@@ -380,9 +388,14 @@ function ConviveCard({
         )}
       </div>
 
-      {showAwayPopup && (
-        <AwayPopup onCancel={() => setShowAwayPopup(false)} onConfirm={handleConfirmAway} isSelf={isSelf} targetName={member.name} t={t} />
-      )}
+      {/* En document.body: la tarjeta y su Reveal llevan transform, y un
+          ancestro con transform encierra a los pop-ups `fixed` (los dejaba
+          del tamaño de la tarjeta, recortados por su overflow-hidden). */}
+      {showAwayPopup &&
+        createPortal(
+          <AwayPopup onCancel={() => setShowAwayPopup(false)} onConfirm={handleConfirmAway} isSelf={isSelf} targetName={member.name} t={t} />,
+          document.body
+        )}
 
       <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="overflow-hidden">
@@ -482,7 +495,11 @@ function AwayPopup({ onCancel, onConfirm, isSelf, targetName, t }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
+    <div
+      className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center"
+      onClick={onCancel}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
