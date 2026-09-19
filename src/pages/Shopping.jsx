@@ -6,6 +6,7 @@ import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { currentPeriodKey } from '../lib/activities'
+import { isPendingToBuy } from '../lib/shopping'
 import {
   StoreIcon,
   AlertIcon,
@@ -95,9 +96,10 @@ export default function Shopping() {
   // El status (con stock/por acabarse/agotado) solo tiene sentido para
   // lo recurrente — una compra puntual no "vuelve a faltar", se compra
   // una vez y listo (ver recordPurchaseSession, que la borra de la
-  // lista en cuanto se compra).
+  // lista en cuanto se compra). Por eso "agotado" es solo lo recurrente,
+  // pero lo pendiente por comprar incluye también las puntuales.
   const outCount = shoppingItems.filter((i) => i.recurring && i.stockLevel === 'out').length
-  const pendingItems = useMemo(() => sortedItems.filter((i) => i.recurring && i.stockLevel !== 'ok'), [sortedItems])
+  const pendingItems = useMemo(() => sortedItems.filter(isPendingToBuy), [sortedItems])
 
   const history = useMemo(
     () => shoppingPurchases.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),

@@ -263,6 +263,9 @@ create table if not exists shopping_items (
 );
 
 create index if not exists shopping_items_floor_idx on shopping_items (floor_id);
+-- Para que Realtime entregue los DELETE con el filtro por floor_id (si no, un
+-- producto borrado en otro dispositivo no desaparece hasta recargar).
+alter table shopping_items replica identity full;
 
 -- Ledger inmutable de compras realizadas. item_name copia el nombre al
 -- momento de comprar (el historial sigue legible aunque el producto se

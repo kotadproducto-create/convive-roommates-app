@@ -7,6 +7,7 @@ import { getMondayOfWeek, computeWeekStreak } from '../lib/rotation'
 import { currentPeriodKey, dueActivitiesOnDate } from '../lib/activities'
 import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon, BellIcon } from '../components/icons'
 import { potAmountColorClass } from '../lib/pot'
+import { isPendingToBuy } from '../lib/shopping'
 import { getTimeGreeting } from '../lib/greeting'
 import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
@@ -83,7 +84,7 @@ export default function Timeline() {
   // El Status solo existe para productos recurrentes (las compras
   // puntuales no lo tienen, ver Shopping.jsx).
   const outOfStockCount = shoppingItems.filter((i) => i.recurring && i.stockLevel === 'out').length
-  const pendingShoppingCount = shoppingItems.filter((i) => i.recurring && i.stockLevel !== 'ok').length
+  const pendingShoppingCount = shoppingItems.filter(isPendingToBuy).length
   const weekDone = fixedProgress.filter((p) => p.completed).length
   const weekStreak = computeWeekStreak(activities, activityCompletions, weekKey)
   const greeting = getTimeGreeting()
