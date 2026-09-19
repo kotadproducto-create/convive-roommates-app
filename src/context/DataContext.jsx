@@ -1037,7 +1037,8 @@ export function DataProvider({ children }) {
         store: item.store || null,
         storeLocation: item.storeLocation || null,
         usualQuantity: item.usualQuantity || null,
-        stockLevel: item.stockLevel || 'ok',
+        // Una compra puntual nunca lleva Status: siempre 'ok' (neutro).
+        stockLevel: item.recurring === false ? 'ok' : item.stockLevel || 'ok',
         recurring: item.recurring !== false,
         estimatedPrice: item.estimatedPrice ? Number(item.estimatedPrice) : null,
         imageUrl,
@@ -1057,6 +1058,9 @@ export function DataProvider({ children }) {
       if (imageFile && currentFloor) {
         rest.imageUrl = await uploadShoppingItemImage(imageFile, currentFloor.id)
       }
+      // Si un producto pasa a ser puntual, se limpia el Status que
+      // tuviera (p. ej. "agotado") — una puntual no lo maneja.
+      if (rest.recurring === false) rest.stockLevel = 'ok'
       return update('shopping_items', itemId, rest)
     },
     [currentFloor]
@@ -1070,7 +1074,7 @@ export function DataProvider({ children }) {
   const setItemStock = useCallback(
     async (itemId, level) => {
       const item = shoppingItems.find((i) => i.id === itemId)
-      if (!item || !currentFloor) return
+      if (!item || !currentFloor || !item.recurring) return
       await update('shopping_items', itemId, { stockLevel: level })
       if (level === 'out' && item.stockLevel !== 'out') {
         await create('notifications', {

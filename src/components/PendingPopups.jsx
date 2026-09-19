@@ -67,7 +67,7 @@ export default function PendingPopups({ user, floor, activities, activityComplet
 
     const compras = progressFor('compras')
     if (compras?.completion?.assignedUserId === user.id) {
-      const missing = shoppingItems.filter((i) => i.stockLevel === 'out')
+      const missing = shoppingItems.filter((i) => i.recurring && i.stockLevel === 'out')
       if (missing.length > 0) {
         list.push({
           key: 'compras',

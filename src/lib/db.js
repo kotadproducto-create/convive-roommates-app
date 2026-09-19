@@ -76,9 +76,19 @@ export async function update(table, id, patch) {
   return toCamel(data)
 }
 
+// Supabase Realtime NO entrega los borrados (DELETE) cuando la
+// suscripción tiene un filtro (`floor_id=eq...`, como usa subscribeTable):
+// el evento de borrado solo trae la clave primaria, así que el filtro
+// lo descarta. Sin esto, algo eliminado (p. ej. una compra puntual ya
+// comprada) seguía mostrándose en la pantalla de quien lo borró hasta
+// recargar la página. Por eso remove() avisa localmente a las
+// suscripciones de esa tabla para que vuelvan a leerla.
+const localChanges = new EventTarget()
+
 export async function remove(table, id) {
   const { error } = await supabase.from(table).delete().eq('id', id)
   if (error) throw error
+  localChanges.dispatchEvent(new Event(table))
 }
 
 /**
@@ -131,6 +141,9 @@ export function subscribeTable(table, { floorId } = {}, onChange) {
 
   refetch()
 
+  // Borrados hechos desde este mismo dispositivo (ver remove()).
+  localChanges.addEventListener(table, refetch)
+
   const channel = supabase
     .channel(`${table}-changes-${floorId || 'all'}`)
     .on(
@@ -147,6 +160,7 @@ export function subscribeTable(table, { floorId } = {}, onChange) {
 
   return () => {
     active = false
+    localChanges.removeEventListener(table, refetch)
     supabase.removeChannel(channel)
   }
 }
