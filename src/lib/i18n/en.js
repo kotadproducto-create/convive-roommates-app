@@ -199,6 +199,7 @@ export default {
     awayFromFloor: 'Away',
     awayUntilLabel: 'Back on {{date}}',
     imAway: "I'm away",
+    backToFloor: 'Back on the floor',
     awayPopupTitle: 'How long will you be away?',
     awayPopupSubtitle: 'Pick the days you\'ll be away from the floor.',
     awayPopupTitleOther: 'How long will {{name}} be away?',

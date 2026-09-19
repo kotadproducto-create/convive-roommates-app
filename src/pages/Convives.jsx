@@ -357,14 +357,11 @@ function ConviveCard({
             {t('convives.awayUntilLabel', { date: format(new Date(`${member.awayUntil}T00:00:00`), t('calendar.dayMonthFormat'), { locale: dateLocale }) })}
           </span>
         )}
-        {isSelf && !isAway && (
-          <button
-            type="button"
-            onClick={() => setShowAwayPopup(true)}
-            className="ml-auto rounded-full bg-gold-500 text-ink-900 border-2 border-ink-900 dark:border-cream-100/40 px-3.5 py-1.5 text-[11px] font-bold flex items-center gap-1 active:scale-95 transition-transform shadow-sm"
-          >
-            <SunIcon className="w-3.5 h-3.5" />
-            {t('convives.imAway')}
+        {/* Un solo botón que alterna: "Estoy fuera" (abre el pop-up de fechas) /
+            "Vuelta al piso" (vuelve al instante). El tag de al lado se actualiza solo. */}
+        {isSelf && (
+          <button type="button" onClick={handleStatusClick} className="btn-secondary text-sm ml-auto">
+            {isAway ? t('convives.backToFloor') : t('convives.imAway')}
           </button>
         )}
       </div>

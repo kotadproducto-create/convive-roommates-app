@@ -39,7 +39,6 @@ export default function FloorSettings() {
     initiateRemoval,
     cancelRemoval,
     setMemberRole,
-    requestAbsence,
     decideAbsenceRequest,
     cancelAbsenceRequest,
     pendingJoinRequests,
@@ -209,7 +208,6 @@ export default function FloorSettings() {
             activityCompletions={activityCompletions}
             myAbsenceRequests={myAbsenceRequests}
             pendingAbsenceRequests={pendingAbsenceRequests}
-            requestAbsence={requestAbsence}
             decideAbsenceRequest={decideAbsenceRequest}
             cancelAbsenceRequest={cancelAbsenceRequest}
             t={t}
@@ -323,13 +321,12 @@ function RotationSection({
   activityCompletions,
   myAbsenceRequests,
   pendingAbsenceRequests,
-  requestAbsence,
   decideAbsenceRequest,
   cancelAbsenceRequest,
   t,
   dateLocale
 }) {
-  const [showAbsenceForm, setShowAbsenceForm] = useState(false)
+  const currentAbsenceRequests = myAbsenceRequests.filter((r) => r.status === 'pending' || r.status === 'approved')
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState(null)
   const [showEditConfirm, setShowEditConfirm] = useState(false)
@@ -493,45 +490,31 @@ function RotationSection({
         <RotationEditConfirmPopup onCancel={() => setShowEditConfirm(false)} onConfirm={startEditing} t={t} />
       )}
 
-      <div className="border-t border-ink-900/10 dark:border-cream-100/15 pt-4 mb-4">
-        <button type="button" className="btn-secondary text-sm" onClick={() => setShowAbsenceForm((s) => !s)}>
-          {showAbsenceForm ? t('floorSettings.cancel') : t('floorSettings.requestAbsence')}
-        </button>
-        {showAbsenceForm && (
-          <AbsenceRequestForm
-            onCancel={() => setShowAbsenceForm(false)}
-            onSubmit={async (payload) => {
-              await requestAbsence(payload)
-              setShowAbsenceForm(false)
-            }}
-            t={t}
-          />
-        )}
-
-        {myAbsenceRequests.length > 0 && (
-          <ul className="flex flex-col gap-1.5 mt-3">
-            {myAbsenceRequests
-              .filter((r) => r.status === 'pending' || r.status === 'approved')
-              .map((r) => (
-                <li key={r.id} className="flex items-center justify-between text-xs px-2.5 py-2 rounded-lg bg-cream-100 dark:bg-ink-700">
-                  <span>
-                    {t('floorSettings.dateRange', { start: r.startDate, end: r.endDate })}
-                    {r.reason ? ` · ${r.reason}` : ''}
-                    {' — '}
-                    <span className={r.status === 'approved' ? 'text-sage-500 font-semibold' : 'text-gold-500 font-semibold'}>
-                      {r.status === 'approved' ? t('floorSettings.approved') : t('floorSettings.pending')}
-                    </span>
+      {/* Ya no se pide estar fuera desde aquí: eso se hace con "Estoy fuera" en
+          Convives. Esto solo muestra solicitudes que ya existían. */}
+      {currentAbsenceRequests.length > 0 && (
+        <div className="border-t border-ink-900/10 dark:border-cream-100/15 pt-4 mb-4">
+          <ul className="flex flex-col gap-1.5">
+            {currentAbsenceRequests.map((r) => (
+              <li key={r.id} className="flex items-center justify-between text-xs px-2.5 py-2 rounded-lg bg-cream-100 dark:bg-ink-700">
+                <span>
+                  {t('floorSettings.dateRange', { start: r.startDate, end: r.endDate })}
+                  {r.reason ? ` · ${r.reason}` : ''}
+                  {' — '}
+                  <span className={r.status === 'approved' ? 'text-sage-500 font-semibold' : 'text-gold-500 font-semibold'}>
+                    {r.status === 'approved' ? t('floorSettings.approved') : t('floorSettings.pending')}
                   </span>
-                  {r.status === 'pending' && (
-                    <button onClick={() => cancelAbsenceRequest(r.id)} className="font-semibold text-violet-500 hover:underline shrink-0 ml-2">
-                      {t('floorSettings.cancelRequest')}
-                    </button>
-                  )}
-                </li>
-              ))}
+                </span>
+                {r.status === 'pending' && (
+                  <button onClick={() => cancelAbsenceRequest(r.id)} className="font-semibold text-violet-500 hover:underline shrink-0 ml-2">
+                    {t('floorSettings.cancelRequest')}
+                  </button>
+                )}
+              </li>
+            ))}
           </ul>
-        )}
-      </div>
+        </div>
+      )}
 
       {isAdmin && pendingAbsenceRequests.length > 0 && (
         <div className="border-t border-ink-900/10 dark:border-cream-100/15 pt-4 mb-4">
@@ -745,47 +728,5 @@ function RotationHistory({ history, memberById, activities, activityCompletions,
         </li>
       ))}
     </ul>
-  )
-}
-
-function AbsenceRequestForm({ onCancel, onSubmit, t }) {
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [reason, setReason] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!startDate || !endDate || endDate < startDate) return
-    setSubmitting(true)
-    try {
-      await onSubmit({ startDate, endDate, reason: reason.trim() || null })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-3 pt-3 border-t border-ink-900/10 dark:border-cream-100/15">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label className="text-sm">
-          {t('floorSettings.fromLabel')}
-          <input type="date" className="input mt-1" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
-        </label>
-        <label className="text-sm">
-          {t('floorSettings.toLabel')}
-          <input type="date" className="input mt-1" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} required />
-        </label>
-      </div>
-      <input className="input text-sm" placeholder={t('floorSettings.reasonPlaceholder')} value={reason} onChange={(e) => setReason(e.target.value)} />
-      <div className="flex gap-2">
-        <button type="button" className="btn-secondary text-xs self-start" onClick={onCancel}>
-          {t('floorSettings.cancel')}
-        </button>
-        <button type="submit" className="btn-primary text-xs self-start" disabled={submitting}>
-          {submitting ? t('floorSettings.sending') : t('floorSettings.sendRequest')}
-        </button>
-      </div>
-    </form>
   )
 }

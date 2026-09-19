@@ -200,6 +200,7 @@ export default {
     awayFromFloor: 'Fuera del piso',
     awayUntilLabel: 'Vuelve el {{date}}',
     imAway: 'Estoy fuera',
+    backToFloor: 'Vuelta al piso',
     awayPopupTitle: '¿Cuánto tiempo estarás fuera?',
     awayPopupSubtitle: 'Selecciona los días que estarás fuera del piso.',
     awayPopupTitleOther: '¿Cuánto tiempo estará fuera {{name}}?',
