@@ -8,9 +8,10 @@ import { currentPeriodKey, dueActivitiesOnDate } from '../lib/activities'
 import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon, BellIcon } from '../components/icons'
 import { potAmountColorClass } from '../lib/pot'
 import { getTimeGreeting } from '../lib/greeting'
-import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
+import { useProgressConfirm } from '../components/ProgressConfirm'
+import { useDisplayedPoints } from '../context/PointsFxContext'
 import PendingPopups from '../components/PendingPopups'
 import RoomieOrb from '../components/RoomieOrb'
 import Avatar from '../components/Avatar'
@@ -20,10 +21,11 @@ const FIXED_ORDER = ['compras', 'basura', 'lavadora']
 
 export default function Timeline() {
   const { user } = useAuth()
-  const { floor, members, activities, activityCompletions, notifications, shoppingItems, setActivityProgress, weekKey, markAllNotificationsRead } = useData()
-  const { showToast } = useToast()
+  const { floor, members, activities, activityCompletions, notifications, shoppingItems, weekKey, markAllNotificationsRead } = useData()
   const { t, dateLocale } = useLanguage()
   const navigate = useNavigate()
+  const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
+  const displayedPoints = useDisplayedPoints()
   const [showAllNotifications, setShowAllNotifications] = useState(false)
 
   // Racha de la semana → Calendario, abierto directo en ese día.
@@ -61,23 +63,9 @@ export default function Timeline() {
     [fixedActivities, activityCompletions, weekKey]
   )
 
-  async function handleStamp(item) {
+  function handleStamp(item) {
     if (!item?.completion) return
-    const wasCompleted = item.completion.completed
-    const delta = wasCompleted ? -1 : 1
-    const result = await setActivityProgress(item.completion, delta)
-    if (result?.ok === false) {
-      showToast(t('activities.notYetToast'), 'default')
-      return
-    }
-    if (!wasCompleted) {
-      const activity = fixedActivities.find((a) => a.id === item.completion.activityId)
-      const target = activity?.timesPerWeek || 1
-      const timesDone = Math.min(target, Math.max(0, (item.completion.timesDone || 0) + delta))
-      if (timesDone >= target) {
-        showToast(`¡${item.title} completada! +${activity?.points ?? 0} recompensas`, 'success')
-      }
-    }
+    askProgress(item.completion, item.completion.completed ? -1 : 1)
   }
 
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
@@ -103,6 +91,7 @@ export default function Timeline() {
 
   return (
     <>
+      {progressDialog}
       <PendingPopups user={user} floor={floor} activities={activities} activityCompletions={activityCompletions} weekKey={weekKey} shoppingItems={shoppingItems} />
       <AppLayout
         title={t('nav.inicio')}
@@ -116,7 +105,7 @@ export default function Timeline() {
             label={t('timeline.chips.activities')}
             streak={weekStreak}
           />
-          <Chip to="/recompensas" tone="gold" icon={CoinIcon} value={user?.points || 0} label={t('timeline.chips.points')} />
+          <Chip to="/recompensas" tone="gold" icon={CoinIcon} value={displayedPoints} label={t('timeline.chips.points')} />
           <Chip
             to="/pote"
             tone="gold"

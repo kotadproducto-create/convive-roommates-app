@@ -26,7 +26,6 @@ export default function Dashboard() {
     shoppingPurchases,
     potContributions,
     notifications,
-    setActivityProgress,
     activityMarks,
     extraCounts,
     addActivityExtra,
@@ -107,7 +106,6 @@ export default function Dashboard() {
           memberById={memberById}
           activities={activities}
           activityCompletions={activityCompletions}
-          setActivityProgress={setActivityProgress}
           potContributions={potContributions}
           shoppingPurchases={shoppingPurchases}
           shoppingItems={shoppingItems}
@@ -151,7 +149,7 @@ export default function Dashboard() {
                   memberById={memberById}
                   rotationOrder={floor?.rotationOrder}
                   extras={completion ? extraCounts[completion.id] || 0 : 0}
-                  onProgress={(delta) => completion && setActivityProgress(completion, delta)}
+                  showProgress={!!completion}
                   onExtra={() => completion && addActivityExtra(completion)}
                   onUndoExtra={() => completion && removeActivityExtra(completion.id)}
                   t={t}

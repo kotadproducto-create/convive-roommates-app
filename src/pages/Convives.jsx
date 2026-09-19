@@ -11,6 +11,7 @@ import { currentPeriodKey } from '../lib/activities'
 import { getMemberColor } from '../lib/roomieColors'
 import { CoinIcon, SunIcon, HomeIcon, PhoneIcon, EditIcon, PlusIcon, MinusIcon, ChevronDownIcon, CloseIcon } from '../components/icons'
 import { formatDistanceToNowStrict, format } from 'date-fns'
+import { useProgressConfirm } from '../components/ProgressConfirm'
 
 export default function Convives() {
   const { user, membership } = useAuth()
@@ -19,7 +20,6 @@ export default function Convives() {
     weekKey,
     activities,
     activityCompletions,
-    setActivityProgress,
     incomingSwapRequests,
     outgoingSwapRequests,
     requestSwap,
@@ -61,7 +61,6 @@ export default function Convives() {
               weekKey={weekKey}
               activities={activities}
               activityCompletions={activityCompletions}
-              setActivityProgress={setActivityProgress}
               requestSwap={requestSwap}
               outgoingSwapRequests={outgoingSwapRequests}
               t={t}
@@ -93,17 +92,17 @@ function getPendingItems(memberId, activities, activityCompletions, weekKey) {
 /** Una fila de "Esta semana": título del turno + Marcar hecho +
  * Intercambiar (con un <select> de compañeros que se abre al tocar,
  * mismo patrón que el picker de compañero de habitación en Perfil). */
-function PendingItemRow({ item, members, currentUserId, setActivityProgress, requestSwap, hasOutgoingSwap, t }) {
+function PendingItemRow({ item, members, currentUserId, requestSwap, hasOutgoingSwap, t }) {
   const { showToast } = useToast()
+  const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [selected, setSelected] = useState('')
   const otherMembers = members.filter((m) => m.id !== currentUserId)
 
   const isStepped = item.activity?.frequencyType === 'recurring' && item.activity.recurrenceUnit === 'week' && (item.activity.timesPerWeek || 1) > 1
 
-  async function handleDone() {
-    const result = await setActivityProgress(item.completion, 1)
-    if (result?.ok === false) showToast(t('activities.notYetToast'), 'default')
+  function handleDone() {
+    askProgress(item.completion, 1)
   }
 
   async function handleSwap() {
@@ -116,6 +115,7 @@ function PendingItemRow({ item, members, currentUserId, setActivityProgress, req
 
   return (
     <div className="flex flex-col gap-1.5 px-3 py-2 rounded-xl bg-cream-100 dark:bg-ink-700">
+      {progressDialog}
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium min-w-0 truncate">{item.title}</span>
         <div className="flex items-center gap-2 shrink-0">
@@ -212,7 +212,6 @@ function ConviveCard({
   weekKey,
   activities,
   activityCompletions,
-  setActivityProgress,
   requestSwap,
   outgoingSwapRequests,
   t,
@@ -387,7 +386,6 @@ function ConviveCard({
                   item={item}
                   members={members}
                   currentUserId={currentUserId}
-                  setActivityProgress={setActivityProgress}
                   requestSwap={requestSwap}
                   hasOutgoingSwap={outgoingSwapRequests.some((r) => r.targetId === item.targetId)}
                   t={t}

@@ -15,7 +15,7 @@ import {
   deterministicUuid
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
-import { ensureActivityPeriods, currentPeriodKey, occurrenceSlots } from '../lib/activities'
+import { ensureActivityPeriods, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks } from '../lib/activities'
 import { resolvePoll } from '../lib/polls'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
@@ -1180,17 +1180,20 @@ export function DataProvider({ children }) {
 
   // Progreso del período actual de una actividad: para timesPerWeek=1 (o
   // mensual/evento único) es un simple hecho/deshecho; si tiene varias
-  // veces por semana, delta suma/resta contra el objetivo. Si la
-  // actividad otorga puntos (las 3 fijas, ver `activity.points`), se
-  // acreditan al responsable de ESTE período justo al llegar al
-  // objetivo — mismo patrón que ya usa completeTask para las tareas
-  // viejas. No hay reversa al deshacer (tampoco la había antes).
+  // veces por semana, delta suma/resta contra el objetivo.
+  // Cada ocasión marcada queda en activity_marks (kind 'routine') con
+  // quién la hizo, cuándo y los puntos que dio: los puntos de la
+  // actividad se reparten entre sus ocasiones (occurrencePoints) y son de
+  // QUIEN EJECUTA, sea o no el responsable del turno. Deshacer no borra
+  // nada: añade una marca 'undo' (queda en el historial), anula la marca
+  // vigente más reciente y le quita esos puntos a quien la hizo — solo lo
+  // puede deshacer esa misma persona o un admin del piso
+  // ({ ok:false, reason:'not_yours' }). Los turnos anteriores a este
+  // registro (sin marcas) se deshacen sin reversa de puntos.
   // Devuelve { ok:false, reason:'not_yet', dateKey } si es una actividad
   // "N veces por semana" y todavía no llega el día de la siguiente
   // ocasión (ver occurrenceSlots) — quien llama avisa al usuario. `force`
   // salta esa regla (la compra completa de "Hacer la compra" cumple todo).
-  // Cada ocasión sumada/restada queda además registrada en activity_marks
-  // (quién la marcó y cuándo).
   const setActivityProgress = useCallback(
     async (completion, delta, { force = false } = {}) => {
       const activity = activities.find((a) => a.id === completion.activityId)
@@ -1199,10 +1202,23 @@ export function DataProvider({ children }) {
         const occ = occurrenceSlots(activity, completion)
         if (occ.gated && !occ.canMark) return { ok: false, reason: 'not_yet', dateKey: occ.nextDateKey }
       }
-      const wasCompleted = completion.completed
       const before = completion.timesDone || 0
       const timesDone = Math.min(target, Math.max(0, before + delta))
       const nowCompleted = timesDone >= target
+
+      // Deshacer: qué marcas vigentes se anulan, y con permiso.
+      const toUndo = []
+      if (timesDone < before) {
+        const stack = activeRoutineMarks(activityMarks, completion.id)
+        const isAdmin = members.find((m) => m.id === user?.id)?.role === 'admin'
+        for (let i = 0; i < before - timesDone; i++) {
+          const mark = stack[stack.length - 1 - i]
+          if (!mark) break
+          if (mark.markedBy !== user?.id && !isAdmin) return { ok: false, reason: 'not_yours' }
+          toUndo.push(mark)
+        }
+      }
+
       await update('activity_completions', completion.id, {
         timesDone,
         completed: nowCompleted,
@@ -1210,34 +1226,39 @@ export function DataProvider({ children }) {
       })
 
       if (currentFloor && user) {
-        if (timesDone > before) {
-          for (let i = before; i < timesDone; i++) {
-            await create('activity_marks', {
-              floorId: currentFloor.id,
-              activityId: completion.activityId,
-              completionId: completion.id,
-              markedBy: user.id,
-              kind: 'routine'
-            })
-          }
-        } else if (timesDone < before) {
-          const latest = activityMarks
-            .filter((m) => m.completionId === completion.id && m.kind === 'routine')
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-            .slice(0, before - timesDone)
-          for (const m of latest) await remove('activity_marks', m.id)
+        const points = {} // profileId → variación de puntos
+        for (let i = before; i < timesDone; i++) {
+          const earned = occurrencePoints(activity?.points, i, target)
+          await create('activity_marks', {
+            floorId: currentFloor.id,
+            activityId: completion.activityId,
+            completionId: completion.id,
+            markedBy: user.id,
+            kind: 'routine',
+            points: earned
+          })
+          if (earned) points[user.id] = (points[user.id] || 0) + earned
         }
-      }
-
-      if (nowCompleted && !wasCompleted && activity?.points && completion.assignedUserId) {
-        const assignee = members.find((m) => m.id === completion.assignedUserId)
-        if (assignee) {
-          await update('profiles', assignee.id, { points: (assignee.points || 0) + activity.points })
+        for (const mark of toUndo) {
+          await create('activity_marks', {
+            floorId: currentFloor.id,
+            activityId: completion.activityId,
+            completionId: completion.id,
+            markedBy: user.id,
+            kind: 'undo',
+            points: -(mark.points || 0)
+          })
+          if (mark.points && mark.markedBy) points[mark.markedBy] = (points[mark.markedBy] || 0) - mark.points
         }
+        for (const [profileId, change] of Object.entries(points)) {
+          const person = members.find((m) => m.id === profileId)
+          if (person && change) await update('profiles', profileId, { points: Math.max(0, (person.points || 0) + change) })
+        }
+        if (points[user.id]) refreshAuth()
       }
       return { ok: true }
     },
-    [activities, members, currentFloor, user, activityMarks]
+    [activities, members, currentFloor, user, activityMarks, refreshAuth]
   )
 
   // Marca EXTRA: una vez de más durante el turno (p. ej. la basura se

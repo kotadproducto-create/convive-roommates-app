@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import Avatar from './Avatar'
 import { SparkleIcon, EditIcon, TrashIcon, CartIcon, WasherIcon } from './icons'
 import { nextOccurrence, occurrenceSlots } from '../lib/activities'
+import { useProgressConfirm } from './ProgressConfirm'
 import { format, startOfWeek, addDays } from 'date-fns'
 
 // "2026-09-17" → "jueves" (nombre del día en el idioma activo).
@@ -60,7 +61,7 @@ export default function ActivityCard({
   extras = 0,
   onEdit,
   onDelete,
-  onProgress,
+  showProgress = false,
   onExtra,
   onUndoExtra,
   t,
@@ -74,6 +75,7 @@ export default function ActivityCard({
   const timesDone = completion?.timesDone || 0
   const isDone = completion?.completed || false
   const notThisPeriod = activity.frequencyType === 'recurring' && !completion
+  const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
   const Icon = (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon
 
   // Solo se calcula (y se muestra) una vez que la actividad ya quedó
@@ -141,7 +143,7 @@ export default function ActivityCard({
             )}
           </div>
 
-          {onProgress && (
+          {showProgress && (
             <div className="flex flex-col gap-2">
               {/* Barra por ocasiones: un tramo por cada vez prevista. */}
               <div
@@ -171,7 +173,7 @@ export default function ActivityCard({
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                   {timesDone > 0 && (
-                    <button type="button" onClick={() => onProgress(-1)} className="text-[11px] text-ink-900/40 dark:text-cream-100/40 hover:underline">
+                    <button type="button" onClick={() => askProgress(completion, -1)} className="text-[11px] text-ink-900/40 dark:text-cream-100/40 hover:underline">
                       {t('activities.undo')}
                     </button>
                   )}
@@ -180,7 +182,7 @@ export default function ActivityCard({
                       type="button"
                       className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                       disabled={!occ.canMark}
-                      onClick={() => onProgress(1)}
+                      onClick={() => askProgress(completion, 1)}
                     >
                       {t('activities.markDone')}
                     </button>
@@ -217,6 +219,7 @@ export default function ActivityCard({
           )}
         </>
       )}
+      {progressDialog}
     </div>
   )
 }

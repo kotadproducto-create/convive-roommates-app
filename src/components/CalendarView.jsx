@@ -17,10 +17,10 @@ import {
 import { currentPeriodKey, isDueOnDate, assigneeFor, getWeekKeyOf } from '../lib/activities'
 import { isPotAdjustment } from '../lib/pot'
 import { JarIcon, CartIcon, StoreIcon, WasherIcon, SparkleIcon } from './icons'
-import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { TASK_TONE_CLASSES } from './TaskCard'
 import { FIXED_ICONS } from './ActivityCard'
+import { useProgressConfirm } from './ProgressConfirm'
 
 const ACTIVITY_TONE_CLASS = 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
 
@@ -48,7 +48,6 @@ export default function CalendarView({
   memberById,
   activities = [],
   activityCompletions = [],
-  setActivityProgress,
   potContributions = [],
   shoppingPurchases = [],
   shoppingItems = [],
@@ -174,7 +173,6 @@ export default function CalendarView({
         <DayDetail
           cursor={cursor}
           dayInfo={dayInfo}
-          setActivityProgress={setActivityProgress}
           memberById={memberById}
           potContributions={potContributions}
           shoppingPurchases={shoppingPurchases}
@@ -391,11 +389,29 @@ function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingI
       })
     }
 
-    // Actividades realizadas: se registran el día en que se completaron
-    // (completedAt), aunque no fuera el día "programado" — el turno
-    // (assignedUserId) es quien se lleva el crédito.
+    // Cada marca de la rutina y cada "deshacer" queda en el historial con
+    // quién la hizo y los puntos que movió.
+    const completionsWithMarks = new Set()
+    for (const m of activityMarks) {
+      if (m.kind !== 'routine' && m.kind !== 'undo') continue
+      const activity = activities.find((a) => a.id === m.activityId)
+      if (!activity) continue
+      completionsWithMarks.add(m.completionId)
+      const isUndo = m.kind === 'undo'
+      events.push({
+        id: `${m.kind}-${m.id}`,
+        time: m.createdAt,
+        icon: (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon,
+        tone: isUndo ? 'clay' : 'sage',
+        title: t(isUndo ? 'calendar.undoneMark' : 'calendar.markedDone', { name: memberById[m.markedBy]?.name || t('calendar.someone'), title: activity.title }),
+        subtitle: m.points ? t('calendar.pointsChange', { points: m.points > 0 ? `+${m.points}` : m.points }) : null
+      })
+    }
+
+    // Turnos anteriores al registro de marcas: se muestran como antes, el
+    // día en que se completaron (completedAt), a nombre del responsable.
     for (const c of activityCompletions) {
-      if (!c.completed || !c.completedAt) continue
+      if (!c.completed || !c.completedAt || completionsWithMarks.has(c.id)) continue
       const activity = activities.find((a) => a.id === c.activityId)
       if (!activity) continue
       events.push({
@@ -521,7 +537,6 @@ function OtherDaysHistory({ allEvents, cursor, onSelectDay, t, dateLocale }) {
 function DayDetail({
   cursor,
   dayInfo,
-  setActivityProgress,
   memberById,
   potContributions,
   shoppingPurchases,
@@ -535,29 +550,17 @@ function DayDetail({
   dateLocale
 }) {
   const items = dayInfo(cursor)
-  const { showToast } = useToast()
+  const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
   const allEvents = useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t)
   const events = useMemo(() => allEvents.filter((e) => isSameDay(new Date(e.time), cursor)), [allEvents, cursor])
 
-  async function handleToggle(item) {
-    const wasCompleted = item.completion.completed
-    const delta = wasCompleted ? -1 : 1
-    const result = await setActivityProgress(item.completion, delta)
-    if (result?.ok === false) {
-      showToast(t('activities.notYetToast'), 'default')
-      return
-    }
-    if (!wasCompleted) {
-      const target = item.activity?.timesPerWeek || 1
-      const timesDone = Math.min(target, Math.max(0, (item.completion.timesDone || 0) + delta))
-      if (timesDone >= target) {
-        showToast(t('taskCard.completedToast', { label: item.label, points: item.points }), 'success')
-      }
-    }
+  function handleToggle(item) {
+    askProgress(item.completion, item.completion.completed ? -1 : 1)
   }
 
   return (
     <div className="py-2">
+      {progressDialog}
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{t('calendar.scheduledTitle')}</p>
       {items.length === 0 ? (
         <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">{t('calendar.noTaskToday')}</p>

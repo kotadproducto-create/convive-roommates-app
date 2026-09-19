@@ -30,7 +30,6 @@ export default function Activities() {
     addActivity,
     updateActivity,
     removeActivity,
-    setActivityProgress,
     extraCounts,
     addActivityExtra,
     removeActivityExtra
@@ -103,11 +102,7 @@ export default function Activities() {
           }}
           onDelete={() => handleDelete(activity)}
           extras={completion ? extraCounts[completion.id] || 0 : 0}
-          onProgress={async (delta) => {
-            if (!completion) return
-            const r = await setActivityProgress(completion, delta)
-            if (r?.ok === false) showToast(t('activities.notYetToast'), 'default')
-          }}
+          showProgress={!!completion}
           onExtra={() => completion && addActivityExtra(completion)}
           onUndoExtra={() => completion && removeActivityExtra(completion.id)}
           t={t}

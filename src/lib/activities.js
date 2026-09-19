@@ -272,6 +272,35 @@ export function occurrenceSlots(activity, completion, todayKey = getDateKey(new 
   return { gated: true, slots, target: slots.length, timesDone, nextDateKey: next?.dateKey || null, canMark: Boolean(next?.unlocked) }
 }
 
+/**
+ * Puntos que da la ocasión número `index` (0 = la primera) de una
+ * actividad con `target` ocasiones y `points` en total: se reparten
+ * enteros y sin perder nada (5 puntos en 3 ocasiones → 2, 2, 1), y los
+ * gana quien ejecuta CADA ocasión, no el responsable del turno.
+ */
+export function occurrencePoints(points, index, target) {
+  if (!points || target < 1) return 0
+  const base = Math.floor(points / target)
+  return base + (index < points % target ? 1 : 0)
+}
+
+/**
+ * Marcas de rutina que siguen vigentes en un turno: cada 'undo' anula la
+ * más reciente (como una pila). La de arriba es la que se deshace si
+ * alguien pulsa "Deshacer".
+ */
+export function activeRoutineMarks(marks, completionId) {
+  const stack = []
+  const ordered = marks
+    .filter((m) => m.completionId === completionId && (m.kind === 'routine' || m.kind === 'undo'))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  for (const m of ordered) {
+    if (m.kind === 'routine') stack.push(m)
+    else stack.pop()
+  }
+  return stack
+}
+
 /** Actividades (con su finalización del período que corresponda, si
  * ya existe) que caen en una fecha concreta — usado por el Calendario
  * y por el "stamp" semanal de Inicio, para no duplicar esta lógica en

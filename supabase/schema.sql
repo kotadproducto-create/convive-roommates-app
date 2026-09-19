@@ -441,7 +441,11 @@ create table if not exists activity_marks (
   activity_id uuid not null references activities(id) on delete cascade,
   completion_id uuid not null references activity_completions(id) on delete cascade,
   marked_by uuid references profiles(id) on delete set null,
-  kind text not null default 'routine' check (kind in ('routine', 'extra')),
+  -- 'routine' = ocasión marcada como hecha; 'undo' = anula la marca vigente
+  -- más reciente (no se borra nada: queda en el historial); 'extra' = solo
+  -- reconocimiento. points = puntos que movió la marca (negativos en 'undo').
+  kind text not null default 'routine' check (kind in ('routine', 'extra', 'undo')),
+  points integer not null default 0,
   created_at timestamptz not null default now()
 );
 create index if not exists activity_marks_floor_idx on activity_marks (floor_id);

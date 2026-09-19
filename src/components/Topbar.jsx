@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
-import { BellIcon, GearIcon, PersonIcon, CloseIcon } from './icons'
+import { BellIcon, GearIcon, PersonIcon, CloseIcon, CoinIcon } from './icons'
+import { useDisplayedPoints, usePointsPulse } from '../context/PointsFxContext'
 import Avatar from './Avatar'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -14,6 +15,9 @@ export default function Topbar({ title, subheader }) {
   const [open, setOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const points = useDisplayedPoints()
+  const pointsRef = useRef(null)
+  usePointsPulse(pointsRef)
 
   const unread = notifications.filter((n) => !n.read)
   const hasRead = notifications.length > unread.length
@@ -26,16 +30,30 @@ export default function Topbar({ title, subheader }) {
           subheader ? 'pt-4 pb-2.5 landscape-sm:pt-2 landscape-sm:pb-1.5' : 'py-4 landscape-sm:py-2'
         }`}
       >
-        <div>
-          <h1 className="font-display text-xl landscape-sm:text-base font-bold tracking-tight">{title}</h1>
+        <div className="min-w-0">
+          <h1 className="font-display text-xl landscape-sm:text-base font-bold tracking-tight truncate">{title}</h1>
           {floor && (
-            <p className="text-xs text-ink-900/50 dark:text-cream-100/50 landscape-sm:hidden">
+            <p className="text-xs text-ink-900/50 dark:text-cream-100/50 landscape-sm:hidden truncate">
               {floor.name} · código {floor.inviteCode}
             </p>
           )}
         </div>
 
-        <div className="flex items-center gap-2 landscape-sm:gap-1">
+        <div className="flex items-center gap-2 landscape-sm:gap-1 shrink-0 pl-2">
+        {/* Indicador de puntos: destino de la animación de fichas (PointsFxContext). */}
+        <Link
+          ref={pointsRef}
+          to="/recompensas"
+          data-points-target
+          aria-label={`${t('topbar.points')}: ${points}`}
+          title={t('topbar.points')}
+          className="inline-flex items-center gap-1.5 h-9 landscape-sm:h-8 pl-1 pr-2.5 rounded-full border-2 border-ink-900/70 dark:border-cream-100/30 bg-gold-100 dark:bg-gold-400/15 shadow-[0_2px_0_0_theme(colors.ink.900/20%)] dark:shadow-[0_2px_0_0_theme(colors.cream.100/15%)] transition-transform active:translate-y-0.5 active:shadow-none"
+        >
+          <span className="w-6 h-6 rounded-full bg-gold-500 flex items-center justify-center shrink-0">
+            <CoinIcon className="w-3.5 h-3.5 text-white" />
+          </span>
+          <span className="text-sm font-extrabold tabular-nums leading-none">{points}</span>
+        </Link>
         <div className="relative">
           <button
             onClick={() => setOpen((o) => !o)}

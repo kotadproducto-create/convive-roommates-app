@@ -1,5 +1,32 @@
 import { describe, it, expect } from 'vitest'
-import { occurrenceSlots, getWeekKeyOf } from '../activities.js'
+import { occurrenceSlots, occurrencePoints, activeRoutineMarks, getWeekKeyOf } from '../activities.js'
+
+describe('occurrencePoints — puntos por ocasión, para quien la ejecuta', () => {
+  it('reparte los puntos enteros sin perder ninguno', () => {
+    const parts = [0, 1, 2].map((i) => occurrencePoints(5, i, 3))
+    expect(parts).toEqual([2, 2, 1])
+    expect(parts.reduce((a, b) => a + b, 0)).toBe(5)
+  })
+  it('una sola ocasión da todos los puntos', () => {
+    expect(occurrencePoints(15, 0, 1)).toBe(15)
+  })
+  it('sin puntos configurados no da nada', () => {
+    expect(occurrencePoints(null, 0, 3)).toBe(0)
+    expect(occurrencePoints(0, 1, 3)).toBe(0)
+  })
+})
+
+describe('activeRoutineMarks — cada deshacer anula la marca más reciente', () => {
+  const m = (id, kind, min) => ({ id, kind, completionId: 'c1', createdAt: new Date(Date.UTC(2026, 8, 19, 10, min)).toISOString() })
+  it('R1 R2 U R3 deja vigentes R1 y R3 (la de arriba es R3)', () => {
+    const stack = activeRoutineMarks([m('R1', 'routine', 0), m('R2', 'routine', 1), m('U', 'undo', 2), m('R3', 'routine', 3)], 'c1')
+    expect(stack.map((x) => x.id)).toEqual(['R1', 'R3'])
+  })
+  it('ignora extras y marcas de otros turnos', () => {
+    const stack = activeRoutineMarks([m('E', 'extra', 0), { ...m('X', 'routine', 1), completionId: 'c2' }, m('R1', 'routine', 2)], 'c1')
+    expect(stack.map((x) => x.id)).toEqual(['R1'])
+  })
+})
 
 // Semana del lunes 2026-09-14 al domingo 2026-09-20.
 const periodKey = getWeekKeyOf(new Date(2026, 8, 14))

@@ -4,6 +4,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { ToastProvider } from './context/ToastContext'
 import { PushProvider } from './context/PushContext'
+import { PointsFxProvider } from './context/PointsFxContext'
 import { DataProvider } from './context/DataContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
@@ -38,6 +39,7 @@ export default function App() {
     <LanguageProvider>
       <ToastProvider>
       <PushProvider>
+      <PointsFxProvider>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
@@ -198,6 +200,7 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
+      </PointsFxProvider>
       </PushProvider>
       </ToastProvider>
     </LanguageProvider>
