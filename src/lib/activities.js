@@ -273,6 +273,17 @@ export function occurrenceSlots(activity, completion, todayKey = getDateKey(new 
 }
 
 /**
+ * ¿Le toca a este usuario cumplir la actividad? "Marcar hecho" es el
+ * cumplimiento de lo ASIGNADO: solo el responsable del turno (o cualquiera,
+ * si la actividad es de "Todos", sin nadie asignado). Quien no es el
+ * responsable usa "+ Extra" (realización voluntaria, sin tocar la rutina).
+ */
+export function canUserMark(activity, completion, userId) {
+  const assigned = completion?.assignedUserId || activity?.assignedUserId
+  return !assigned || assigned === userId
+}
+
+/**
  * Puntos que da la ocasión número `index` (0 = la primera) de una
  * actividad con `target` ocasiones y `points` en total: se reparten
  * enteros y sin perder nada (5 puntos en 3 ocasiones → 2, 2, 1), y los

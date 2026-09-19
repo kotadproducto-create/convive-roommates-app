@@ -15,7 +15,7 @@ import {
   deterministicUuid
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
-import { ensureActivityPeriods, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks } from '../lib/activities'
+import { ensureActivityPeriods, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark } from '../lib/activities'
 import { resolvePoll } from '../lib/polls'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
@@ -278,16 +278,24 @@ export function DataProvider({ children }) {
         const outcome = resolvePoll(poll, votesForPoll, activeMemberIds, todayISO, Date.now())
         if (!outcome) continue
 
-        // Las consultas de tipo 'rotation_order' (propuesta de nuevo
-        // orden de rotación, ver proposeRotationOrder) solo aplican el
-        // cambio de verdad si se resolvió con la opción "Aprobar" — un
-        // "Rechazar", un cierre sin mayoría o un vencimiento del plazo
-        // dejan floors.rotation_order intacto.
+        // Las consultas de tipo 'rotation_order' (propuesta de cambio de
+        // rotación: orden de personas, modo y/o período, ver
+        // proposeRotationChange) solo aplican el cambio de verdad si se
+        // resolvió con la opción "Aprobar" — un "Rechazar", un cierre sin
+        // mayoría o un vencimiento del plazo dejan la rotación intacta.
         const isRotationOrder = poll.kind === 'rotation_order'
         const isPotAdjustment = poll.kind === 'pot_adjustment'
         const approved = outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar'
-        if (isRotationOrder && approved && poll.payload?.newOrder) {
-          await update('floors', currentFloor.id, { rotationOrder: poll.payload.newOrder, rotationEpoch: todayISO })
+        if (isRotationOrder && approved && poll.payload) {
+          const { newOrder, mode, periodUnit, periodInterval } = poll.payload
+          const patch = { rotationEpoch: todayISO }
+          if (newOrder) patch.rotationOrder = newOrder
+          if (mode) patch.rotationMode = mode
+          if (periodUnit) {
+            patch.rotationPeriodUnit = periodUnit
+            patch.rotationPeriodInterval = Math.max(1, Number(periodInterval) || 1)
+          }
+          await update('floors', currentFloor.id, patch)
         }
 
         // 'pot_adjustment' (ajuste manual del Pote, ver requestPotAdjustment):
@@ -330,12 +338,12 @@ export function DataProvider({ children }) {
         const id = await deterministicUuid(`notif:poll-resolved:${poll.id}:${outcome.status}`)
         const message = isRotationOrder
           ? approved
-            ? 'El piso aprobó el nuevo orden de rotación — ya está activo.'
+            ? 'El piso aprobó el cambio de rotación — ya está activo.'
             : outcome.status === 'resolved'
-              ? 'El piso rechazó la propuesta de nuevo orden de rotación. Sigue el orden anterior.'
+              ? 'El piso rechazó la propuesta de cambio de rotación. Sigue la rotación anterior.'
               : outcome.status === 'closed'
-                ? 'La propuesta de nuevo orden de rotación se cerró sin mayoría clara. Sigue el orden anterior.'
-                : 'La propuesta de nuevo orden de rotación venció sin que todos votaran. Sigue el orden anterior.'
+                ? 'La propuesta de cambio de rotación se cerró sin mayoría clara. Sigue la rotación anterior.'
+                : 'La propuesta de cambio de rotación venció sin que todos votaran. Sigue la rotación anterior.'
           : isPotAdjustment
             ? approved
               ? `Todos aprobaron la modificación del Pote: ahora es de ${Number(poll.payload?.newAmount).toFixed(2)}€.`
@@ -1190,6 +1198,10 @@ export function DataProvider({ children }) {
   // puede deshacer esa misma persona o un admin del piso
   // ({ ok:false, reason:'not_yours' }). Los turnos anteriores a este
   // registro (sin marcas) se deshacen sin reversa de puntos.
+  // "Marcar hecho" es el cumplimiento de lo ASIGNADO: si el turno es de
+  // otra persona devuelve { ok:false, reason:'not_your_turn' } (quien no es
+  // el responsable usa "+ Extra", ver addActivityExtra). `force` (compra
+  // completa) también salta esta regla.
   // Devuelve { ok:false, reason:'not_yet', dateKey } si es una actividad
   // "N veces por semana" y todavía no llega el día de la siguiente
   // ocasión (ver occurrenceSlots) — quien llama avisa al usuario. `force`
@@ -1198,6 +1210,9 @@ export function DataProvider({ children }) {
     async (completion, delta, { force = false } = {}) => {
       const activity = activities.find((a) => a.id === completion.activityId)
       const target = activity?.timesPerWeek || 1
+      if (delta > 0 && !force && activity && !canUserMark(activity, completion, user?.id)) {
+        return { ok: false, reason: 'not_your_turn' }
+      }
       if (delta > 0 && !force && activity) {
         const occ = occurrenceSlots(activity, completion)
         if (occ.gated && !occ.canMark) return { ok: false, reason: 'not_yet', dateKey: occ.nextDateKey }
@@ -1261,9 +1276,11 @@ export function DataProvider({ children }) {
     [activities, members, currentFloor, user, activityMarks, refreshAuth]
   )
 
-  // Marca EXTRA: una vez de más durante el turno (p. ej. la basura se
-  // llenó otra vez el mismo día). Va aparte de la rutina — no cuenta para
-  // el objetivo, no da puntos, solo queda como reconocimiento.
+  // Marca EXTRA: realización voluntaria/adicional de la actividad por
+  // CUALQUIER persona, sea o no su turno (p. ej. la basura se llenó otra
+  // vez el mismo día, o alguien no quiso esperar al responsable). Va aparte
+  // de la rutina — no cuenta para el objetivo, no da puntos, solo queda
+  // como reconocimiento.
   const addActivityExtra = useCallback(
     async (completion) => {
       if (!currentFloor || !user || !completion) return
@@ -1389,22 +1406,39 @@ export function DataProvider({ children }) {
     [currentFloor, user]
   )
 
-  // Propone un nuevo orden de rotación: no toca floors.rotation_order
-  // todavía — crea una consulta de aprobación (kind:'rotation_order') con
-  // un plazo de menos de 24h. Solo si el piso la aprueba por mayoría se
-  // aplica de verdad (ver el efecto de arriba que invoca resolvePoll).
-  // Mientras haya una de estas pendiente, pendingRotationOrderPoll (más
-  // abajo) evita que se proponga una segunda.
-  const proposeRotationOrder = useCallback(
-    (newOrder) =>
-      createPoll({
-        question: `¿Apruebas el nuevo orden de rotación propuesto por ${user?.name || 'un admin'}?`,
+  // Propone un cambio de rotación — el orden de las personas (newOrder),
+  // el modo (mode: 'random' | 'period') y/o la frecuencia (periodUnit +
+  // periodInterval), lo que venga en `changes`. No toca floors todavía:
+  // crea una consulta de aprobación (kind:'rotation_order') con un plazo de
+  // menos de 24h. Solo si el piso la aprueba por mayoría se aplica de
+  // verdad (ver el efecto de arriba que invoca resolvePoll). Mientras haya
+  // una de estas pendiente, pendingRotationOrderPoll (más abajo) evita que
+  // se proponga una segunda.
+  const proposeRotationChange = useCallback(
+    (changes) => {
+      const { newOrder, mode, periodUnit, periodInterval } = changes
+      const unitLabels = {
+        day: ['día', 'días'],
+        week: ['semana', 'semanas'],
+        month: ['mes', 'meses'],
+        year: ['año', 'años']
+      }
+      const parts = []
+      if (newOrder) parts.push('nuevo orden de personas')
+      if (mode) parts.push(`modo ${mode === 'random' ? 'Aleatorio' : 'Determinado'}`)
+      if (periodUnit) {
+        const n = Math.max(1, Number(periodInterval) || 1)
+        parts.push(`cambio de turno cada ${n} ${unitLabels[periodUnit]?.[n === 1 ? 0 : 1] || periodUnit}`)
+      }
+      return createPoll({
+        question: `¿Apruebas el cambio de rotación propuesto por ${user?.name || 'un admin'}? (${parts.join(', ')})`,
         options: ['Aprobar', 'Rechazar'],
         resolutionMode: 'majority',
         kind: 'rotation_order',
-        payload: { newOrder },
+        payload: changes,
         deadlineAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
-      }),
+      })
+    },
     [createPoll, user]
   )
 
@@ -1443,31 +1477,7 @@ export function DataProvider({ children }) {
     [currentFloor, user, createPoll, pendingPotAdjustmentPoll]
   )
 
-  // Modo/período de rotación: configuración de piso, se guarda al
-  // instante (no requiere consulta — no mueve a nadie por sí solo). Se
-  // resetea rotationEpoch para que el reloj de turnos en modo 'period'
-  // arranque limpio desde el cambio, sin arrastrar índices calculados
-  // con la cadencia anterior.
-  const setRotationMode = useCallback(
-    (mode) => {
-      if (!currentFloor) return
-      update('floors', currentFloor.id, { rotationMode: mode, rotationEpoch: todayISO })
-    },
-    [currentFloor, todayISO]
-  )
-  const setRotationPeriod = useCallback(
-    (unit, interval) => {
-      if (!currentFloor) return
-      update('floors', currentFloor.id, {
-        rotationPeriodUnit: unit,
-        rotationPeriodInterval: Math.max(1, Number(interval) || 1),
-        rotationEpoch: todayISO
-      })
-    },
-    [currentFloor, todayISO]
-  )
-
-  // Consulta pendiente de aprobar un cambio de orden — usado para
+  // Consulta pendiente de aprobar un cambio de rotación — usado para
   // deshabilitar el lápiz de edición mientras haya una en curso, y para
   // mostrar el banner con su plazo en FloorSettings.
   const pendingRotationOrderPoll = useMemo(
@@ -1556,9 +1566,7 @@ export function DataProvider({ children }) {
     createPoll,
     castVote,
     closePoll,
-    proposeRotationOrder,
-    setRotationMode,
-    setRotationPeriod,
+    proposeRotationChange,
     pendingRotationOrderPoll,
     pendingPotAdjustmentPoll,
     requestPotAdjustment,

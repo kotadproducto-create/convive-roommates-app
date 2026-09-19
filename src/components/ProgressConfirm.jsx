@@ -4,7 +4,7 @@ import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { usePointsFx } from '../context/PointsFxContext'
-import { activeRoutineMarks, occurrencePoints } from '../lib/activities'
+import { activeRoutineMarks, occurrencePoints, canUserMark } from '../lib/activities'
 
 /** Pop-up de confirmación (mismo patrón fijo que ConfirmPotDialog). */
 export function ConfirmDialog({ title, body, confirmLabel, onCancel, onConfirm, t }) {
@@ -59,7 +59,15 @@ export function useProgressConfirm() {
   const [pending, setPending] = useState(null) // { completion, delta }
 
   function ask(completion, delta) {
-    if (completion) setPending({ completion, delta })
+    if (!completion) return
+    // Marcar hecho es solo del responsable del turno: se avisa sin abrir el pop-up.
+    const activity = activities.find((a) => a.id === completion.activityId)
+    if (delta > 0 && activity && !canUserMark(activity, completion, user?.id)) {
+      const name = members.find((m) => m.id === (completion.assignedUserId || activity.assignedUserId))?.name || ''
+      showToast(t('activities.notYourTurnToast', { name }), 'default')
+      return
+    }
+    setPending({ completion, delta })
   }
 
   let dialog = null

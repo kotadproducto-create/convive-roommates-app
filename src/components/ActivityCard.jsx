@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import Avatar from './Avatar'
 import { SparkleIcon, EditIcon, TrashIcon, CartIcon, WasherIcon } from './icons'
-import { nextOccurrence, occurrenceSlots } from '../lib/activities'
+import { nextOccurrence, occurrenceSlots, canUserMark } from '../lib/activities'
+import { useAuth } from '../context/AuthContext'
 import { useProgressConfirm } from './ProgressConfirm'
 import { format, startOfWeek, addDays } from 'date-fns'
 
@@ -75,7 +76,11 @@ export default function ActivityCard({
   const timesDone = completion?.timesDone || 0
   const isDone = completion?.completed || false
   const notThisPeriod = activity.frequencyType === 'recurring' && !completion
+  const { user } = useAuth()
   const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
+  // "Marcar hecho" = cumplir lo asignado: solo si el turno es de este usuario
+  // (o de "Todos") y ya toca la ocasión. "+ Extra" no depende de nada de eso.
+  const isMyTurn = canUserMark(activity, completion, user?.id)
   const Icon = (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon
 
   // Solo se calcula (y se muestra) una vez que la actividad ya quedó
@@ -165,11 +170,13 @@ export default function ActivityCard({
                 <p className={`text-xs min-w-0 ${isDone ? 'font-semibold text-sage-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
                   {isDone
                     ? t('activities.completed')
-                    : occ.gated && occ.nextDateKey
-                      ? occ.canMark
-                        ? t('activities.readyToMark')
-                        : t('activities.nextTime', { day: dayName(occ.nextDateKey, dateLocale) })
-                      : ''}
+                    : !isMyTurn
+                      ? t('activities.turnOf', { name: assignee?.name || '' })
+                      : occ.gated && occ.nextDateKey
+                        ? occ.canMark
+                          ? t('activities.readyToMark')
+                          : t('activities.nextTime', { day: dayName(occ.nextDateKey, dateLocale) })
+                        : ''}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                   {timesDone > 0 && (
@@ -177,17 +184,15 @@ export default function ActivityCard({
                       {t('activities.undo')}
                     </button>
                   )}
-                  {!isDone && (
-                    <button
-                      type="button"
-                      className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                      disabled={!occ.canMark}
-                      onClick={() => askProgress(completion, 1)}
-                    >
-                      {t('activities.markDone')}
-                    </button>
-                  )}
-                  {onExtra && activity.frequencyType === 'recurring' && completion && (
+                  <button
+                    type="button"
+                    className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={isDone || !isMyTurn || !occ.canMark}
+                    onClick={() => askProgress(completion, 1)}
+                  >
+                    {t('activities.markDone')}
+                  </button>
+                  {onExtra && completion && (
                     <button type="button" className="btn-secondary text-xs px-2.5 py-1.5" onClick={onExtra} title={t('activities.extraHint')}>
                       {t('activities.extraButton')}
                     </button>

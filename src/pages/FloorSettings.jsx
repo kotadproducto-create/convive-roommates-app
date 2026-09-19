@@ -32,9 +32,7 @@ export default function FloorSettings() {
     myAbsenceRequests,
     pendingAbsenceRequests,
     awayUserIds,
-    proposeRotationOrder,
-    setRotationMode,
-    setRotationPeriod,
+    proposeRotationChange,
     pendingRotationOrderPoll,
     initiateRemoval,
     cancelRemoval,
@@ -197,9 +195,7 @@ export default function FloorSettings() {
             order={order}
             floor={floor}
             memberById={memberById}
-            proposeRotationOrder={proposeRotationOrder}
-            setRotationMode={setRotationMode}
-            setRotationPeriod={setRotationPeriod}
+            proposeRotationChange={proposeRotationChange}
             pendingRotationOrderPoll={pendingRotationOrderPoll}
             weekKey={weekKey}
             awayUserIds={awayUserIds}
@@ -310,9 +306,7 @@ function RotationSection({
   order,
   floor,
   memberById,
-  proposeRotationOrder,
-  setRotationMode,
-  setRotationPeriod,
+  proposeRotationChange,
   pendingRotationOrderPoll,
   weekKey,
   awayUserIds,
@@ -332,6 +326,14 @@ function RotationSection({
   const [showEditConfirm, setShowEditConfirm] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(order)
+  // Modo y frecuencia también son parte del borrador: nada se guarda hasta
+  // que se propone y el piso lo aprueba.
+  const currentMode = floor?.rotationMode || 'random'
+  const currentUnit = floor?.rotationPeriodUnit || 'week'
+  const currentInterval = floor?.rotationPeriodInterval || 1
+  const [draftMode, setDraftMode] = useState(currentMode)
+  const [draftUnit, setDraftUnit] = useState(currentUnit)
+  const [draftInterval, setDraftInterval] = useState(String(currentInterval))
 
   const monday = getMondayOfWeek(weekKey)
   const sunday = addDays(monday, 6)
@@ -344,6 +346,9 @@ function RotationSection({
 
   function startEditing() {
     setDraft(order)
+    setDraftMode(currentMode)
+    setDraftUnit(currentUnit)
+    setDraftInterval(String(currentInterval))
     setEditing(true)
     setShowEditConfirm(false)
   }
@@ -365,10 +370,26 @@ function RotationSection({
     setDraft(next)
   }
 
-  const draftChanged = JSON.stringify(draft) !== JSON.stringify(order)
+  // La frecuencia solo cuenta en modo Determinado, y tiene que ser un
+  // entero de 1 a 52 para que el cambio sea válido.
+  const intervalNumber = Number(draftInterval)
+  const periodValid = draftMode !== 'period' || (draftInterval.trim() !== '' && Number.isInteger(intervalNumber) && intervalNumber >= 1 && intervalNumber <= 52)
+  const orderChanged = JSON.stringify(draft) !== JSON.stringify(order)
+  const modeChanged = draftMode !== currentMode
+  const periodChanged = draftMode === 'period' && (draftUnit !== currentUnit || intervalNumber !== currentInterval)
+  // Cualquier modificación válida (orden, modo o frecuencia) se puede proponer.
+  const canPropose = periodValid && (orderChanged || modeChanged || periodChanged)
 
   async function handlePropose() {
-    await proposeRotationOrder(draft)
+    if (!canPropose) return
+    const changes = {}
+    if (orderChanged) changes.newOrder = draft
+    if (modeChanged) changes.mode = draftMode
+    if (draftMode === 'period' && (modeChanged || periodChanged)) {
+      changes.periodUnit = draftUnit
+      changes.periodInterval = intervalNumber
+    }
+    await proposeRotationChange(changes)
     setEditing(false)
   }
 
@@ -421,9 +442,18 @@ function RotationSection({
 
       {editing ? (
         <div className="flex flex-col gap-3 mb-4 border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-xl p-3">
-          <RotationModePicker floor={floor} setRotationMode={setRotationMode} setRotationPeriod={setRotationPeriod} t={t} />
+          <RotationModePicker
+            mode={draftMode}
+            unit={draftUnit}
+            interval={draftInterval}
+            onModeChange={setDraftMode}
+            onUnitChange={setDraftUnit}
+            onIntervalChange={setDraftInterval}
+            intervalInvalid={!periodValid}
+            t={t}
+          />
 
-          {(floor?.rotationMode || 'random') === 'random' && (
+          {draftMode === 'random' && (
             <button type="button" onClick={shuffleDraft} className="btn-secondary text-sm self-start">
               {t('floorSettings.shuffleButton')}
             </button>
@@ -458,7 +488,7 @@ function RotationSection({
             <button type="button" className="btn-secondary text-sm flex-1" onClick={() => setEditing(false)}>
               {t('floorSettings.cancel')}
             </button>
-            <button type="button" className="btn-primary text-sm flex-1" onClick={handlePropose} disabled={!draftChanged}>
+            <button type="button" className="btn-primary text-sm flex-1" onClick={handlePropose} disabled={!canPropose}>
               {t('floorSettings.proposeChangeButton')}
             </button>
           </div>
@@ -601,20 +631,10 @@ const PERIOD_UNITS = ['day', 'week', 'month', 'year']
 
 /** Selector de modo (Aleatorio/Determinado) +, en Determinado, el
  * picker "Repetir cada N día/semana/mes/año" (mismo patrón visual que
- * activities.repeatEvery en Activities.jsx). Ambos se guardan al
- * instante — no requieren la consulta de aprobación, solo reordenar a
- * las personas sí (ver proposeRotationOrder). */
-function RotationModePicker({ floor, setRotationMode, setRotationPeriod, t }) {
-  const mode = floor?.rotationMode || 'random'
-  const [intervalValue, setIntervalValue] = useState(floor?.rotationPeriodInterval || 1)
-  const [unit, setUnit] = useState(floor?.rotationPeriodUnit || 'week')
-
-  function commitPeriod(nextInterval, nextUnit) {
-    setIntervalValue(nextInterval)
-    setUnit(nextUnit)
-    setRotationPeriod(nextUnit, nextInterval)
-  }
-
+ * activities.repeatEvery en Activities.jsx). Es controlado: solo edita el
+ * borrador de RotationSection — el cambio no se aplica hasta que se pulsa
+ * "Proponer cambio" y el piso lo aprueba. */
+function RotationModePicker({ mode, unit, interval, onModeChange, onUnitChange, onIntervalChange, intervalInvalid, t }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-2">
@@ -622,7 +642,7 @@ function RotationModePicker({ floor, setRotationMode, setRotationPeriod, t }) {
           <button
             key={m}
             type="button"
-            onClick={() => setRotationMode(m)}
+            onClick={() => onModeChange(m)}
             className={`flex-1 text-left text-xs font-semibold px-3 py-2 rounded-xl border-2 ${
               mode === m
                 ? 'bg-gold-100 dark:bg-gold-400/25 border-ink-900 dark:border-cream-100/50 text-ink-900 dark:text-cream-100'
@@ -644,11 +664,11 @@ function RotationModePicker({ floor, setRotationMode, setRotationPeriod, t }) {
             type="number"
             min="1"
             max="52"
-            className="input w-16 text-center"
-            value={intervalValue}
-            onChange={(e) => commitPeriod(e.target.value, unit)}
+            className={`input !w-16 shrink-0 text-center ${intervalInvalid ? 'border-clay-500' : ''}`}
+            value={interval}
+            onChange={(e) => onIntervalChange(e.target.value)}
           />
-          <select className="input flex-1" value={unit} onChange={(e) => commitPeriod(intervalValue, e.target.value)}>
+          <select className="input flex-1 min-w-0" value={unit} onChange={(e) => onUnitChange(e.target.value)}>
             {PERIOD_UNITS.map((u) => (
               <option key={u} value={u}>
                 {t(`floorSettings.unit${u.charAt(0).toUpperCase()}${u.slice(1)}Option`)}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { occurrenceSlots, occurrencePoints, activeRoutineMarks, getWeekKeyOf } from '../activities.js'
+import { occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark, getWeekKeyOf } from '../activities.js'
 
 describe('occurrencePoints — puntos por ocasión, para quien la ejecuta', () => {
   it('reparte los puntos enteros sin perder ninguno', () => {
@@ -13,6 +13,21 @@ describe('occurrencePoints — puntos por ocasión, para quien la ejecuta', () =
   it('sin puntos configurados no da nada', () => {
     expect(occurrencePoints(null, 0, 3)).toBe(0)
     expect(occurrencePoints(0, 1, 3)).toBe(0)
+  })
+})
+
+describe('canUserMark — Marcar hecho es solo del responsable del turno', () => {
+  it('el responsable puede; otro usuario no', () => {
+    const completion = { assignedUserId: 'ana' }
+    expect(canUserMark({}, completion, 'ana')).toBe(true)
+    expect(canUserMark({}, completion, 'luis')).toBe(false)
+  })
+  it('sin nadie asignado ("Todos") puede cualquiera', () => {
+    expect(canUserMark({ assignmentMode: 'manual', assignedUserId: null }, { assignedUserId: null }, 'luis')).toBe(true)
+  })
+  it('sin turno cargado usa la asignación de la actividad', () => {
+    expect(canUserMark({ assignedUserId: 'ana' }, null, 'luis')).toBe(false)
+    expect(canUserMark({ assignedUserId: 'ana' }, null, 'ana')).toBe(true)
   })
 })
 
