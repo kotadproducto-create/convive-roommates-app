@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import ActivityCard from '../components/ActivityCard'
 import CalendarView from '../components/CalendarView'
@@ -35,6 +35,22 @@ export default function Dashboard() {
   const [washerMsg, setWasherMsg] = useState(false)
   const { t, dateLocale } = useLanguage()
 
+  // "/calendario?fecha=YYYY-MM-DD" abre el calendario directo en ese día
+  // (lo usa "Racha de la semana" en Inicio). Se lee una sola vez al
+  // entrar y se limpia de la URL para que "atrás" vuelva a Inicio y un
+  // refresh no re-fuerce esa fecha.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [initialDate] = useState(() => {
+    const raw = searchParams.get('fecha')
+    if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
+    const d = new Date(`${raw}T00:00:00`)
+    return Number.isNaN(d.getTime()) ? null : d
+  })
+  useEffect(() => {
+    if (searchParams.has('fecha')) setSearchParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const monday = getMondayOfWeek(weekKey)
   const sunday = new Date(monday)
   sunday.setUTCDate(monday.getUTCDate() + 6)
@@ -65,7 +81,7 @@ export default function Dashboard() {
     [fixedActivities, activityCompletions, weekKey]
   )
   const doneCount = fixedWithCompletion.filter(({ completion }) => completion?.completed).length
-  const outOfStockItems = shoppingItems.filter((i) => i.stockLevel === 'out')
+  const outOfStockItems = shoppingItems.filter((i) => i.recurring && i.stockLevel === 'out')
 
   return (
     <AppLayout title={t('calendar.title')}>
@@ -93,6 +109,7 @@ export default function Dashboard() {
           shoppingItems={shoppingItems}
           notifications={notifications}
           currentUserId={user?.id}
+          initialDate={initialDate}
         />
       </Reveal>
 

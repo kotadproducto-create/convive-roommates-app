@@ -53,11 +53,21 @@ export default function CalendarView({
   shoppingPurchases = [],
   shoppingItems = [],
   notifications = [],
-  currentUserId
+  currentUserId,
+  initialDate = null,
+  initialView = 'month'
 }) {
-  const [view, setView] = useState('month')
-  const [cursor, setCursor] = useState(() => new Date())
+  // `initialDate`/`initialView` permiten abrir el calendario ya posado en
+  // un día concreto (p. ej. desde "Racha de la semana" en Inicio).
+  const [view, setView] = useState(initialDate ? 'day' : initialView)
+  const [cursor, setCursor] = useState(() => initialDate || new Date())
   const { t, dateLocale } = useLanguage()
+
+  // Mes/otros días → vista del día, conservando la fecha elegida.
+  function selectDay(date) {
+    setCursor(date)
+    setView('day')
+  }
 
   const VIEW_MODES = [
     { key: 'month', label: t('calendar.viewMonth') },
@@ -157,7 +167,7 @@ export default function CalendarView({
         </div>
       </div>
 
-      {view === 'month' && <MonthGrid cursor={cursor} dayInfo={dayInfo} t={t} dateLocale={dateLocale} />}
+      {view === 'month' && <MonthGrid cursor={cursor} dayInfo={dayInfo} onSelectDay={selectDay} t={t} dateLocale={dateLocale} />}
       {view === 'week' && <WeekStrip cursor={cursor} dayInfo={dayInfo} t={t} dateLocale={dateLocale} />}
       {view === 'day' && (
         <DayDetail
@@ -169,6 +179,9 @@ export default function CalendarView({
           shoppingPurchases={shoppingPurchases}
           shoppingItems={shoppingItems}
           notifications={notifications}
+          activities={activities}
+          activityCompletions={activityCompletions}
+          onSelectDay={selectDay}
           t={t}
           dateLocale={dateLocale}
         />
@@ -177,7 +190,7 @@ export default function CalendarView({
   )
 }
 
-function MonthGrid({ cursor, dayInfo, t, dateLocale }) {
+function MonthGrid({ cursor, dayInfo, onSelectDay, t, dateLocale }) {
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(cursor), { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(cursor), { weekStartsOn: 1 })
@@ -207,9 +220,12 @@ function MonthGrid({ cursor, dayInfo, t, dateLocale }) {
           const Icon = first?.icon
           const inMonth = isSameMonth(date, cursor)
           return (
-            <div
+            <button
+              type="button"
               key={date.toISOString()}
-              className={`aspect-square rounded-lg p-1 flex flex-col items-center justify-center gap-0.5 ${
+              onClick={() => onSelectDay(date)}
+              aria-label={format(date, t('calendar.dayTitleFormat'), { locale: dateLocale })}
+              className={`aspect-square rounded-lg p-1 flex flex-col items-center justify-center gap-0.5 transition-colors hover:bg-cream-200 dark:hover:bg-ink-700 active:scale-95 ${
                 isToday(date) ? 'bg-violet-50 dark:bg-violet-700/20 ring-2 ring-violet-500' : ''
               } ${!inMonth ? 'opacity-30' : ''}`}
             >
@@ -235,7 +251,7 @@ function MonthGrid({ cursor, dayInfo, t, dateLocale }) {
                   )}
                 </div>
               )}
-            </div>
+            </button>
           )
         })}
       </div>
@@ -311,12 +327,11 @@ const EVENT_TONE_CLASSES = {
  * aportes/gastos del pote, compras realizadas, productos agregados a la
  * lista, y avisos de lavadora — ordenado cronológicamente, como un
  * historial resumen del día. */
-function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t) {
+function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, t) {
   return useMemo(() => {
     const events = []
 
     for (const c of potContributions) {
-      if (!isSameDay(new Date(c.createdAt), cursor)) continue
       const isExpense = Number(c.amount) < 0
       const name = memberById[c.userId]?.name || t('calendar.someone')
       if (isPotAdjustment(c)) {
@@ -341,7 +356,6 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
     }
 
     for (const p of shoppingPurchases) {
-      if (!isSameDay(new Date(p.createdAt), cursor)) continue
       events.push({
         id: `purchase-${p.id}`,
         time: p.createdAt,
@@ -353,7 +367,6 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
     }
 
     for (const item of shoppingItems) {
-      if (!isSameDay(new Date(item.createdAt), cursor)) continue
       events.push({
         id: `item-${item.id}`,
         time: item.createdAt,
@@ -365,7 +378,7 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
     }
 
     for (const n of notifications) {
-      if (n.type !== 'lavadora' || !isSameDay(new Date(n.createdAt), cursor)) continue
+      if (n.type !== 'lavadora') continue
       events.push({
         id: `notif-${n.id}`,
         time: n.createdAt,
@@ -376,15 +389,137 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
       })
     }
 
+    // Actividades realizadas: se registran el día en que se completaron
+    // (completedAt), aunque no fuera el día "programado" — el turno
+    // (assignedUserId) es quien se lleva el crédito.
+    for (const c of activityCompletions) {
+      if (!c.completed || !c.completedAt) continue
+      const activity = activities.find((a) => a.id === c.activityId)
+      if (!activity) continue
+      events.push({
+        id: `done-${c.id}`,
+        time: c.completedAt,
+        icon: (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon,
+        tone: 'sage',
+        title: t('calendar.completedActivity', {
+          name: memberById[c.assignedUserId]?.name || t('calendar.someone'),
+          title: activity.title
+        }),
+        subtitle: null
+      })
+    }
+
     return events.sort((a, b) => new Date(a.time) - new Date(b.time))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t])
+  }, [memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, t])
 }
 
-function DayDetail({ cursor, dayInfo, setActivityProgress, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t }) {
+function EventRow({ e }) {
+  return (
+    <li className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+      <div
+        className={`w-9 h-9 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center shrink-0 ${EVENT_TONE_CLASSES[e.tone]}`}
+      >
+        <e.icon className="w-4 h-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{e.title}</p>
+        {e.subtitle && <p className="text-xs text-ink-900/50 dark:text-cream-100/50 truncate">{e.subtitle}</p>}
+      </div>
+      <span className="text-xs text-ink-900/40 dark:text-cream-100/40 shrink-0">{format(new Date(e.time), 'HH:mm')}</span>
+    </li>
+  )
+}
+
+const OTHER_DAYS_PAGE = 7
+
+/** "Historial de otros días": lo que pasó en las demás fechas (sin
+ * mezclarlo con el día abierto), agrupado por día y del más reciente al
+ * más antiguo. Tocar el encabezado de un día abre ese día. Cerrado por
+ * defecto para que la vista diaria se centre solo en su fecha. */
+function OtherDaysHistory({ allEvents, cursor, onSelectDay, t, dateLocale }) {
+  const [open, setOpen] = useState(false)
+  const [visibleDays, setVisibleDays] = useState(OTHER_DAYS_PAGE)
+
+  const groups = useMemo(() => {
+    const byDay = new Map()
+    for (const e of allEvents) {
+      const d = new Date(e.time)
+      if (isSameDay(d, cursor)) continue
+      const key = format(d, 'yyyy-MM-dd')
+      if (!byDay.has(key)) byDay.set(key, { key, date: new Date(`${key}T00:00:00`), events: [] })
+      byDay.get(key).events.push(e)
+    }
+    return [...byDay.values()].sort((a, b) => b.date - a.date)
+  }, [allEvents, cursor])
+
+  return (
+    <div className="mt-6 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 text-left"
+        aria-expanded={open}
+      >
+        <span className="font-display font-semibold">{t('calendar.otherDaysHistory')}</span>
+        <span className="text-xs font-semibold text-violet-500 shrink-0">{open ? t('calendar.hide') : t('calendar.show')}</span>
+      </button>
+
+      {open &&
+        (groups.length === 0 ? (
+          <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">{t('calendar.otherDaysEmpty')}</p>
+        ) : (
+          <div className="mt-3 flex flex-col gap-4">
+            {groups.slice(0, visibleDays).map((g) => (
+              <div key={g.key}>
+                <button
+                  type="button"
+                  onClick={() => onSelectDay(g.date)}
+                  className="text-xs font-semibold uppercase tracking-wide text-violet-500 hover:underline mb-1.5 capitalize text-left"
+                >
+                  {format(g.date, t('calendar.dayTitleFormat'), { locale: dateLocale })}
+                </button>
+                <ul className="flex flex-col gap-2">
+                  {g.events.slice().reverse().map((e) => (
+                    <EventRow key={e.id} e={e} />
+                  ))}
+                </ul>
+              </div>
+            ))}
+            {groups.length > visibleDays && (
+              <button
+                type="button"
+                onClick={() => setVisibleDays((n) => n + OTHER_DAYS_PAGE)}
+                className="text-xs font-semibold text-violet-500 hover:underline self-start"
+              >
+                {t('calendar.showMoreDays')}
+              </button>
+            )}
+          </div>
+        ))}
+    </div>
+  )
+}
+
+function DayDetail({
+  cursor,
+  dayInfo,
+  setActivityProgress,
+  memberById,
+  potContributions,
+  shoppingPurchases,
+  shoppingItems,
+  notifications,
+  activities,
+  activityCompletions,
+  onSelectDay,
+  t,
+  dateLocale
+}) {
   const items = dayInfo(cursor)
   const { showToast } = useToast()
-  const events = useDayEvents(cursor, memberById, potContributions, shoppingPurchases, shoppingItems, notifications, t)
+  const allEvents = useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, t)
+  const events = useMemo(() => allEvents.filter((e) => isSameDay(new Date(e.time), cursor)), [allEvents, cursor])
 
   function handleToggle(item) {
     const wasCompleted = item.completion.completed
@@ -401,6 +536,7 @@ function DayDetail({ cursor, dayInfo, setActivityProgress, memberById, potContri
 
   return (
     <div className="py-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{t('calendar.scheduledTitle')}</p>
       {items.length === 0 ? (
         <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">{t('calendar.noTaskToday')}</p>
       ) : (
@@ -479,22 +615,13 @@ function DayDetail({ cursor, dayInfo, setActivityProgress, memberById, potContri
         ) : (
           <ul className="flex flex-col gap-2">
             {events.map((e) => (
-              <li key={e.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
-                <div
-                  className={`w-9 h-9 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 flex items-center justify-center shrink-0 ${EVENT_TONE_CLASSES[e.tone]}`}
-                >
-                  <e.icon className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{e.title}</p>
-                  {e.subtitle && <p className="text-xs text-ink-900/50 dark:text-cream-100/50 truncate">{e.subtitle}</p>}
-                </div>
-                <span className="text-xs text-ink-900/40 dark:text-cream-100/40 shrink-0">{format(new Date(e.time), 'HH:mm')}</span>
-              </li>
+              <EventRow key={e.id} e={e} />
             ))}
           </ul>
         )}
       </div>
+
+      <OtherDaysHistory allEvents={allEvents} cursor={cursor} onSelectDay={onSelectDay} t={t} dateLocale={dateLocale} />
     </div>
   )
 }

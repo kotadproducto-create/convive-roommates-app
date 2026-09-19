@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -23,7 +23,13 @@ export default function Timeline() {
   const { floor, members, activities, activityCompletions, notifications, shoppingItems, setActivityProgress, weekKey, markAllNotificationsRead } = useData()
   const { showToast } = useToast()
   const { t, dateLocale } = useLanguage()
+  const navigate = useNavigate()
   const [showAllNotifications, setShowAllNotifications] = useState(false)
+
+  // Racha de la semana → Calendario, abierto directo en ese día.
+  function goToDay(date) {
+    navigate(`/calendario?fecha=${format(date, 'yyyy-MM-dd')}`)
+  }
 
   const monday = getMondayOfWeek(weekKey)
   const unreadNotifications = notifications.filter((n) => !n.read)
@@ -82,8 +88,10 @@ export default function Timeline() {
     })
   }, [monday, fixedActivities, activityCompletions])
 
-  const outOfStockCount = shoppingItems.filter((i) => i.stockLevel === 'out').length
-  const pendingShoppingCount = shoppingItems.filter((i) => i.stockLevel !== 'ok').length
+  // El Status solo existe para productos recurrentes (las compras
+  // puntuales no lo tienen, ver Shopping.jsx).
+  const outOfStockCount = shoppingItems.filter((i) => i.recurring && i.stockLevel === 'out').length
+  const pendingShoppingCount = shoppingItems.filter((i) => i.recurring && i.stockLevel !== 'ok').length
   const weekDone = fixedProgress.filter((p) => p.completed).length
   const weekStreak = computeWeekStreak(activities, activityCompletions, weekKey)
   const greeting = getTimeGreeting()
@@ -165,19 +173,33 @@ export default function Timeline() {
                 return (
                   <div
                     key={date.toISOString()}
-                    className={`flex flex-col items-center gap-1.5 rounded-xl py-2.5 px-1 ${today ? 'bg-violet-50 dark:bg-violet-700/20' : ''}`}
+                    onClick={() => goToDay(date)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl py-2.5 px-1 cursor-pointer ${today ? 'bg-violet-50 dark:bg-violet-700/20' : ''}`}
                   >
-                    <span className="text-[10px] font-bold uppercase text-ink-900/40 dark:text-cream-100/40">
-                      {format(date, 'EEEEE', { locale: dateLocale })}
-                    </span>
-                    <span className="text-xs font-bold">{format(date, 'd')}</span>
+                    {/* El recuadro entero abre el día (onClick de arriba); este
+                        botón es solo para teclado/lector de pantalla — su clic
+                        sube al recuadro, no hace falta otro manejador. */}
+                    <button
+                      type="button"
+                      aria-label={format(date, t('calendar.dayTitleFormat'), { locale: dateLocale })}
+                      className="flex flex-col items-center gap-1.5"
+                    >
+                      <span className="text-[10px] font-bold uppercase text-ink-900/40 dark:text-cream-100/40">
+                        {format(date, 'EEEEE', { locale: dateLocale })}
+                      </span>
+                      <span className="text-xs font-bold">{format(date, 'd')}</span>
+                    </button>
                     {item ? (
                       <button
                         type="button"
                         disabled={isFuture || !item.completion}
-                        onClick={() => handleStamp({ completion: item.completion, title: item.activity.title })}
+                        onClick={(e) => {
+                          // Marcar hecho sigue siendo cosa del sello — no debe abrir el día.
+                          e.stopPropagation()
+                          handleStamp({ completion: item.completion, title: item.activity.title })
+                        }}
                         title={`${item.activity.title} · ${assignee?.name || t('calendar.unassigned')}${isMinePending ? t('calendar.yourTurnDash') : ''}`}
-                        className="stamp-btn relative mt-1 disabled:cursor-not-allowed"
+                        className="stamp-btn relative mt-1 disabled:pointer-events-none"
                       >
                         <div
                           className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold border-2 transition-colors ${
