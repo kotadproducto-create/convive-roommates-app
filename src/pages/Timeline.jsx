@@ -16,7 +16,8 @@ import { useDisplayedPoints } from '../context/PointsFxContext'
 import PendingPopups from '../components/PendingPopups'
 import RoomieOrb from '../components/RoomieOrb'
 import Avatar from '../components/Avatar'
-import { format, formatDistanceToNow, isSameDay } from 'date-fns'
+import NotificationItem from '../components/NotificationItem'
+import { format, isSameDay } from 'date-fns'
 
 const FIXED_ORDER = ['compras', 'basura', 'lavadora']
 
@@ -266,11 +267,8 @@ export default function Timeline() {
             ) : (
               <ul className="flex flex-col gap-2.5">
                 {visibleNotifications.slice(0, 5).map((n) => (
-                  <li key={n.id} className="text-sm">
-                    <p className={n.read ? '' : 'font-semibold'}>{n.message}</p>
-                    <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
-                      {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: dateLocale })}
-                    </p>
+                  <li key={n.id}>
+                    <NotificationItem notification={n} className="text-sm" />
                   </li>
                 ))}
               </ul>

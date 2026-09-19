@@ -6,12 +6,12 @@ import { useLanguage } from '../context/LanguageContext'
 import { BellIcon, GearIcon, PersonIcon, CloseIcon, CoinIcon } from './icons'
 import { useDisplayedPoints, usePointsPulse } from '../context/PointsFxContext'
 import Avatar from './Avatar'
-import { formatDistanceToNow } from 'date-fns'
+import NotificationItem from './NotificationItem'
 
 export default function Topbar({ title, subheader }) {
   const { user, floor, membership, logout } = useAuth()
   const { notifications, unreadCount, markAllNotificationsRead } = useData()
-  const { t, dateLocale } = useLanguage()
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -90,12 +90,12 @@ export default function Topbar({ title, subheader }) {
                 </p>
               )}
               {visibleNotifications.map((n) => (
-                <div key={n.id} className="px-3 py-2 rounded-lg hover:bg-cream-100 dark:hover:bg-ink-700 text-sm">
-                  <p className={n.read ? '' : 'font-semibold'}>{n.message}</p>
-                  <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">
-                    {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: dateLocale })}
-                  </p>
-                </div>
+                <NotificationItem
+                  key={n.id}
+                  notification={n}
+                  onNavigate={() => setOpen(false)}
+                  className="px-3 py-2 rounded-lg hover:bg-cream-100 dark:hover:bg-ink-700 text-sm"
+                />
               ))}
 
               {hasRead && (

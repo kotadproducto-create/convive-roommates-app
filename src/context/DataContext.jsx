@@ -367,7 +367,8 @@ export function DataProvider({ children }) {
               id,
               floorId: currentFloor.id,
               userId: null,
-              type: 'poll_resolved',
+              // El tipo dice a qué pantalla lleva la notificación (ver lib/notifications.js).
+              type: isPotAdjustment ? 'poll_resolved_pote' : isRotationOrder ? 'poll_resolved_rotation' : 'poll_resolved',
               read: false,
               message
             }
@@ -821,6 +822,8 @@ export function DataProvider({ children }) {
   )
 
   const removeIncident = useCallback((incidentId) => remove('incidents', incidentId), [])
+
+  const markNotificationRead = useCallback((notificationId) => update('notifications', notificationId, { read: true }), [])
 
   const markAllNotificationsRead = useCallback(async () => {
     for (const n of myNotifications) {
@@ -1595,6 +1598,7 @@ export function DataProvider({ children }) {
     adjustMemberPoints,
     addIncident,
     removeIncident,
+    markNotificationRead,
     markAllNotificationsRead,
     requestWasher,
     addPotContribution,
