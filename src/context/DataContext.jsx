@@ -275,8 +275,42 @@ export function DataProvider({ children }) {
         // "Rechazar", un cierre sin mayoría o un vencimiento del plazo
         // dejan floors.rotation_order intacto.
         const isRotationOrder = poll.kind === 'rotation_order'
-        if (isRotationOrder && outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar' && poll.payload?.newOrder) {
+        const isPotAdjustment = poll.kind === 'pot_adjustment'
+        const approved = outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar'
+        if (isRotationOrder && approved && poll.payload?.newOrder) {
           await update('floors', currentFloor.id, { rotationOrder: poll.payload.newOrder, rotationEpoch: todayISO })
+        }
+
+        // 'pot_adjustment' (ajuste manual del Pote, ver requestPotAdjustment):
+        // solo con la aprobación de TODOS (unanimidad) se aplica el nuevo
+        // importe. Cualquier otro desenlace (rechazo, plazo vencido, cierre
+        // manual) deja el Pote intacto. El movimiento del historial usa un
+        // id determinístico + upsert-ignorando-duplicados: como este efecto
+        // corre en el dispositivo de cada conviviente a la vez, así solo se
+        // registra una vez aunque varios lo apliquen en paralelo (fijar
+        // potAmount al mismo valor es idempotente por sí solo).
+        if (isPotAdjustment && approved && Number.isFinite(Number(poll.payload?.newAmount))) {
+          const newAmount = Number(poll.payload.newAmount)
+          const delta = newAmount - Number(currentFloor.potAmount || 0)
+          await update('floors', currentFloor.id, { potAmount: newAmount })
+          if (delta !== 0) {
+            const requester = members.find((m) => m.id === poll.createdBy)?.name || 'un conviviente'
+            const rowId = await deterministicUuid(`pot-adjustment:${poll.id}`)
+            await upsertIgnoreDuplicates(
+              'pot_contributions',
+              [
+                {
+                  id: rowId,
+                  floorId: currentFloor.id,
+                  userId: user.id,
+                  amount: delta,
+                  kind: 'adjustment',
+                  note: `Pote establecido en ${newAmount.toFixed(2)}€ · solicitado por ${requester}`
+                }
+              ],
+              ['id']
+            )
+          }
         }
 
         await update('polls', poll.id, {
@@ -286,18 +320,26 @@ export function DataProvider({ children }) {
         })
         const id = await deterministicUuid(`notif:poll-resolved:${poll.id}:${outcome.status}`)
         const message = isRotationOrder
-          ? outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar'
+          ? approved
             ? 'El piso aprobó el nuevo orden de rotación — ya está activo.'
             : outcome.status === 'resolved'
               ? 'El piso rechazó la propuesta de nuevo orden de rotación. Sigue el orden anterior.'
               : outcome.status === 'closed'
                 ? 'La propuesta de nuevo orden de rotación se cerró sin mayoría clara. Sigue el orden anterior.'
                 : 'La propuesta de nuevo orden de rotación venció sin que todos votaran. Sigue el orden anterior.'
-          : outcome.status === 'resolved'
-            ? `Se resolvió la consulta "${poll.question}": ganó "${outcome.resolvedOption}"`
-            : outcome.status === 'closed'
-              ? `La consulta "${poll.question}" se cerró sin mayoría clara.`
-              : `La consulta "${poll.question}" expiró: no todos votaron a tiempo.`
+          : isPotAdjustment
+            ? approved
+              ? `Todos aprobaron la modificación del Pote: ahora es de ${Number(poll.payload?.newAmount).toFixed(2)}€.`
+              : outcome.status === 'resolved'
+                ? 'Se rechazó la solicitud de modificación del Pote. El importe no cambió.'
+                : outcome.status === 'closed'
+                  ? 'Se canceló la solicitud de modificación del Pote. El importe no cambió.'
+                  : 'La solicitud de modificación del Pote venció sin que todos la aprobaran. El importe no cambió.'
+            : outcome.status === 'resolved'
+              ? `Se resolvió la consulta "${poll.question}": ganó "${outcome.resolvedOption}"`
+              : outcome.status === 'closed'
+                ? `La consulta "${poll.question}" se cerró sin mayoría clara.`
+                : `La consulta "${poll.question}" expiró: no todos votaron a tiempo.`
         await upsertIgnoreDuplicates(
           'notifications',
           [
@@ -1260,6 +1302,41 @@ export function DataProvider({ children }) {
     [createPoll, user]
   )
 
+  // Consulta pendiente de modificar manualmente el importe del Pote —
+  // usada para mostrar su estado en la pantalla del Pote y para no
+  // permitir una segunda solicitud mientras haya una en curso.
+  const pendingPotAdjustmentPoll = useMemo(
+    () => polls.find((p) => p.kind === 'pot_adjustment' && p.status === 'pending') || null,
+    [polls]
+  )
+
+  // Pide fijar el importe del Pote en `newAmount` (0 para ponerlo a cero).
+  // NUNCA lo aplica directo: crea una consulta de unanimidad (kind
+  // 'pot_adjustment') que le llega a todo el piso; solo se ejecuta si
+  // TODOS los convivientes aprueban (un solo "Rechazar" la tumba, ver
+  // resolvePoll) — el efecto de resolución de arriba hace el cambio real
+  // y deja el movimiento en el historial. Quien la pide queda aprobándola
+  // de entrada (es su propia solicitud). Plazo de 72h: si alguien nunca
+  // responde, vence sola en vez de bloquear el Pote para siempre.
+  const requestPotAdjustment = useCallback(
+    async (newAmount) => {
+      if (!currentFloor || !user || pendingPotAdjustmentPoll) return null
+      const amount = Math.round(Number(newAmount) * 100) / 100
+      if (!Number.isFinite(amount) || amount < 0) return null
+      const poll = await createPoll({
+        question: `¿Apruebas establecer el Pote en ${amount.toFixed(2)}€?`,
+        options: ['Aprobar', 'Rechazar'],
+        resolutionMode: 'unanimity',
+        kind: 'pot_adjustment',
+        payload: { newAmount: amount },
+        deadlineAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+      })
+      await create('poll_votes', { pollId: poll.id, floorId: currentFloor.id, userId: user.id, option: 'Aprobar' })
+      return poll
+    },
+    [currentFloor, user, createPoll, pendingPotAdjustmentPoll]
+  )
+
   // Modo/período de rotación: configuración de piso, se guarda al
   // instante (no requiere consulta — no mueve a nadie por sí solo). Se
   // resetea rotationEpoch para que el reloj de turnos en modo 'period'
@@ -1373,6 +1450,8 @@ export function DataProvider({ children }) {
     setRotationMode,
     setRotationPeriod,
     pendingRotationOrderPoll,
+    pendingPotAdjustmentPoll,
+    requestPotAdjustment,
     completeTask,
     uncompleteTask,
     reorderRotation,

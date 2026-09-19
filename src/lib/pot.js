@@ -11,6 +11,13 @@ export function potAmountColorClass(amount) {
   return 'text-sage-500'
 }
 
+/** Movimiento del pote que es un ajuste manual (aprobado por todo el
+ * piso, ver requestPotAdjustment) y no un aporte ni un gasto de nadie:
+ * no cuenta para el saldo personal, ni como "participó en el pote". */
+export function isPotAdjustment(contribution) {
+  return contribution?.kind === 'adjustment'
+}
+
 /** Mensaje corto para el globo de diálogo del pote, a juego con el mismo
  * semáforo. Recibe `t` (LanguageContext) para traducirse — si no se pasa,
  * cae al texto en español fijo (por si algún caller todavía no lo pasa). */

@@ -119,6 +119,48 @@ describe('resolvePoll — deadlineAt (plazo preciso, ej. aprobación de orden de
   })
 })
 
+describe('resolvePoll — veto (kind pot_adjustment: todos aprueban, un "Rechazar" la tumba)', () => {
+  const potPoll = (extra) => poll({ kind: 'pot_adjustment', resolutionMode: 'unanimity', ...extra })
+
+  it('un solo "Rechazar" la resuelve al instante, aunque falten votos', () => {
+    const votes = [
+      { userId: 'A', option: 'Aprobar' },
+      { userId: 'B', option: 'Rechazar' }
+    ]
+    const result = resolvePoll(potPoll({}), votes, ['A', 'B', 'C'], TODAY)
+    expect(result).toEqual({ status: 'resolved', resolvedOption: 'Rechazar' })
+  })
+
+  it('con todos aprobando (unanimidad) se resuelve "Aprobar"', () => {
+    const votes = [
+      { userId: 'A', option: 'Aprobar' },
+      { userId: 'B', option: 'Aprobar' }
+    ]
+    expect(resolvePoll(potPoll({}), votes, ['A', 'B'], TODAY)).toEqual({ status: 'resolved', resolvedOption: 'Aprobar' })
+  })
+
+  it('mientras falte alguien por aprobar y nadie rechazó, sigue pendiente', () => {
+    const votes = [{ userId: 'A', option: 'Aprobar' }]
+    expect(resolvePoll(potPoll({}), votes, ['A', 'B'], TODAY)).toBeNull()
+  })
+
+  it('el "Rechazar" de alguien que ya no es miembro activo no cuenta', () => {
+    const votes = [
+      { userId: 'A', option: 'Aprobar' },
+      { userId: 'ghost', option: 'Rechazar' }
+    ]
+    expect(resolvePoll(potPoll({}), votes, ['A'], TODAY)).toEqual({ status: 'resolved', resolvedOption: 'Aprobar' })
+  })
+
+  it('en una consulta normal (kind custom) "Rechazar" no tiene poder de veto', () => {
+    const votes = [
+      { userId: 'A', option: 'Aprobar' },
+      { userId: 'B', option: 'Rechazar' }
+    ]
+    expect(resolvePoll(poll({ kind: 'custom' }), votes, ['A', 'B', 'C'], TODAY)).toBeNull()
+  })
+})
+
 describe('resolvePoll — casos generales', () => {
   it('una consulta que ya no está pendiente devuelve null (idempotente)', () => {
     const votes = [{ userId: 'A', option: 'Sí' }]

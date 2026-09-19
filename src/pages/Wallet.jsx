@@ -6,14 +6,27 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { JarIcon, EditIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons'
-import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
+import { JarIcon, EditIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, CloseIcon } from '../components/icons'
+import { potAmountColorClass, potAmountBubbleMessage, isPotAdjustment } from '../lib/pot'
 import { format } from 'date-fns'
 
 export default function Wallet() {
   const { user, membership } = useAuth()
-  const { floor, members, potContributions, addPotContribution, addPotExpense, updatePotExpense, deletePotExpense, setMemberPotActive } =
-    useData()
+  const {
+    floor,
+    members,
+    potContributions,
+    addPotContribution,
+    addPotExpense,
+    updatePotExpense,
+    deletePotExpense,
+    setMemberPotActive,
+    pollVotes,
+    pendingPotAdjustmentPoll,
+    requestPotAdjustment,
+    castVote,
+    closePoll
+  } = useData()
   const { showToast } = useToast()
   const { t, dateLocale } = useLanguage()
   const isAdmin = membership?.role === 'admin'
@@ -32,6 +45,10 @@ export default function Wallet() {
   // se despliega/oculta sin perder ni afectar ningún movimiento (los datos
   // ya están cargados, esto solo alterna si se muestran).
   const [showHistory, setShowHistory] = useState(false)
+  // Modificación manual del importe: pop-up de 2 pasos (cantidad →
+  // confirmación) que solo ENVÍA una solicitud a todo el piso, nunca
+  // cambia el Pote directo (ver PotAdjustDialog / requestPotAdjustment).
+  const [showAdjustDialog, setShowAdjustDialog] = useState(false)
 
   const activeMembers = useMemo(() => members.filter((m) => m.potActive !== false), [members])
   const inactiveMembers = useMemo(() => members.filter((m) => m.potActive === false), [members])
@@ -41,11 +58,19 @@ export default function Wallet() {
   // verdad está el mecanismo de "Estoy fuera" en Convives (con fecha de
   // regreso), no este toggle manual pensado para alguien que todavía no
   // había empezado a participar.
-  const hasPotActivity = useMemo(() => new Set(potContributions.map((c) => c.userId)), [potContributions])
+  // (Los ajustes manuales del Pote no cuentan: no son aporte ni gasto de nadie.)
+  const hasPotActivity = useMemo(
+    () => new Set(potContributions.filter((c) => !isPotAdjustment(c)).map((c) => c.userId)),
+    [potContributions]
+  )
 
   // Solo los aportes (montos positivos) cuentan para el saldo personal de
   // cada quien. Los gastos son del grupo, no una deuda de quien los registra.
-  const aportes = useMemo(() => potContributions.filter((c) => Number(c.amount) > 0), [potContributions])
+  // Tampoco cuentan los ajustes manuales aprobados por el piso.
+  const aportes = useMemo(
+    () => potContributions.filter((c) => Number(c.amount) > 0 && !isPotAdjustment(c)),
+    [potContributions]
+  )
 
   const balances = useMemo(() => {
     const totalsByUser = {}
@@ -144,6 +169,19 @@ export default function Wallet() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('wallet.totalLabel')}</p>
                 <p className={`text-2xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{floor?.potAmount ?? 0}€</p>
+                {!pendingPotAdjustmentPoll && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowAdjustDialog(true)
+                    }}
+                    className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-ink-900/40 dark:text-cream-100/40 hover:text-violet-500"
+                  >
+                    <EditIcon className="w-3 h-3 shrink-0" />
+                    {t('wallet.adjustButton')}
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -193,6 +231,24 @@ export default function Wallet() {
           )}
         </div>
       </Reveal>
+
+      {pendingPotAdjustmentPoll && (
+        <Reveal delay={60}>
+          <div className="mb-5">
+            <PotAdjustmentRequestCard
+              poll={pendingPotAdjustmentPoll}
+              votes={pollVotes.filter((v) => v.pollId === pendingPotAdjustmentPoll.id)}
+              members={members}
+              user={user}
+              isAdmin={isAdmin}
+              castVote={castVote}
+              closePoll={closePoll}
+              t={t}
+              dateLocale={dateLocale}
+            />
+          </div>
+        </Reveal>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
         <Reveal delay={80}>
@@ -274,7 +330,7 @@ export default function Wallet() {
                       key={c.id}
                       contribution={c}
                       authorName={memberById[c.userId]?.name || t('wallet.someone')}
-                      canManage={c.userId === user.id && Number(c.amount) < 0 && Date.now() - new Date(c.createdAt).getTime() < 24 * 60 * 60 * 1000}
+                      canManage={!isPotAdjustment(c) && c.userId === user.id && Number(c.amount) < 0 && Date.now() - new Date(c.createdAt).getTime() < 24 * 60 * 60 * 1000}
                       onUpdate={updatePotExpense}
                       onDelete={deletePotExpense}
                       t={t}
@@ -290,7 +346,195 @@ export default function Wallet() {
       {pendingAction && (
         <ConfirmPotDialog action={pendingAction} onCancel={() => setPendingAction(null)} onConfirm={confirmPending} t={t} />
       )}
+
+      {showAdjustDialog && (
+        <PotAdjustDialog
+          currentAmount={Number(floor?.potAmount ?? 0)}
+          onCancel={() => setShowAdjustDialog(false)}
+          onSend={async (newAmount) => {
+            await requestPotAdjustment(newAmount)
+            setShowAdjustDialog(false)
+            showToast(t('wallet.adjustSentToast'), 'success')
+          }}
+          t={t}
+        />
+      )}
     </AppLayout>
+  )
+}
+
+/** Pop-up de 2 pasos para pedir un nuevo importe del Pote: (1) escribir
+ * la cantidad (0 para ponerlo a cero), (2) leer qué va a pasar y
+ * confirmar el envío. Aquí NO se cambia el Pote — solo se envía una
+ * solicitud que debe aprobar todo el piso (ver requestPotAdjustment). */
+function PotAdjustDialog({ currentAmount, onCancel, onSend, t }) {
+  const [step, setStep] = useState('input')
+  const [value, setValue] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const parsed = value === '' ? null : Math.round(Number(value) * 100) / 100
+  const invalid = parsed === null || !Number.isFinite(parsed) || parsed < 0
+  const sameAsCurrent = !invalid && parsed === Math.round(currentAmount * 100) / 100
+
+  async function handleSend() {
+    setSending(true)
+    try {
+      await onSend(parsed)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative max-h-[90vh] overflow-y-auto"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <button
+          type="button"
+          onClick={onCancel}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+
+        {step === 'input' ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!invalid && !sameAsCurrent) setStep('confirm')
+            }}
+          >
+            <h3 className="font-display text-lg font-bold mb-1 pr-8">{t('wallet.adjustTitle')}</h3>
+            <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-1">{t('wallet.adjustBody')}</p>
+            <p className="text-xs font-semibold text-ink-900/50 dark:text-cream-100/50 mb-4">
+              {t('wallet.adjustCurrent', { amount: currentAmount.toFixed(2) })}
+            </p>
+            <label className="text-sm block mb-1">
+              {t('wallet.adjustInputLabel')}
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                className="input mt-1"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                autoFocus
+                required
+              />
+            </label>
+            {sameAsCurrent && <p className="text-xs font-semibold text-clay-500 mb-1">{t('wallet.adjustSameAmount')}</p>}
+            <div className="flex gap-2 mt-4">
+              <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel}>
+                {t('wallet.cancel')}
+              </button>
+              <button type="submit" className="btn-primary text-sm flex-1" disabled={invalid || sameAsCurrent}>
+                {t('wallet.adjustContinue')}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <h3 className="font-display text-lg font-bold mb-2 pr-8">{t('wallet.adjustConfirmTitle')}</h3>
+            <div className="text-sm text-ink-900/70 dark:text-cream-100/70 flex flex-col gap-2 mb-5">
+              <p className="font-semibold text-ink-900 dark:text-cream-100">
+                {t('wallet.adjustConfirmLine1', { amount: parsed.toFixed(2) })}
+              </p>
+              <p>{t('wallet.adjustConfirmLine2')}</p>
+              <p>{t('wallet.adjustConfirmLine3')}</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="btn-secondary text-sm flex-1" onClick={() => setStep('input')} disabled={sending}>
+                {t('wallet.adjustBack')}
+              </button>
+              <button type="button" className="btn-primary text-sm flex-1" onClick={handleSend} disabled={sending}>
+                {sending ? t('wallet.saving') : t('wallet.adjustSend')}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Estado de una solicitud de modificación del Pote en curso: quién la
+ * pidió, a qué importe, quién ya aprobó y a quién le falta. Cada
+ * conviviente aprueba o rechaza desde acá (también aparece en
+ * Votaciones); un solo rechazo la tumba, se aplica solo cuando aprueban
+ * todos. */
+function PotAdjustmentRequestCard({ poll, votes, members, user, isAdmin, castVote, closePoll, t, dateLocale }) {
+  const requester = members.find((m) => m.id === poll.createdBy)
+  const voteByUser = Object.fromEntries(votes.map((v) => [v.userId, v.option]))
+  const approvedNames = members.filter((m) => voteByUser[m.id] === 'Aprobar').map((m) => m.name)
+  const pendingNames = members.filter((m) => !voteByUser[m.id]).map((m) => m.name)
+  const myVote = voteByUser[user?.id]
+  const newAmount = Number(poll.payload?.newAmount ?? 0)
+  const canCancel = poll.createdBy === user?.id || isAdmin
+
+  async function handleCancel() {
+    if (!confirm(t('wallet.adjustCancelConfirm'))) return
+    await closePoll(poll.id)
+  }
+
+  return (
+    <div className="card p-5 border-gold-500/60">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 mb-2">
+        <h2 className="font-display font-semibold min-w-0">{t('wallet.adjustPendingTitle')}</h2>
+        <span className="text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-2 py-1 rounded-md shrink-0">
+          {t('wallet.adjustPendingBadge')}
+        </span>
+      </div>
+      <p className="text-sm text-ink-900/70 dark:text-cream-100/70">
+        {t('wallet.adjustRequestedBy', { name: requester?.name || t('wallet.someone') })}
+      </p>
+      <p className="font-display text-lg font-bold my-1">{t('wallet.adjustProposes', { amount: newAmount.toFixed(2) })}</p>
+      {poll.deadlineAt && (
+        <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mb-3">
+          {t('wallet.adjustDeadline', { date: format(new Date(poll.deadlineAt), 'd MMM, HH:mm', { locale: dateLocale }) })}
+        </p>
+      )}
+
+      <div className="flex flex-col gap-1.5 text-sm mb-4">
+        <p>
+          <span className="font-semibold text-sage-500">{t('wallet.adjustApprovedBy')}:</span>{' '}
+          {approvedNames.length ? approvedNames.join(', ') : '—'}
+        </p>
+        <p>
+          <span className="font-semibold text-gold-500">{t('wallet.adjustStillPending')}:</span>{' '}
+          {pendingNames.length ? pendingNames.join(', ') : '—'}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {!myVote && (
+          <>
+            <button type="button" className="btn-danger text-sm" onClick={() => castVote(poll.id, 'Rechazar')}>
+              {t('wallet.adjustReject')}
+            </button>
+            <button type="button" className="btn-primary text-sm" onClick={() => castVote(poll.id, 'Aprobar')}>
+              {t('wallet.adjustApprove')}
+            </button>
+          </>
+        )}
+        {myVote === 'Aprobar' && (
+          <>
+            <span className="text-sm font-semibold text-sage-500">{t('wallet.adjustYouApproved')}</span>
+            <button type="button" className="text-xs font-semibold text-clay-500 hover:underline" onClick={() => castVote(poll.id, 'Rechazar')}>
+              {t('wallet.adjustChangeToReject')}
+            </button>
+          </>
+        )}
+        {canCancel && (
+          <button type="button" onClick={handleCancel} className="text-xs font-semibold text-violet-500 hover:underline ml-auto">
+            {t('wallet.adjustCancel')}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -363,6 +607,31 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
     if (confirm(t('wallet.deleteConfirm'))) {
       onDelete(c.id)
     }
+  }
+
+  if (isPotAdjustment(c)) {
+    return (
+      <li className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
+        <div className="flex justify-between text-sm gap-2">
+          <span className="min-w-0">
+            <strong>{t('wallet.manualAdjustment')}</strong>
+          </span>
+          <span className="flex items-center gap-2 shrink-0">
+            <span className="text-ink-900/40 dark:text-cream-100/40 text-xs">
+              {format(new Date(c.createdAt), 'd MMM, HH:mm', { locale: dateLocale })}
+            </span>
+            <span className="font-semibold text-violet-500">
+              {Number(c.amount) > 0 ? '+' : '-'}
+              {Math.abs(Number(c.amount)).toFixed(2)}€
+            </span>
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-ink-900/50 dark:text-cream-100/50">
+          {c.note && <span>{c.note} · </span>}
+          {t('wallet.manualAdjustmentApproved')}
+        </p>
+      </li>
+    )
   }
 
   if (editing) {

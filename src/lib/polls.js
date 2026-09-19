@@ -7,6 +7,12 @@
  * abierta.
  */
 
+/** Consultas de sistema donde una opción concreta actúa como veto: basta
+ * un solo voto por ella para resolverla de inmediato. Hoy solo la
+ * modificación manual del Pote (todos deben aprobar; un "Rechazar" la
+ * tumba). */
+const VETO_OPTION_BY_KIND = { pot_adjustment: 'Rechazar' }
+
 /**
  * Decide si una consulta 'pending' debe cambiar de estado, dado el
  * padrón de electores actual (miembros activos del piso) y los votos
@@ -41,6 +47,15 @@ export function resolvePoll(poll, votesForPoll, activeMemberIds, todayISO, nowMs
   const relevantVotes = votesForPoll.filter((v) => electorate.has(v.userId))
   const distinctVoters = new Set(relevantVotes.map((v) => v.userId))
   const everyoneVoted = electorate.size > 0 && distinctVoters.size >= electorate.size
+
+  // Consultas con derecho a veto (ver VETO_OPTION_BY_KIND): un solo voto
+  // por la opción de veto la resuelve al instante, sin esperar a que
+  // voten los demás — no tiene sentido dejar "pendiente" algo que ya no
+  // puede aprobarse.
+  const vetoOption = VETO_OPTION_BY_KIND[poll.kind]
+  if (vetoOption && relevantVotes.some((v) => v.option === vetoOption)) {
+    return { status: 'resolved', resolvedOption: vetoOption }
+  }
 
   const tally = tallyVotes(relevantVotes)
 

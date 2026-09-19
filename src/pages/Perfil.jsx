@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { getFloorHistory } from '../lib/db'
 import { getMemberColor } from '../lib/roomieColors'
+import { isPotAdjustment } from '../lib/pot'
 import { CameraIcon, AlertIcon, MailIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict } from 'date-fns'
 
@@ -98,7 +99,7 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
   const [rejecting, setRejecting] = useState(false)
 
   const activeMembers = members.filter((m) => m.potActive !== false)
-  const aportes = potContributions.filter((c) => Number(c.amount) > 0)
+  const aportes = potContributions.filter((c) => Number(c.amount) > 0 && !isPotAdjustment(c))
   const myContributed = aportes.filter((c) => c.userId === userId).reduce((sum, c) => sum + Number(c.amount), 0)
   const totalAmongActive = aportes
     .filter((c) => activeMembers.some((m) => m.id === c.userId))

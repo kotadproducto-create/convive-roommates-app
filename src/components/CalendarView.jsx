@@ -15,6 +15,7 @@ import {
   isToday
 } from 'date-fns'
 import { currentPeriodKey, isDueOnDate, assigneeFor, getWeekKeyOf } from '../lib/activities'
+import { isPotAdjustment } from '../lib/pot'
 import { JarIcon, CartIcon, StoreIcon, WasherIcon, SparkleIcon } from './icons'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
@@ -81,7 +82,7 @@ export default function CalendarView({
       // ahora mismo): se previsualiza igual quién le tocaría por
       // rotación, de solo lectura — mismo espíritu que antes con
       // whoIsAssigned para semanas fuera de la actual.
-      const assignedUserId = completion ? completion.assignedUserId : assigneeFor(activity, floor?.rotationOrder, wk)
+      const assignedUserId = completion ? completion.assignedUserId : assigneeFor(activity, floor?.rotationOrder, wk, floor)
       const isMine = Boolean(currentUserId) && assignedUserId === currentUserId
       items.push({
         kind: isFixed ? 'fixed' : 'activity',
@@ -318,6 +319,17 @@ function useDayEvents(cursor, memberById, potContributions, shoppingPurchases, s
       if (!isSameDay(new Date(c.createdAt), cursor)) continue
       const isExpense = Number(c.amount) < 0
       const name = memberById[c.userId]?.name || t('calendar.someone')
+      if (isPotAdjustment(c)) {
+        events.push({
+          id: `pot-${c.id}`,
+          time: c.createdAt,
+          icon: JarIcon,
+          tone: 'violet',
+          title: t('wallet.manualAdjustment'),
+          subtitle: c.note || null
+        })
+        continue
+      }
       events.push({
         id: `pot-${c.id}`,
         time: c.createdAt,

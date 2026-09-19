@@ -227,6 +227,12 @@ create table if not exists pot_contributions (
   floor_id uuid not null references floors(id) on delete cascade,
   user_id uuid not null references profiles(id) on delete cascade,
   amount numeric not null, -- positivo = aporte, negativo = gasto
+  -- 'adjustment' = ajuste manual del Pote aprobado por TODO el piso (ver
+  -- requestPotAdjustment en DataContext.jsx): `amount` es la diferencia
+  -- que se aplicó (nuevo importe − importe anterior), y NO cuenta como
+  -- aporte ni gasto de nadie (ni para el saldo personal ni para "ya
+  -- participó en el pote").
+  kind text not null default 'contribution' check (kind in ('contribution', 'adjustment')),
   note text,
   receipt_url text,
   created_at timestamptz not null default now()
@@ -347,7 +353,7 @@ create table if not exists polls (
   -- que aplicar si se aprueba (ej. {newOrder:[...]}). 'deadline_at' es un
   -- plazo con hora exacta (no solo fecha) para cuando "menos de 24h" de
   -- verdad importa — las consultas normales siguen usando 'deadline'.
-  kind text not null default 'custom' check (kind in ('custom', 'rotation_order')),
+  kind text not null default 'custom' check (kind in ('custom', 'rotation_order', 'pot_adjustment')),
   payload jsonb,
   deadline_at timestamptz,
   status text not null default 'pending' check (status in ('pending', 'resolved', 'closed', 'expired')),
@@ -603,11 +609,11 @@ create policy "select floor pot contributions" on pot_contributions for select u
 create policy "insert own pot contributions" on pot_contributions for insert with check (is_active_member(floor_id) and user_id = auth.uid());
 create policy "author edit own recent expense" on pot_contributions
   for update
-  using (user_id = auth.uid() and amount < 0 and created_at > now() - interval '24 hours')
-  with check (user_id = auth.uid() and amount < 0);
+  using (user_id = auth.uid() and amount < 0 and kind = 'contribution' and created_at > now() - interval '24 hours')
+  with check (user_id = auth.uid() and amount < 0 and kind = 'contribution');
 create policy "author delete own recent expense" on pot_contributions
   for delete
-  using (user_id = auth.uid() and amount < 0 and created_at > now() - interval '24 hours');
+  using (user_id = auth.uid() and amount < 0 and kind = 'contribution' and created_at > now() - interval '24 hours');
 
 -- shopping_items: cualquier miembro activo ve, crea, edita y borra (mismo
 -- modelo de confianza que el resto de la app).

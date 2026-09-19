@@ -12,7 +12,7 @@ import {
   isToday
 } from 'date-fns'
 import { useLanguage } from '../context/LanguageContext'
-import { potAmountColorClass } from '../lib/pot'
+import { potAmountColorClass, isPotAdjustment } from '../lib/pot'
 
 /**
  * Calendario gráfico de movimientos del pote: un punto verde el día que
@@ -41,8 +41,9 @@ export default function PotCalendar({ contributions, memberById = {} }) {
     const map = new Map()
     for (const c of contributions) {
       const key = format(new Date(c.createdAt), 'yyyy-MM-dd')
-      const entry = map.get(key) || { aporte: false, gasto: false, items: [] }
-      if (Number(c.amount) > 0) entry.aporte = true
+      const entry = map.get(key) || { aporte: false, gasto: false, ajuste: false, items: [] }
+      if (isPotAdjustment(c)) entry.ajuste = true
+      else if (Number(c.amount) > 0) entry.aporte = true
       else entry.gasto = true
       entry.items.push(c)
       map.set(key, entry)
@@ -99,6 +100,7 @@ export default function PotCalendar({ contributions, memberById = {} }) {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-ink-900/60 dark:text-cream-100/60">
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sage-500 inline-block shrink-0" />{t('wallet.contributionLegend')}</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-clay-500 inline-block shrink-0" />{t('wallet.expenseLegend')}</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-violet-500 inline-block shrink-0" />{t('wallet.adjustmentLegend')}</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-ink-900/30 dark:border-cream-100/30 inline-block shrink-0" />{t('wallet.noMovementLegend')}</span>
         </div>
       </div>
@@ -120,7 +122,9 @@ export default function PotCalendar({ contributions, memberById = {} }) {
               ? t('wallet.contributionAndExpense')
               : entry.aporte
                 ? t('wallet.contributionLegend')
-                : t('wallet.expenseLegend')
+                : entry.gasto
+                  ? t('wallet.expenseLegend')
+                  : t('wallet.adjustmentLegend')
             : t('wallet.noMovementLegend')
           const isSelected = selectedKey === key
           return (
@@ -141,6 +145,7 @@ export default function PotCalendar({ contributions, memberById = {} }) {
               <div className="flex items-center gap-0.5">
                 {entry?.aporte && <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-cream-100' : 'bg-sage-500'}`} />}
                 {entry?.gasto && <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-cream-100' : 'bg-clay-500'}`} />}
+                {entry?.ajuste && <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-cream-100' : 'bg-violet-500'}`} />}
               </div>
             </button>
           )
@@ -164,13 +169,20 @@ export default function PotCalendar({ contributions, memberById = {} }) {
             <ul className="flex flex-col gap-1.5">
               {selectedItems.map((c) => {
                 const isExpense = Number(c.amount) < 0
+                const isAdjustment = isPotAdjustment(c)
                 return (
-                  <li key={c.id} className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-cream-100 dark:bg-ink-700">
-                    <span className="truncate">
-                      <strong>{memberById[c.userId]?.name || t('wallet.someone')}</strong> {isExpense ? t('wallet.spent') : t('wallet.contributedVerb')}
+                  <li key={c.id} className="flex items-center justify-between min-w-0 text-sm px-2 py-1.5 rounded-lg bg-cream-100 dark:bg-ink-700">
+                    <span className="truncate min-w-0">
+                      {isAdjustment ? (
+                        <strong>{t('wallet.manualAdjustment')}</strong>
+                      ) : (
+                        <>
+                          <strong>{memberById[c.userId]?.name || t('wallet.someone')}</strong> {isExpense ? t('wallet.spent') : t('wallet.contributedVerb')}
+                        </>
+                      )}
                       {c.note && <span className="text-ink-900/50 dark:text-cream-100/50"> · {c.note}</span>}
                     </span>
-                    <span className={`font-semibold shrink-0 ml-2 ${isExpense ? 'text-clay-500' : 'text-sage-500'}`}>
+                    <span className={`font-semibold shrink-0 ml-2 ${isAdjustment ? 'text-violet-500' : isExpense ? 'text-clay-500' : 'text-sage-500'}`}>
                       {isExpense ? '-' : '+'}{Math.abs(Number(c.amount)).toFixed(2)}€
                     </span>
                   </li>
