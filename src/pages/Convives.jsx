@@ -218,6 +218,7 @@ function ConviveCard({
   dateLocale
 }) {
   const { declareAway, returnFromAway } = useData()
+  const { showToast } = useToast()
   const [adjusting, setAdjusting] = useState(false)
   const [showAwayPopup, setShowAwayPopup] = useState(false)
 
@@ -263,14 +264,27 @@ function ConviveCard({
   // En "En el piso" (verde): pulsar abre el pop-up de fechas para
   // declararse fuera. En "Fuera del piso" (gris): pulsar vuelve al
   // instante, sin pop-up — salir se planea, volver es inmediato.
-  function handleStatusClick() {
-    if (isAway) returnFromAway(member.membershipId)
-    else setShowAwayPopup(true)
+  async function handleStatusClick() {
+    if (!isAway) {
+      setShowAwayPopup(true)
+      return
+    }
+    try {
+      await returnFromAway(member.membershipId)
+    } catch (err) {
+      console.error('returnFromAway', err)
+      showToast(t('convives.awayChangeError'), 'error')
+    }
   }
 
   async function handleConfirmAway(untilDate) {
-    await declareAway(member.membershipId, member.id, untilDate)
-    setShowAwayPopup(false)
+    try {
+      await declareAway(member.membershipId, member.id, untilDate)
+      setShowAwayPopup(false)
+    } catch (err) {
+      console.error('declareAway', err)
+      showToast(t('convives.awayChangeError'), 'error')
+    }
   }
 
   return (

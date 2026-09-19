@@ -201,6 +201,7 @@ export default {
     awayUntilLabel: 'Vuelve el {{date}}',
     imAway: 'Estoy fuera',
     backToFloor: 'Vuelta al piso',
+    awayChangeError: 'No se pudo cambiar el estado. Si el problema sigue, avisa a un admin del piso.',
     awayPopupTitle: '¿Cuánto tiempo estarás fuera?',
     awayPopupSubtitle: 'Selecciona los días que estarás fuera del piso.',
     awayPopupTitleOther: '¿Cuánto tiempo estará fuera {{name}}?',

@@ -215,20 +215,23 @@ export function DataProvider({ children }) {
     return subscribeTable('poll_votes', { floorId }, setPollVotes)
   }, [floorId])
 
-  // IDs de quienes tienen una ausencia aprobada que cubre hoy — se
-  // excluyen de la generación de tareas de la semana (whoIsAssigned salta
-  // a la siguiente persona en rotationOrder). Solo afecta a la semana que
-  // se está generando ahora, no reescribe semanas ya creadas.
+  // IDs de quienes están "Fuera del piso" ahora mismo (pot_active en
+  // false: "Estoy fuera" de Convives, o una ausencia aprobada que apagó ese
+  // mismo indicador) — se excluyen de la rotación de actividades
+  // (whoIsAssigned salta a la siguiente persona en rotationOrder) y del
+  // reparto del pote. Es una sola fuente de verdad: al pulsar "Vuelta al
+  // piso" (o al pasar la fecha de regreso) la persona vuelve a todo a la
+  // vez. Solo afecta a los períodos que se generan desde ahora, no reescribe
+  // los ya creados. La clave ordenada mantiene estable la identidad del Set
+  // mientras no cambie quién está fuera (así los efectos que dependen de él
+  // no se re-disparan con cada refresco de miembros).
   const todayISO = new Date().toISOString().slice(0, 10)
-  const awayUserIds = useMemo(
-    () =>
-      new Set(
-        absenceRequests
-          .filter((r) => r.status === 'approved' && r.startDate <= todayISO && r.endDate >= todayISO)
-          .map((r) => r.userId)
-      ),
-    [absenceRequests, todayISO]
-  )
+  const awayKey = members
+    .filter((m) => m.potActive === false)
+    .map((m) => m.id)
+    .sort()
+    .join(',')
+  const awayUserIds = useMemo(() => new Set(awayKey ? awayKey.split(',') : []), [awayKey])
 
   // Cuando una ausencia aprobada ya terminó (end_date pasó), la cierra
   // ('completed') y reactiva a la persona en el pote. Como no hay cron en
@@ -864,9 +867,15 @@ export function DataProvider({ children }) {
   // no duplicar ese mecanismo. Si quien lo marca no es la propia persona,
   // se le avisa — nunca debe enterarse por su cuenta de que otro cambió
   // su estado.
+  // Refleja al instante en la lista local un cambio ya guardado en
+  // floor_memberships (Realtime lo confirma después con su propio refresco).
+  const patchMember = (membershipId, patch) =>
+    setMembers((list) => list.map((m) => (m.membershipId === membershipId ? { ...m, ...patch } : m)))
+
   const declareAway = useCallback(
     async (membershipId, targetUserId, untilDate) => {
       await update('floor_memberships', membershipId, { potActive: false, awayUntil: untilDate })
+      patchMember(membershipId, { potActive: false, awayUntil: untilDate })
       if (currentFloor && user && targetUserId && targetUserId !== user.id) {
         await notifyUser(
           currentFloor.id,
@@ -878,10 +887,10 @@ export function DataProvider({ children }) {
     },
     [currentFloor, user, notifyUser]
   )
-  const returnFromAway = useCallback(
-    (membershipId) => update('floor_memberships', membershipId, { potActive: true, awayUntil: null }),
-    []
-  )
+  const returnFromAway = useCallback(async (membershipId) => {
+    await update('floor_memberships', membershipId, { potActive: true, awayUntil: null })
+    patchMember(membershipId, { potActive: true, awayUntil: null })
+  }, [])
 
   // Solicitud formal de "estar fuera del piso" (con fechas y motivo,
   // pendiente de aprobación de un admin) — distinta del toggle instantáneo

@@ -200,6 +200,7 @@ export default {
     awayUntilLabel: 'Back on {{date}}',
     imAway: "I'm away",
     backToFloor: 'Back on the floor',
+    awayChangeError: 'Could not change the status. If it keeps happening, tell a floor admin.',
     awayPopupTitle: 'How long will you be away?',
     awayPopupSubtitle: 'Pick the days you\'ll be away from the floor.',
     awayPopupTitleOther: 'How long will {{name}} be away?',
