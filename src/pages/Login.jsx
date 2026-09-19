@@ -1,14 +1,13 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 import Mascot from '../components/Mascot'
 import PasswordInput from '../components/PasswordInput'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, user, loading } = useAuth()
   const { t } = useLanguage()
-  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -31,14 +30,19 @@ export default function Login() {
     setError('')
     setSubmitting(true)
     try {
+      // Al terminar, `user` ya está cargado y el <Navigate> de abajo
+      // lleva a "/" solo — sin navegar a mano desde acá (ver login()).
       await login(emailValue, passwordValue)
-      navigate('/')
     } catch (err) {
       setError(err.message)
     } finally {
       setSubmitting(false)
     }
   }
+
+  // Sesión ya iniciada (recién logueado, o entró a /login con la sesión
+  // abierta): no tiene sentido mostrar el formulario.
+  if (!loading && user) return <Navigate to="/" replace />
 
   return (
     <AuthShell>

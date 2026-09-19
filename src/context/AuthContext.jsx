@@ -113,9 +113,17 @@ export function AuthProvider({ children }) {
 
   // --- Acciones ---
 
+  // No resuelve hasta tener cargados el perfil y el piso. Antes resolvía
+  // apenas Supabase confirmaba las credenciales — pero `user` se llena
+  // DESPUÉS, de forma asíncrona (onAuthStateChange → loadProfileAndFloor),
+  // así que quien navegaba a "/" justo al volver de login() chocaba con
+  // ProtectedRoute viendo `user === null`, era devuelto a /login con el
+  // formulario vacío, y solo el segundo intento (con el perfil ya
+  // cargado) entraba.
   async function login(email, password) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new Error(traduceErrorAuth(error))
+    await loadProfileAndFloor(data.user.id)
   }
 
   async function registerAndCreateFloor({ name, email, password, floorName }) {
