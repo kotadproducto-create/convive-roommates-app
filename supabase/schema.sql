@@ -233,6 +233,10 @@ create table if not exists pot_contributions (
   -- aporte ni gasto de nadie (ni para el saldo personal ni para "ya
   -- participó en el pote").
   kind text not null default 'contribution' check (kind in ('contribution', 'adjustment')),
+  -- Solo en gastos: ids de quienes se repartieron ese gasto (todos menos
+  -- los que estaban "fuera" al hacerse). Null en gastos viejos = se
+  -- reparte entre todos los que ya estaban en el piso (ver lib/wallets.js).
+  split_among uuid[],
   note text,
   receipt_url text,
   created_at timestamptz not null default now()

@@ -961,12 +961,17 @@ export function DataProvider({ children }) {
         userId: user.id,
         amount: -Math.abs(Number(amount)),
         note: note || null,
-        receiptUrl
+        receiptUrl,
+        // Quiénes se reparten este gasto: los que NO están "fuera" ahora
+        // mismo. Se guarda en el propio gasto (no se recalcula después),
+        // así volver o irse más tarde no cambia gastos ya hechos. Si todos
+        // están fuera, se reparte entre todos (ver computeWallets).
+        splitAmong: members.filter((m) => m.potActive !== false).map((m) => m.id)
       })
       await update('floors', currentFloor.id, { potAmount: Math.max(0, (currentFloor.potAmount || 0) - Number(amount)) })
       return created
     },
-    [currentFloor, user]
+    [currentFloor, user, members]
   )
 
   // Solo el autor de un gasto puede editarlo/borrarlo, y solo durante las

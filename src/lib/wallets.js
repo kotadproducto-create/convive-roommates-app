@@ -8,9 +8,11 @@ import { isPotAdjustment } from './pot.js'
  * - Aporte (monto > 0): suma el monto COMPLETO a la wallet de quien
  *   aportó. A nadie más le afecta.
  * - Gasto (monto < 0, venga de la pestaña Pote o de Compras): se reparte
- *   en partes iguales entre TODOS los miembros del piso que ya estaban
- *   cuando se hizo el gasto, y cada parte se resta de su wallet. (El
- *   total del Pote baja por el monto completo — eso lo hace DataContext.)
+ *   en partes iguales entre quienes participaban al hacerse (`splitAmong`:
+ *   todos menos los que estaban "fuera"; en gastos viejos sin ese dato,
+ *   todos los que ya estaban en el piso), y cada parte se resta de su
+ *   wallet. (El total del Pote baja por el monto completo — eso lo hace
+ *   DataContext.)
  *
  * Los ajustes manuales del Pote (`kind: 'adjustment'`) no tocan wallets.
  * Todo se calcula en céntimos enteros (expense-splitting-core), así que
@@ -38,7 +40,13 @@ export function computeWallets(members, potContributions) {
       continue
     }
 
-    let participants = members.filter((m) => !m.joinedAt || new Date(m.joinedAt) <= new Date(c.createdAt))
+    // Gasto con "quiénes participaban" guardado (`splitAmong`): se respeta
+    // tal cual (así los que estaban "fuera" no pagan). Gastos viejos sin
+    // ese dato: todos los que ya estaban en el piso ese momento.
+    const snapshot = Array.isArray(c.splitAmong) && c.splitAmong.length ? new Set(c.splitAmong) : null
+    let participants = snapshot
+      ? members.filter((m) => snapshot.has(m.id))
+      : members.filter((m) => !m.joinedAt || new Date(m.joinedAt) <= new Date(c.createdAt))
     if (participants.length === 0) participants = members
     if (participants.length === 0) continue
 

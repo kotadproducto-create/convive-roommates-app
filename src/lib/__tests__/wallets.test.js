@@ -64,6 +64,35 @@ describe('computeWallets', () => {
     expect(w.L.balance).toBe(0)
   })
 
+  it('quien estaba "fuera" al hacerse el gasto (fuera de splitAmong) no lo paga', () => {
+    const w = computeWallets([A, B, C], [mov('A', -10, { splitAmong: ['A', 'B'] })])
+    expect(w.A.balance).toBe(-5)
+    expect(w.B.balance).toBe(-5)
+    expect(w.C.balance).toBe(0)
+  })
+
+  it('volver o irse después no cambia gastos ya hechos: cada gasto usa su propio reparto', () => {
+    const w = computeWallets(
+      [A, B, C],
+      [mov('A', -10, { splitAmong: ['A', 'B'] }), mov('A', -30, { splitAmong: ['A', 'B', 'C'] })]
+    )
+    expect(w.A.balance).toBe(-15) // 5 + 10
+    expect(w.B.balance).toBe(-15)
+    expect(w.C.balance).toBe(-10) // solo el segundo
+  })
+
+  it('un splitAmong con gente que ya no está en el piso se ignora (reparte entre los que quedan)', () => {
+    const w = computeWallets([A, B], [mov('A', -9, { splitAmong: ['A', 'B', 'gone'] })])
+    expect(w.A.balance).toBe(-4.5)
+    expect(w.B.balance).toBe(-4.5)
+  })
+
+  it('si splitAmong no coincide con nadie del piso, se reparte entre todos', () => {
+    const w = computeWallets([A, B], [mov('A', -10, { splitAmong: ['gone'] })])
+    expect(w.A.balance).toBe(-5)
+    expect(w.B.balance).toBe(-5)
+  })
+
   it('los ajustes manuales del Pote no tocan ninguna wallet', () => {
     const w = computeWallets([A, B], [mov('A', 50, { kind: 'adjustment' }), mov('B', -20, { kind: 'adjustment' })])
     expect(w.A.balance).toBe(0)
