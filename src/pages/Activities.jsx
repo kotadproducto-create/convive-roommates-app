@@ -8,6 +8,8 @@ import { useLanguage } from '../context/LanguageContext'
 import { update } from '../lib/db'
 import { currentPeriodKey } from '../lib/activities'
 import ActivityCard, { FIXED_ICONS } from '../components/ActivityCard'
+import SharedSpaces from '../components/SharedSpaces'
+import RotationOrderBox from '../components/RotationOrderBox'
 import { CloseIcon, ChevronUpIcon, ChevronDownIcon, SparkleIcon } from '../components/icons'
 import { format, formatDistanceToNowStrict, startOfWeek, addDays } from 'date-fns'
 
@@ -130,6 +132,9 @@ export default function Activities() {
         </button>
       </div>
 
+      {/* Justo debajo de "Todo lo que hay que hacer en el piso, y quién lo hace" */}
+      <RotationOrderBox />
+
       {(showForm || editing) && (
         <Reveal>
           <ActivityForm
@@ -170,6 +175,9 @@ export default function Activities() {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">{oneTimeActivities.map(renderCard)}</div>
         )}
       </section>
+
+      {/* Lógica aparte de las actividades: no hay turnos ni puntos, solo avisar el uso. */}
+      <SharedSpaces />
 
       <section>
         <button

@@ -21,7 +21,12 @@ export default function Wallet() {
     addPotExpense,
     updatePotExpense,
     deletePotExpense,
+    polls,
     pollVotes,
+    walletResets,
+    resetMyWallet,
+    proposeWalletResetForAll,
+    pendingBalanceResetPoll,
     pendingPotAdjustmentPoll,
     requestPotAdjustment,
     castVote,
@@ -49,10 +54,12 @@ export default function Wallet() {
   // confirmación) que solo ENVÍA una solicitud a todo el piso, nunca
   // cambia el Pote directo (ver PotAdjustDialog / requestPotAdjustment).
   const [showAdjustDialog, setShowAdjustDialog] = useState(false)
+  // "Reiniciar saldo": solo para mí (al instante) o para todos (consulta en Votaciones).
+  const [showResetDialog, setShowResetDialog] = useState(false)
 
   // Wallet de cada persona: suma lo que aporta y resta su parte de cada
   // gasto (Pote o Compras), repartido en partes iguales — ver lib/wallets.js.
-  const wallets = useMemo(() => computeWallets(members, potContributions), [members, potContributions])
+  const wallets = useMemo(() => computeWallets(members, potContributions, walletResets), [members, potContributions, walletResets])
 
   // El aporte y el gasto ya no ejecutan directo al pulsar el botón — solo
   // abren el pop-up de confirmación (ConfirmPotDialog); la operación real
@@ -103,9 +110,16 @@ export default function Wallet() {
     }
   }
 
+  // Historial: los movimientos del pote, más cada reinicio de saldo (individual
+  // o aprobado por consulta) y cada propuesta de reinicio para todos.
   const history = useMemo(
-    () => potContributions.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
-    [potContributions]
+    () =>
+      [
+        ...potContributions.map((c) => ({ type: 'pot', id: c.id, createdAt: c.createdAt, c })),
+        ...walletResets.map((r) => ({ type: 'reset', id: `reset-${r.id}`, createdAt: r.createdAt, r })),
+        ...polls.filter((p) => p.kind === 'balance_reset').map((p) => ({ type: 'proposal', id: `proposal-${p.id}`, createdAt: p.createdAt, p }))
+      ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+    [potContributions, walletResets, polls]
   )
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
 
@@ -229,6 +243,8 @@ export default function Wallet() {
                         <p className="text-sm font-medium truncate">{m.name}{m.id === user.id ? t('wallet.you') : ''}</p>
                         <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
                           {t('wallet.walletBreakdown', { contributed: w.contributed.toFixed(2), share: w.expenseShare.toFixed(2) })}
+                          {w.resetAdjustment !== undefined &&
+                            ` · ${t('wallet.walletResetAdjustment', { amount: `${w.resetAdjustment > 0 ? '+' : ''}${w.resetAdjustment.toFixed(2)}` })}`}
                         </p>
                       </div>
                     </div>
@@ -239,6 +255,14 @@ export default function Wallet() {
                 )
               })}
             </ul>
+            {/* Acción discreta, como el "Ajustar importe" del total del Pote */}
+            <button
+              type="button"
+              onClick={() => setShowResetDialog(true)}
+              className="mt-3 text-xs font-semibold text-ink-900/40 dark:text-cream-100/40 hover:text-violet-500 hover:underline"
+            >
+              {t('wallet.resetButton')}
+            </button>
           </section>
         </Reveal>
 
@@ -261,18 +285,24 @@ export default function Wallet() {
                 <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">{t('wallet.noHistoryYet')}</p>
               ) : (
                 <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto mt-3">
-                  {history.map((c) => (
-                    <HistoryRow
-                      key={c.id}
-                      contribution={c}
-                      authorName={memberById[c.userId]?.name || t('wallet.someone')}
-                      canManage={!isPotAdjustment(c) && c.userId === user.id && Number(c.amount) < 0 && Date.now() - new Date(c.createdAt).getTime() < 24 * 60 * 60 * 1000}
-                      onUpdate={updatePotExpense}
-                      onDelete={deletePotExpense}
-                      t={t}
-                      dateLocale={dateLocale}
-                    />
-                  ))}
+                  {history.map((item) =>
+                    item.type === 'reset' ? (
+                      <ResetHistoryRow key={item.id} reset={item.r} name={memberById[item.r.userId]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} />
+                    ) : item.type === 'proposal' ? (
+                      <ResetProposalRow key={item.id} poll={item.p} name={memberById[item.p.createdBy]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} />
+                    ) : (
+                      <HistoryRow
+                        key={item.id}
+                        contribution={item.c}
+                        authorName={memberById[item.c.userId]?.name || t('wallet.someone')}
+                        canManage={!isPotAdjustment(item.c) && item.c.userId === user.id && Number(item.c.amount) < 0 && Date.now() - new Date(item.c.createdAt).getTime() < 24 * 60 * 60 * 1000}
+                        onUpdate={updatePotExpense}
+                        onDelete={deletePotExpense}
+                        t={t}
+                        dateLocale={dateLocale}
+                      />
+                    )
+                  )}
                 </ul>
               ))}
           </section>
@@ -281,6 +311,24 @@ export default function Wallet() {
 
       {pendingAction && (
         <ConfirmPotDialog action={pendingAction} onCancel={() => setPendingAction(null)} onConfirm={confirmPending} t={t} />
+      )}
+
+      {showResetDialog && (
+        <WalletResetDialog
+          hasPendingProposal={!!pendingBalanceResetPoll}
+          onCancel={() => setShowResetDialog(false)}
+          onConfirm={async (scope, newBalance) => {
+            if (scope === 'self') {
+              await resetMyWallet(newBalance)
+              showToast(t('wallet.resetSelfToast', { amount: newBalance.toFixed(2) }), 'success')
+            } else {
+              await proposeWalletResetForAll(newBalance)
+              showToast(t('wallet.resetAllToast'), 'success')
+            }
+            setShowResetDialog(false)
+          }}
+          t={t}
+        />
       )}
 
       {showAdjustDialog && (
@@ -517,6 +565,139 @@ function ConfirmPotDialog({ action, onCancel, onConfirm, t }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/** "Reiniciar saldo": (1) elegir para quién — solo para mí o para todos —
+ * y (2) el nuevo saldo (0 por defecto, editable). "Solo para mí" cambia
+ * únicamente el saldo propio, al instante. "Para todos" NO cambia ningún
+ * saldo: crea una consulta en Votaciones y solo se modifica el saldo de
+ * quien la apruebe (ver proposeWalletResetForAll). */
+function WalletResetDialog({ hasPendingProposal, onCancel, onConfirm, t }) {
+  const [scope, setScope] = useState(null) // 'self' | 'all'
+  const [value, setValue] = useState('0')
+  const [sending, setSending] = useState(false)
+
+  const parsed = value.trim() === '' ? null : Math.round(Number(value) * 100) / 100
+  const invalid = parsed === null || !Number.isFinite(parsed)
+  const canSubmit = scope !== null && !invalid && !(scope === 'all' && hasPendingProposal)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!canSubmit) return
+    setSending(true)
+    try {
+      await onConfirm(scope, parsed)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
+      <form
+        onSubmit={handleSubmit}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative max-h-[90vh] overflow-y-auto"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <button
+          type="button"
+          onClick={onCancel}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+
+        <h3 className="font-display text-lg font-bold mb-3 pr-8">{t('wallet.resetTitle')}</h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+          {['self', 'all'].map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setScope(opt)}
+              className={`text-left text-sm font-semibold px-3 py-2.5 rounded-xl border-2 ${
+                scope === opt
+                  ? 'bg-gold-100 dark:bg-gold-400/25 border-ink-900 dark:border-cream-100/50 text-ink-900 dark:text-cream-100'
+                  : 'border-ink-900/15 dark:border-cream-100/20 text-ink-900/70 dark:text-cream-100/70'
+              }`}
+            >
+              {opt === 'self' ? t('wallet.resetOptionSelf') : t('wallet.resetOptionAll')}
+            </button>
+          ))}
+        </div>
+
+        {scope && (
+          <>
+            <label className="text-sm block mb-2">
+              {t('wallet.resetAmountLabel')}
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                className="input mt-1"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                required
+              />
+            </label>
+            <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mb-2">
+              {scope === 'self' ? t('wallet.resetSelfHint') : t('wallet.resetAllHint')}
+            </p>
+            {scope === 'all' && hasPendingProposal && (
+              <p className="text-xs font-semibold text-clay-500 mb-2">{t('wallet.resetAllPending')}</p>
+            )}
+          </>
+        )}
+
+        <div className="flex gap-2 mt-4">
+          <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel} disabled={sending}>
+            {t('wallet.cancel')}
+          </button>
+          <button type="submit" className="btn-primary text-sm flex-1" disabled={!canSubmit || sending}>
+            {sending ? t('wallet.saving') : scope === 'all' ? t('wallet.resetSubmitAll') : scope === 'self' ? t('wallet.resetSubmitSelf') : t('wallet.resetSubmitNone')}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+/** Fila del historial: alguien reinició su propio saldo — individualmente
+ * ("Solo para mí") o al aprobar una propuesta "para todos". */
+function ResetHistoryRow({ reset: r, name, t, dateLocale }) {
+  return (
+    <li className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
+      <div className="flex justify-between text-sm gap-2">
+        <span className="min-w-0">
+          {t(r.scope === 'poll' ? 'wallet.historyResetPoll' : 'wallet.historyResetSelf', { name, amount: Number(r.newBalance).toFixed(2) })}
+        </span>
+        <span className="text-ink-900/40 dark:text-cream-100/40 text-xs shrink-0">
+          {format(new Date(r.createdAt), 'd MMM, HH:mm', { locale: dateLocale })}
+        </span>
+      </div>
+    </li>
+  )
+}
+
+/** Fila del historial: alguien propuso reiniciar el saldo de todos (la
+ * consulta vive en Votaciones; acá queda constancia del importe y su estado). */
+function ResetProposalRow({ poll, name, t, dateLocale }) {
+  const status =
+    poll.status === 'pending' ? t('wallet.resetProposalPending') : poll.status === 'expired' ? t('wallet.resetProposalExpired') : t('wallet.resetProposalDone')
+  return (
+    <li className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
+      <div className="flex justify-between text-sm gap-2">
+        <span className="min-w-0">
+          <strong>{t('wallet.historyResetProposal', { name, amount: Number(poll.payload?.newBalance ?? 0).toFixed(2) })}</strong>
+        </span>
+        <span className="text-ink-900/40 dark:text-cream-100/40 text-xs shrink-0">
+          {format(new Date(poll.createdAt), 'd MMM, HH:mm', { locale: dateLocale })}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-ink-900/50 dark:text-cream-100/50">{status}</p>
+    </li>
   )
 }
 

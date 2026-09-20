@@ -15,6 +15,7 @@ import {
   deterministicUuid
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
+import { SHARED_SPACE_BY_KEY, currentSpaceUse } from '../lib/sharedSpaces'
 import { ensureActivityPeriods, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark } from '../lib/activities'
 import { resolvePoll } from '../lib/polls'
 import { useAuth } from './AuthContext'
@@ -43,6 +44,8 @@ export function DataProvider({ children }) {
   const [notifications, setNotifications] = useState([])
   const [redemptions, setRedemptions] = useState([])
   const [potContributions, setPotContributions] = useState([])
+  const [walletResets, setWalletResets] = useState([])
+  const [sharedSpaceUses, setSharedSpaceUses] = useState([])
   const [pendingJoinRequests, setPendingJoinRequests] = useState([])
   const [shoppingItems, setShoppingItems] = useState([])
   const [shoppingPurchases, setShoppingPurchases] = useState([])
@@ -117,6 +120,22 @@ export function DataProvider({ children }) {
       return
     }
     return subscribeTable('pot_contributions', { floorId }, setPotContributions)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setWalletResets([])
+      return
+    }
+    return subscribeTable('wallet_resets', { floorId }, setWalletResets)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setSharedSpaceUses([])
+      return
+    }
+    return subscribeTable('shared_space_uses', { floorId }, setSharedSpaceUses)
   }, [floorId])
 
   useEffect(() => {
@@ -288,6 +307,7 @@ export function DataProvider({ children }) {
         // mayoría o un vencimiento del plazo dejan la rotación intacta.
         const isRotationOrder = poll.kind === 'rotation_order'
         const isPotAdjustment = poll.kind === 'pot_adjustment'
+        const isBalanceReset = poll.kind === 'balance_reset'
         const approved = outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar'
         if (isRotationOrder && approved && poll.payload) {
           const { newOrder, mode, periodUnit, periodInterval } = poll.payload
@@ -347,6 +367,8 @@ export function DataProvider({ children }) {
               : outcome.status === 'closed'
                 ? 'La propuesta de cambio de rotación se cerró sin mayoría clara. Sigue la rotación anterior.'
                 : 'La propuesta de cambio de rotación venció sin que todos votaran. Sigue la rotación anterior.'
+          : isBalanceReset
+            ? 'La consulta de reinicio de saldo terminó. Solo cambió el saldo de quienes la aprobaron.'
           : isPotAdjustment
             ? approved
               ? `Todos aprobaron la modificación del Pote: ahora es de ${Number(poll.payload?.newAmount).toFixed(2)}€.`
@@ -368,7 +390,7 @@ export function DataProvider({ children }) {
               floorId: currentFloor.id,
               userId: null,
               // El tipo dice a qué pantalla lleva la notificación (ver lib/notifications.js).
-              type: isPotAdjustment ? 'poll_resolved_pote' : isRotationOrder ? 'poll_resolved_rotation' : 'poll_resolved',
+              type: isPotAdjustment || isBalanceReset ? 'poll_resolved_pote' : isRotationOrder ? 'poll_resolved_rotation' : 'poll_resolved',
               read: false,
               message
             }
@@ -831,17 +853,47 @@ export function DataProvider({ children }) {
     }
   }, [myNotifications])
 
-  const requestWasher = useCallback(async () => {
-    if (!currentFloor || !user) return
-    await create('notifications', {
-      floorId: currentFloor.id,
-      userId: null,
-      type: 'lavadora',
-      weekKey,
-      read: false,
-      message: `${user.name} necesita usar la lavadora en breve. Avisad si tenéis ropa dentro.`
-    })
-  }, [currentFloor, user, weekKey])
+  // Espacios compartidos (Actividades → "Espacios compartidos", ver
+  // lib/sharedSpaces.js): "Voy a usarla" registra un uso con hora de fin y le
+  // manda un aviso a TODO el piso diciendo quién lo va a usar. Mientras ese
+  // uso siga vigente el espacio figura "en uso" para todos (no es un turno
+  // ni una actividad: no hay rotación ni puntos). Si ya hay un uso vigente
+  // no se crea otro ({ ok:false, reason:'busy' }).
+  const startSharedSpaceUse = useCallback(
+    async (spaceKey, minutes) => {
+      const space = SHARED_SPACE_BY_KEY[spaceKey]
+      if (!currentFloor || !user || !space) return { ok: false, reason: 'invalid' }
+      const busy = currentSpaceUse(sharedSpaceUses, spaceKey)
+      if (busy) return { ok: false, reason: 'busy', use: busy }
+      const duration = Math.min(360, Math.max(15, Number(minutes) || space.defaultMinutes))
+      const startsAt = new Date()
+      const endsAt = new Date(startsAt.getTime() + duration * 60000)
+      const created = await create('shared_space_uses', {
+        floorId: currentFloor.id,
+        spaceKey,
+        userId: user.id,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString()
+      })
+      setSharedSpaceUses((list) => [...list.filter((u) => u.id !== created.id), created])
+      const until = endsAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+      await create('notifications', {
+        floorId: currentFloor.id,
+        userId: null,
+        type: 'shared_space',
+        message: `${user.name} va a usar ${space.notifyName} hasta las ${until}. Espera a que termine antes de usarla.`
+      })
+      return { ok: true, use: created }
+    },
+    [currentFloor, user, sharedSpaceUses]
+  )
+
+  // "Ya terminé": libera el espacio antes de que venza el tiempo.
+  const releaseSharedSpaceUse = useCallback(async (useId) => {
+    const releasedAt = new Date().toISOString()
+    await update('shared_space_uses', useId, { releasedAt })
+    setSharedSpaceUses((list) => list.map((u) => (u.id === useId ? { ...u, releasedAt } : u)))
+  }, [])
 
   const addPotContribution = useCallback(
     async (amount) => {
@@ -1497,6 +1549,71 @@ export function DataProvider({ children }) {
     [polls]
   )
 
+  // "Reiniciar saldo" (Pote → Saldo por persona). Nunca toca el total del
+  // Pote ni el saldo de otra persona: solo agrega una fila propia a
+  // wallet_resets, y computeWallets (lib/wallets.js) fija el saldo de quien
+  // la hizo en ese importe.
+  // — Solo para mí: se aplica al instante (scope 'self').
+  const resetMyWallet = useCallback(
+    async (newBalance) => {
+      if (!currentFloor || !user) return
+      const amount = Math.round(Number(newBalance) * 100) / 100
+      if (!Number.isFinite(amount)) return
+      await create('wallet_resets', { floorId: currentFloor.id, userId: user.id, newBalance: amount, scope: 'self' })
+    },
+    [currentFloor, user]
+  )
+
+  // — Para todos: cada persona que aprueba la consulta (poll 'balance_reset')
+  // se reinicia SU saldo, con id determinístico + upsert-ignorando-duplicados
+  // para que aprobar dos veces (o reintentar) no duplique el registro.
+  const applyPollWalletReset = useCallback(
+    async (poll) => {
+      if (!currentFloor || !user) return
+      const newBalance = Number(poll.payload?.newBalance)
+      if (!Number.isFinite(newBalance)) return
+      const rowId = await deterministicUuid(`wallet-reset:${poll.id}:${user.id}`)
+      await upsertIgnoreDuplicates(
+        'wallet_resets',
+        [{ id: rowId, floorId: currentFloor.id, userId: user.id, newBalance, scope: 'poll', pollId: poll.id }],
+        ['id']
+      )
+    },
+    [currentFloor, user]
+  )
+
+  // Consulta pendiente de reiniciar el saldo de todos — para no abrir una
+  // segunda mientras haya una en curso.
+  const pendingBalanceResetPoll = useMemo(
+    () => polls.find((p) => p.kind === 'balance_reset' && p.status === 'pending') || null,
+    [polls]
+  )
+
+  // Propone reiniciar el saldo de TODOS a `newBalance`: no cambia ningún
+  // saldo todavía — crea una consulta en Votaciones (kind 'balance_reset',
+  // 72h de plazo). Cada persona la aprueba o rechaza por sí misma y solo se
+  // le reinicia el saldo a quien apruebe. Quien propone queda aprobándola
+  // (es su propia propuesta), así que su saldo sí se reinicia.
+  const proposeWalletResetForAll = useCallback(
+    async (newBalance) => {
+      if (!currentFloor || !user || pendingBalanceResetPoll) return null
+      const amount = Math.round(Number(newBalance) * 100) / 100
+      if (!Number.isFinite(amount)) return null
+      const poll = await createPoll({
+        question: `¿Apruebas reiniciar tu saldo del Pote a ${amount.toFixed(2)}€? Lo propone ${user.name}. Solo cambia el saldo de quien apruebe.`,
+        options: ['Aprobar', 'Rechazar'],
+        resolutionMode: 'majority',
+        kind: 'balance_reset',
+        payload: { newBalance: amount },
+        deadlineAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+      })
+      await create('poll_votes', { pollId: poll.id, floorId: currentFloor.id, userId: user.id, option: 'Aprobar' })
+      await applyPollWalletReset(poll)
+      return poll
+    },
+    [currentFloor, user, createPoll, pendingBalanceResetPoll, applyPollWalletReset]
+  )
+
   // Un voto por persona por consulta: si ya votó, cambia de opción
   // (update); si no, crea el suyo. Corta en seco si la consulta ya no
   // está pendiente (RLS también lo bloquea, esto solo evita el viaje).
@@ -1506,13 +1623,18 @@ export function DataProvider({ children }) {
       const poll = polls.find((p) => p.id === pollId)
       if (!poll || poll.status !== 'pending') return
       const existing = pollVotes.find((v) => v.pollId === pollId && v.userId === user.id)
+      // Reinicio de saldo "para todos": aprobar reinicia MI saldo al instante,
+      // así que un voto ya aprobado no se puede cambiar (no habría reversa).
+      if (poll.kind === 'balance_reset' && existing?.option === 'Aprobar') return { ok: false, reason: 'locked' }
       if (existing) {
         await update('poll_votes', existing.id, { option })
       } else {
         await create('poll_votes', { pollId, floorId: currentFloor.id, userId: user.id, option })
       }
+      if (poll.kind === 'balance_reset' && option === 'Aprobar') await applyPollWalletReset(poll)
+      return { ok: true }
     },
-    [currentFloor, user, polls, pollVotes]
+    [currentFloor, user, polls, pollVotes, applyPollWalletReset]
   )
 
   const closePoll = useCallback((pollId) => update('polls', pollId, { status: 'closed', resolvedAt: new Date().toISOString() }), [])
@@ -1530,6 +1652,10 @@ export function DataProvider({ children }) {
     leaderboard,
     redemptions,
     potContributions,
+    walletResets,
+    resetMyWallet,
+    proposeWalletResetForAll,
+    pendingBalanceResetPoll,
     pendingJoinRequests,
     claimJoinRequests,
     approveJoinRequest,
@@ -1600,7 +1726,9 @@ export function DataProvider({ children }) {
     removeIncident,
     markNotificationRead,
     markAllNotificationsRead,
-    requestWasher,
+    sharedSpaceUses,
+    startSharedSpaceUse,
+    releaseSharedSpaceUse,
     addPotContribution,
     addPotExpense,
     updatePotExpense,

@@ -159,6 +159,22 @@ function rotationIndexFor(activity, period, weekKey, floor) {
   return activity.recurrenceUnit === 'month' ? monthIndexFromKey(period) : activity.recurrenceUnit === 'day' ? dayIndexFromKey(period) : weekIndexFromKey(period)
 }
 
+/**
+ * Persona encargada del piso esta semana: a quien le toca en el orden de
+ * rotación del piso. Usa el mismo índice de turno que una actividad
+ * semanal por rotación (en modo Determinado, el reloj global del piso), así
+ * que coincide con quien tiene asignadas las semanales del piso.
+ * `rotationOrder` es el orden efectivo (sin quienes están fuera). null si
+ * no hay nadie en la rotación.
+ */
+export function floorKeeperFor(floor, rotationOrder, weekKey) {
+  const index =
+    floor?.rotationMode === 'period' && floor.rotationPeriodUnit
+      ? globalPeriodIndex(floor, mondayOfWeekKey(weekKey))
+      : weekIndexFromKey(weekKey)
+  return rotationPick(rotationOrder, index)
+}
+
 /** ¿Quién le toca a esta actividad en este período? (manual: la
  * persona fija, o nadie en particular si se dejó en "Todos"; rotation:
  * según el rotationOrder del piso). Los eventos únicos ('once')

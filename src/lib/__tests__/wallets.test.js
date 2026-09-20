@@ -107,3 +107,42 @@ describe('computeWallets', () => {
     })
   })
 })
+
+describe('computeWallets — reiniciar saldo', () => {
+  const reset = (userId, newBalance) => ({
+    userId,
+    newBalance,
+    createdAt: new Date(Date.UTC(2026, 5, 1, 0, n++)).toISOString()
+  })
+
+  it('reiniciar a 0 deja el saldo de esa persona en 0 y no toca a nadie más', () => {
+    const movements = [mov('A', 30), mov('B', 30), mov('A', -30)]
+    const w = computeWallets([A, B, C], movements, [reset('A', 0)])
+    expect(w.A.balance).toBe(0)
+    expect(w.A.resetAdjustment).toBe(-20)
+    expect(w.B.balance).toBe(20) // 30 aportado − 10 de su parte
+    expect(w.C.balance).toBe(-10)
+  })
+
+  it('permite fijar otro importe, incluso negativo', () => {
+    const w = computeWallets([A, B], [mov('A', 10)], [reset('A', 25.5), reset('B', -4)])
+    expect(w.A.balance).toBe(25.5)
+    expect(w.B.balance).toBe(-4)
+  })
+
+  it('lo que pasa DESPUÉS del reinicio sigue contando', () => {
+    const firstMovement = mov('A', 40)
+    const r = reset('A', 0)
+    const later = [mov('A', 10), mov('B', -20)]
+    const w = computeWallets([A, B], [firstMovement, ...later], [r])
+    // reinicio a 0 tras el aporte de 40; luego +10 y la parte de 10 del gasto de 20
+    expect(w.A.balance).toBe(0)
+    expect(w.B.balance).toBe(-10)
+  })
+
+  it('sin reinicios el resultado es idéntico al de siempre (no aparece resetAdjustment)', () => {
+    const w = computeWallets([A, B], [mov('A', 10)])
+    expect(w.A).toEqual({ contributed: 10, expenseShare: 0, balance: 10 })
+  })
+})
+

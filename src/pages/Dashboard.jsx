@@ -2,15 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import ActivityCard from '../components/ActivityCard'
+import { useSpaceUse, formatLeft } from '../components/SharedSpaces'
+import { SHARED_SPACE_BY_KEY } from '../lib/sharedSpaces'
+import { useToast } from '../context/ToastContext'
 import CalendarView from '../components/CalendarView'
 import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
 import { getMondayOfWeek } from '../lib/rotation'
-import { currentPeriodKey } from '../lib/activities'
-import { potAmountColorClass, potAmountBubbleMessage } from '../lib/pot'
-import { AlertIcon, ChatIcon } from '../components/icons'
+import { currentPeriodKey, floorKeeperFor } from '../lib/activities'
+import { AlertIcon } from '../components/icons'
 import { format } from 'date-fns'
 
 const FIXED_ORDER = ['compras', 'basura', 'lavadora']
@@ -30,12 +32,14 @@ export default function Dashboard() {
     extraCounts,
     addActivityExtra,
     removeActivityExtra,
-    requestWasher,
-    addPotContribution,
+    startSharedSpaceUse,
+    awayUserIds,
     weekKey
   } = useData()
-  const [contribution, setContribution] = useState(floor?.potPerPerson || 10)
-  const [washerMsg, setWasherMsg] = useState(false)
+  const { showToast } = useToast()
+  // La lavadora es un "espacio compartido" (Actividades → Espacios compartidos):
+  // este botón usa la misma lógica, así que también deja el espacio "en uso".
+  const washer = useSpaceUse('washer')
   const { t, dateLocale } = useLanguage()
 
   // "/calendario?fecha=YYYY-MM-DD" abre el calendario directo en ese día
@@ -55,15 +59,26 @@ export default function Dashboard() {
   }, [])
 
   const monday = getMondayOfWeek(weekKey)
+  // Persona encargada del piso esta semana: a quien le toca en el orden de
+  // rotación (sin quienes están fuera), ver floorKeeperFor.
+  const floorKeeper = useMemo(() => {
+    const order = (floor?.rotationOrder || []).filter((id) => !awayUserIds.has(id))
+    const id = floorKeeperFor(floor, order, weekKey)
+    return members.find((m) => m.id === id) || null
+  }, [floor, members, awayUserIds, weekKey])
   const sunday = new Date(monday)
   sunday.setUTCDate(monday.getUTCDate() + 6)
 
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
 
-  function handleWasher() {
-    requestWasher()
-    setWasherMsg(true)
-    setTimeout(() => setWasherMsg(false), 3000)
+  async function handleWasher() {
+    try {
+      const result = await startSharedSpaceUse('washer', SHARED_SPACE_BY_KEY.washer.defaultMinutes)
+      if (result?.ok) showToast(t('calendar.washerNotified'), 'success')
+    } catch (err) {
+      console.error('startSharedSpaceUse', err)
+      showToast(t('sharedSpaces.errorToast'), 'error')
+    }
   }
 
   const fixedActivities = useMemo(
@@ -128,6 +143,9 @@ export default function Dashboard() {
               floor: floor?.name
             })}
           </p>
+          {floorKeeper && (
+            <p className="text-sm font-semibold mt-1">{t('calendar.floorKeeper', { name: floorKeeper.name })}</p>
+          )}
         </div>
       </Reveal>
 
@@ -160,76 +178,23 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* Zona secundaria: pote, lavadora, cómo va la rotación */}
+        {/* Zona secundaria: lavadora */}
         <aside className="flex flex-col gap-4">
-          <Reveal delay={80}>
-          <div className="card hoverbubble p-4" tabIndex={0}>
-            <div className="bubble">{potAmountBubbleMessage(floor?.potAmount ?? 0, t)}</div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{t('calendar.potLabel')}</p>
-            <p className={`text-2xl font-display font-bold mb-3 ${potAmountColorClass(floor?.potAmount ?? 0)}`}>
-              {floor?.potAmount ?? 0}€
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                className="input w-20"
-                value={contribution}
-                min={1}
-                onChange={(e) => setContribution(e.target.value)}
-              />
-              <button className="btn-secondary text-sm flex-1" onClick={() => addPotContribution(contribution)}>
-                {t('calendar.contribute')}
-              </button>
-            </div>
-          </div>
-          </Reveal>
-
           <Reveal delay={150}>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-1">{t('calendar.washerLabel')}</p>
             <p className="text-sm mb-3">{t('calendar.washerHint')}</p>
-            <button className="btn-primary text-sm w-full" onClick={handleWasher}>
-              {washerMsg ? t('calendar.washerNotified') : t('calendar.washerCta')}
+            {washer.current && (
+              <p className="text-sm font-semibold mb-3">
+                {t('sharedSpaces.inUseBy', { name: washer.user?.name || t('sharedSpaces.someone'), space: t('sharedSpaces.spaceRef.washer') })}
+                <span className="block text-xs font-normal text-ink-900/60 dark:text-cream-100/60">
+                  {t('sharedSpaces.untilTime', { time: format(new Date(washer.current.endsAt), 'HH:mm'), left: formatLeft(washer.left, t) })}
+                </span>
+              </p>
+            )}
+            <button className="btn-primary text-sm w-full disabled:opacity-40 disabled:cursor-not-allowed" disabled={!!washer.current} onClick={handleWasher}>
+              {t('calendar.washerCta')}
             </button>
-          </div>
-          </Reveal>
-
-          {floor?.whatsappGroupUrl && (
-            <Reveal delay={190}>
-              <a
-                href={floor.whatsappGroupUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="card p-4 flex items-center gap-3 hover:-translate-y-0.5 transition-transform"
-              >
-                <div className="w-10 h-10 rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 bg-sage-100 dark:bg-sage-500/20 text-sage-500 flex items-center justify-center shrink-0">
-                  <ChatIcon className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="font-display font-semibold">{t('calendar.whatsappGroup')}</p>
-                  <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{t('calendar.openInWhatsapp')}</p>
-                </div>
-              </a>
-            </Reveal>
-          )}
-
-          <Reveal delay={220}>
-          <div className="card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 mb-2">{t('calendar.rotationOrder')}</p>
-            <ol className="flex flex-col gap-2">
-              {(floor?.rotationOrder || []).map((id, idx) => {
-                const m = memberById[id]
-                if (!m) return null
-                return (
-                  <li key={id} className="flex items-center gap-2 text-sm">
-                    <span className="w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 text-[10px] font-bold flex items-center justify-center shrink-0">
-                      {idx + 1}
-                    </span>
-                    {m.name}
-                  </li>
-                )
-              })}
-            </ol>
           </div>
           </Reveal>
         </aside>

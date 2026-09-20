@@ -360,7 +360,7 @@ create table if not exists polls (
   -- que aplicar si se aprueba (ej. {newOrder:[...]}). 'deadline_at' es un
   -- plazo con hora exacta (no solo fecha) para cuando "menos de 24h" de
   -- verdad importa — las consultas normales siguen usando 'deadline'.
-  kind text not null default 'custom' check (kind in ('custom', 'rotation_order', 'pot_adjustment')),
+  kind text not null default 'custom' check (kind in ('custom', 'rotation_order', 'pot_adjustment', 'balance_reset')),
   payload jsonb,
   deadline_at timestamptz,
   status text not null default 'pending' check (status in ('pending', 'resolved', 'closed', 'expired')),
@@ -385,6 +385,40 @@ create table if not exists poll_votes (
 );
 create index if not exists poll_votes_floor_idx on poll_votes (floor_id);
 create index if not exists poll_votes_poll_idx on poll_votes (poll_id);
+
+-- "Reiniciar saldo" (Pote → Saldo por persona): fija el saldo de UNA persona
+-- en new_balance sin tocar el total del Pote ni a nadie más. scope 'self' =
+-- reinicio individual, se aplica al instante; 'poll' = la persona aprobó una
+-- consulta "para todos" (poll_id, kind 'balance_reset') y se aplica solo a su
+-- propio saldo. Ledger inmutable: solo se inserta la fila propia
+-- (user_id = auth.uid()), sin update ni delete.
+create table if not exists wallet_resets (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  new_balance numeric not null,
+  scope text not null check (scope in ('self', 'poll')),
+  poll_id uuid references polls(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists wallet_resets_floor_idx on wallet_resets (floor_id);
+
+-- "Espacios compartidos" (Actividades): elementos de uso común del piso que se
+-- avisan con "Voy a usarla". Un uso = quién, desde cuándo y hasta cuándo; el
+-- espacio figura "en uso" mientras haya un uso sin liberar (released_at) cuyo
+-- ends_at no haya pasado — se calcula con la hora actual, no hay cron.
+-- space_key es libre ('washer' hoy): un espacio nuevo no necesita migración.
+create table if not exists shared_space_uses (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  space_key text not null,
+  user_id uuid not null references profiles(id) on delete cascade,
+  starts_at timestamptz not null default now(),
+  ends_at timestamptz not null,
+  released_at timestamptz, -- "Ya terminé": libera el espacio antes de que venza ends_at
+  created_at timestamptz not null default now()
+);
+create index if not exists shared_space_uses_floor_space_idx on shared_space_uses (floor_id, space_key, ends_at);
 
 -- Gestor de actividades del piso — incluye tanto las actividades
 -- propias como las 3 "fijas" (Compras/Basura/Lavadora, identificadas
@@ -703,6 +737,15 @@ create policy "update own poll_vote while pending" on poll_votes
   for update using (user_id = auth.uid() and exists (select 1 from polls p where p.id = poll_id and p.status = 'pending'))
   with check (user_id = auth.uid());
 
+alter table shared_space_uses enable row level security;
+create policy "select floor shared_space_uses" on shared_space_uses for select using (is_active_member(floor_id));
+create policy "insert own shared_space_use" on shared_space_uses for insert with check (is_active_member(floor_id) and user_id = auth.uid());
+create policy "release own or admin shared_space_use" on shared_space_uses for update using (user_id = auth.uid() or is_floor_admin(floor_id));
+
+alter table wallet_resets enable row level security;
+create policy "select floor wallet_resets" on wallet_resets for select using (is_active_member(floor_id));
+create policy "insert own wallet_reset" on wallet_resets for insert with check (is_active_member(floor_id) and user_id = auth.uid());
+
 alter table password_reset_attempts enable row level security;
 
 -- activities/activity_completions: mismo modelo colaborativo que
@@ -750,6 +793,8 @@ alter publication supabase_realtime add table absence_requests;
 alter publication supabase_realtime add table room_partners;
 alter publication supabase_realtime add table polls;
 alter publication supabase_realtime add table poll_votes;
+alter publication supabase_realtime add table wallet_resets;
+alter publication supabase_realtime add table shared_space_uses;
 alter publication supabase_realtime add table activities;
 alter publication supabase_realtime add table activity_completions;
 alter publication supabase_realtime add table activity_marks;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { globalPeriodIndex } from '../activities.js'
+import { globalPeriodIndex, floorKeeperFor, assigneeFor } from '../activities.js'
 
 describe('globalPeriodIndex — reloj de turno global del piso (modo Determinado)', () => {
   it('semanal (unidad por defecto), intervalo 1: misma semana del epoch → índice 0', () => {
@@ -40,5 +40,34 @@ describe('globalPeriodIndex — reloj de turno global del piso (modo Determinado
     const floor = { rotationPeriodUnit: 'week', rotationPeriodInterval: 1 }
     const date = new Date('2026-09-14T00:00:00')
     expect(globalPeriodIndex(floor, date)).toBe(0)
+  })
+})
+
+describe('floorKeeperFor — persona encargada del piso esta semana', () => {
+  const order = ['A', 'B', 'C']
+
+  it('en modo normal avanza una persona por semana, en el orden de rotación', () => {
+    const w1 = floorKeeperFor({ rotationMode: 'random' }, order, '2026-W37')
+    const w2 = floorKeeperFor({ rotationMode: 'random' }, order, '2026-W38')
+    expect(order.includes(w1)).toBe(true)
+    expect(w2).toBe(order[(order.indexOf(w1) + 1) % 3])
+  })
+
+  it('coincide con quien tiene asignada una actividad semanal por rotación', () => {
+    const weekly = { frequencyType: 'recurring', recurrenceUnit: 'week', assignmentMode: 'rotation', weekdays: [0], startDate: '2026-09-14' }
+    for (const weekKey of ['2026-W37', '2026-W38', '2026-W39']) {
+      expect(floorKeeperFor({ rotationMode: 'random' }, order, weekKey)).toBe(assigneeFor(weekly, order, weekKey, { rotationMode: 'random' }))
+    }
+  })
+
+  it('en modo Determinado (cada 2 semanas) la misma persona sigue al cargo dos semanas', () => {
+    const floor = { rotationMode: 'period', rotationPeriodUnit: 'week', rotationPeriodInterval: 2, rotationEpoch: '2026-09-14' }
+    const first = floorKeeperFor(floor, order, '2026-W38') // semana del epoch
+    expect(floorKeeperFor(floor, order, '2026-W39')).toBe(first)
+    expect(floorKeeperFor(floor, order, '2026-W40')).toBe(order[(order.indexOf(first) + 1) % 3])
+  })
+
+  it('sin nadie en la rotación no hay persona encargada', () => {
+    expect(floorKeeperFor({}, [], '2026-W37')).toBeNull()
   })
 })

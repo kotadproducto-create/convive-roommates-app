@@ -6,8 +6,10 @@
 const ROUTE_BY_TYPE = {
   // Actividades y sus avisos
   turno: '/actividades',
-  // Lavadora ("Voy a usarla") vive en el Calendario
-  lavadora: '/calendario',
+  // Espacios compartidos ("Voy a usarla") viven en Actividades; 'lavadora'
+  // es el tipo antiguo del mismo aviso.
+  shared_space: '/actividades',
+  lavadora: '/actividades',
   // Dinero y compras
   pote: '/pote',
   stock_out: '/compras',

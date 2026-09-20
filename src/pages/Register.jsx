@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 import PasswordInput from '../components/PasswordInput'
 import { AuthShell } from './Login'
+import { authErrorMessage } from '../lib/authErrors'
 
 export default function Register() {
   const { registerAndCreateFloor, registerAndRequestJoin } = useAuth()
@@ -41,7 +42,7 @@ export default function Register() {
       }
       navigate('/bienvenida')
     } catch (err) {
-      setError(err.message)
+      setError(authErrorMessage(err, t))
     } finally {
       setSubmitting(false)
     }

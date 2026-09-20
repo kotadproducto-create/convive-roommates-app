@@ -25,6 +25,7 @@ export default function Perfil() {
     rejectMyRemoval,
     members,
     potContributions,
+    walletResets,
     myRoomPartner,
     incomingPartnerRequests,
     outgoingPartnerRequest,
@@ -49,6 +50,7 @@ export default function Perfil() {
               userId={user.id}
               members={members}
               potContributions={potContributions}
+              walletResets={walletResets}
               removeMember={removeMember}
               rejectMyRemoval={rejectMyRemoval}
               showToast={showToast}
@@ -94,13 +96,13 @@ export default function Perfil() {
   )
 }
 
-function RemovalPendingCard({ floorName, membership, userId, members, potContributions, removeMember, rejectMyRemoval, showToast, t }) {
+function RemovalPendingCard({ floorName, membership, userId, members, potContributions, walletResets, removeMember, rejectMyRemoval, showToast, t }) {
   const [confirming, setConfirming] = useState(false)
   const [rejecting, setRejecting] = useState(false)
 
   // Misma wallet que se ve en el Pote (lib/wallets.js): aportes menos tu
   // parte de cada gasto.
-  const myWallet = computeWallets(members, potContributions)[userId] || { contributed: 0, expenseShare: 0, balance: 0 }
+  const myWallet = computeWallets(members, potContributions, walletResets)[userId] || { contributed: 0, expenseShare: 0, balance: 0 }
   const myContributed = myWallet.contributed
   const fairShare = myWallet.expenseShare
   const balance = myWallet.balance

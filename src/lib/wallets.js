@@ -15,23 +15,35 @@ import { isPotAdjustment } from './pot.js'
  *   DataContext.)
  *
  * Los ajustes manuales del Pote (`kind: 'adjustment'`) no tocan wallets.
+ * Un "Reiniciar saldo" (`walletResets`, tabla wallet_resets) fija el saldo de
+ * UNA persona en un importe: se guarda como un desfase (`resetAdjustment`)
+ * calculado en el momento del reinicio, y los movimientos posteriores siguen
+ * sumando y restando normal. No toca el total del Pote ni a nadie más.
  * Todo se calcula en céntimos enteros (expense-splitting-core), así que
  * la suma de las partes de un gasto es exactamente el gasto.
  *
  * @param {{id:string, joinedAt?:string}[]} members - miembros activos del piso
  * @param {{userId:string, amount:number|string, createdAt:string, kind?:string}[]} potContributions
- * @returns {Record<string, {contributed:number, expenseShare:number, balance:number}>} en euros, por id de miembro
+ * @param {{userId:string, newBalance:number|string, createdAt:string}[]} [walletResets]
+ * @returns {Record<string, {contributed:number, expenseShare:number, balance:number, resetAdjustment?:number}>} en euros, por id de miembro
  */
-export function computeWallets(members, potContributions) {
-  const cents = Object.fromEntries(members.map((m) => [m.id, { contributed: 0, expenseShare: 0 }]))
+export function computeWallets(members, potContributions, walletResets = []) {
+  const cents = Object.fromEntries(members.map((m) => [m.id, { contributed: 0, expenseShare: 0, adjustment: 0 }]))
 
-  const movements = potContributions
-    .filter((c) => !isPotAdjustment(c))
+  const movements = [
+    ...potContributions.filter((c) => !isPotAdjustment(c)),
+    ...walletResets.map((r) => ({ ...r, isReset: true }))
+  ]
     .slice()
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
 
   let expenseIndex = 0
   for (const c of movements) {
+    if (c.isReset) {
+      const w = cents[c.userId]
+      if (w) w.adjustment += toCents(Number(c.newBalance) || 0) - (w.contributed - w.expenseShare + w.adjustment)
+      continue
+    }
     const amount = Number(c.amount)
     if (!amount) continue
 
@@ -71,7 +83,8 @@ export function computeWallets(members, potContributions) {
       {
         contributed: fromCents(w.contributed),
         expenseShare: fromCents(w.expenseShare),
-        balance: fromCents(w.contributed - w.expenseShare)
+        balance: fromCents(w.contributed - w.expenseShare + w.adjustment),
+        ...(w.adjustment !== 0 ? { resetAdjustment: fromCents(w.adjustment) } : {})
       }
     ])
   )

@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
-import { PASSWORD_RULE, PASSWORD_RULE_MESSAGE } from '../lib/validation'
+import { PASSWORD_RULE } from '../lib/validation'
+import { authErrorMessage } from '../lib/authErrors'
 import { AuthShell } from './Login'
 
 export default function ForgotPassword() {
@@ -31,7 +32,7 @@ export default function ForgotPassword() {
       await requestPasswordReset(email.trim())
       setSent(true)
     } catch (err) {
-      setError(err.message)
+      setError(authErrorMessage(err, t))
     } finally {
       setSubmitting(false)
     }
@@ -43,7 +44,7 @@ export default function ForgotPassword() {
       await requestPasswordReset(email.trim())
       setResent(true)
     } catch (err) {
-      setCodeError(err.message)
+      setCodeError(authErrorMessage(err, t))
     }
   }
 
@@ -55,7 +56,7 @@ export default function ForgotPassword() {
       return
     }
     if (!PASSWORD_RULE.test(newPassword)) {
-      setCodeError(PASSWORD_RULE_MESSAGE)
+      setCodeError(t('auth.passwordRule'))
       return
     }
     if (newPassword !== confirmPassword) {
@@ -68,7 +69,7 @@ export default function ForgotPassword() {
       setDone(true)
       setTimeout(() => navigate('/'), 1500)
     } catch (err) {
-      setCodeError(err.message)
+      setCodeError(authErrorMessage(err, t))
     } finally {
       setConfirmingCode(false)
     }

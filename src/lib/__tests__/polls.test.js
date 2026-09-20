@@ -185,6 +185,41 @@ describe('resolvePoll — casos generales', () => {
   })
 })
 
+describe('resolvePoll — reinicio de saldo para todos (balance_reset)', () => {
+  const resetPoll = (o = {}) => poll({ kind: 'balance_reset', ...o })
+
+  it('una mayoría de "Aprobar" NO la resuelve: cada quien decide por sí mismo', () => {
+    const votes = [
+      { userId: 'A', option: 'Aprobar' },
+      { userId: 'B', option: 'Aprobar' }
+    ]
+    expect(resolvePoll(resetPoll(), votes, ['A', 'B', 'C'], TODAY)).toBeNull()
+  })
+
+  it('un "Rechazar" tampoco la tumba (no hay veto): los demás aún pueden aprobar', () => {
+    const votes = [{ userId: 'A', option: 'Rechazar' }]
+    expect(resolvePoll(resetPoll(), votes, ['A', 'B', 'C'], TODAY)).toBeNull()
+  })
+
+  it('termina cuando ya votaron todos, sin ganador', () => {
+    const votes = [
+      { userId: 'A', option: 'Aprobar' },
+      { userId: 'B', option: 'Rechazar' },
+      { userId: 'C', option: 'Aprobar' }
+    ]
+    expect(resolvePoll(resetPoll(), votes, ['A', 'B', 'C'], TODAY)).toEqual({ status: 'resolved', resolvedOption: null })
+  })
+
+  it('vence el plazo con gente sin votar → expired', () => {
+    const votes = [{ userId: 'A', option: 'Aprobar' }]
+    const late = resetPoll({ deadlineAt: '2026-09-20T10:00:00Z' })
+    expect(resolvePoll(late, votes, ['A', 'B'], TODAY, Date.parse('2026-09-20T12:00:00Z'))).toEqual({
+      status: 'expired',
+      resolvedOption: null
+    })
+  })
+})
+
 describe('tallyVotes', () => {
   it('cuenta votos por opción', () => {
     const votes = [

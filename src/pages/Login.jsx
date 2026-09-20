@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 import Mascot from '../components/Mascot'
 import PasswordInput from '../components/PasswordInput'
+import LanguageSwitcher from '../components/LanguageSwitcher'
+import { authErrorMessage } from '../lib/authErrors'
 
 export default function Login() {
   const { login, user, loading } = useAuth()
@@ -34,7 +36,7 @@ export default function Login() {
       // lleva a "/" solo — sin navegar a mano desde acá (ver login()).
       await login(emailValue, passwordValue)
     } catch (err) {
-      setError(err.message)
+      setError(authErrorMessage(err, t))
     } finally {
       setSubmitting(false)
     }
@@ -90,6 +92,10 @@ export function AuthShell({ children }) {
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-ink-900 px-4 relative overflow-hidden">
       <div className="dot-grid absolute inset-0 text-ink-900/[0.06] dark:text-cream-100/[0.05] pointer-events-none" />
       <div className="relative w-full max-w-sm">
+        {/* Selector de idioma: el mismo de Ajustes, disponible antes de entrar. */}
+        <div className="flex justify-end mb-3">
+          <LanguageSwitcher />
+        </div>
         <div className="flex flex-col items-center gap-1 mb-7">
           <Mascot className="w-20 h-20 mb-1" />
           <div className="flex items-center gap-2.5">

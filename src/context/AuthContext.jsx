@@ -1,3 +1,4 @@
+import { authError } from '../lib/authErrors'
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getAll, getById, create, update, generateInviteCode } from '../lib/db'
@@ -122,15 +123,16 @@ export function AuthProvider({ children }) {
   // cargado) entraba.
   async function login(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw new Error(traduceErrorAuth(error))
+    if (error) throw traduceErrorAuth(error)
     await loadProfileAndFloor(data.user.id)
   }
 
   async function registerAndCreateFloor({ name, email, password, floorName }) {
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password })
-    if (signUpError) throw new Error(traduceErrorAuth(signUpError))
+    if (signUpError) throw traduceErrorAuth(signUpError)
     if (!signUpData.session) {
-      throw new Error(
+      throw authError(
+        'confirmEmail',
         'Cuenta creada, pero Supabase requiere confirmar el email antes de entrar. Revisa tu correo, o desactiva "Confirm email" en Authentication → Providers → Email dentro de Supabase si es solo para tu piso de confianza.'
       )
     }
@@ -213,12 +215,13 @@ export function AuthProvider({ children }) {
   async function registerAndRequestJoin({ name, email, password, inviteCode }) {
     const floors = await getAll('floors', { inviteCode: inviteCode.trim().toUpperCase() })
     const targetFloor = floors[0]
-    if (!targetFloor) throw new Error('Código de invitación no válido.')
+    if (!targetFloor) throw authError('invalidInvite', 'Código de invitación no válido.')
 
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password })
-    if (signUpError) throw new Error(traduceErrorAuth(signUpError))
+    if (signUpError) throw traduceErrorAuth(signUpError)
     if (!signUpData.session) {
-      throw new Error(
+      throw authError(
+        'confirmEmail',
         'Cuenta creada, pero Supabase requiere confirmar el email antes de entrar. Revisa tu correo, o desactiva "Confirm email" en Supabase si es solo para tu piso de confianza.'
       )
     }
@@ -246,7 +249,7 @@ export function AuthProvider({ children }) {
     if (!session?.user?.id) return
     const floors = await getAll('floors', { inviteCode: inviteCode.trim().toUpperCase() })
     const targetFloor = floors[0]
-    if (!targetFloor) throw new Error('Código de invitación no válido.')
+    if (!targetFloor) throw authError('invalidInvite', 'Código de invitación no válido.')
 
     await create('floor_memberships', {
       userId: session.user.id,
@@ -278,7 +281,7 @@ export function AuthProvider({ children }) {
     })
     if (verifyError) throw new Error('La contraseña actual no es correcta.')
     const { error } = await supabase.auth.updateUser({ password: newPassword })
-    if (error) throw new Error(traduceErrorAuth(error))
+    if (error) throw traduceErrorAuth(error)
   }
 
   // Cambia el email de la cuenta: Supabase manda un correo de
@@ -287,7 +290,7 @@ export function AuthProvider({ children }) {
   // hasta que se confirme desde ese correo.
   async function updateEmail(newEmail) {
     const { error } = await supabase.auth.updateUser({ email: newEmail })
-    if (error) throw new Error(traduceErrorAuth(error))
+    if (error) throw traduceErrorAuth(error)
   }
 
   // Reverifica la contraseña actual (mismo motivo que changePassword:
@@ -328,7 +331,7 @@ export function AuthProvider({ children }) {
   // averiguar qué emails están registrados.
   async function requestPasswordReset(email) {
     const { error } = await supabase.functions.invoke('send-recovery-code', { body: { email } })
-    if (error) throw new Error('No se pudo enviar el código. Inténtalo de nuevo en un momento.')
+    if (error) throw authError('codeSendFailed', 'No se pudo enviar el código. Inténtalo de nuevo en un momento.')
   }
 
   // Se llama desde la pantalla que abre el enlace del correo: Supabase ya
@@ -336,7 +339,7 @@ export function AuthProvider({ children }) {
   // la URL, así que no hace falta pedir la contraseña actual.
   async function updatePasswordWithRecovery(newPassword) {
     const { error } = await supabase.auth.updateUser({ password: newPassword })
-    if (error) throw new Error(traduceErrorAuth(error))
+    if (error) throw traduceErrorAuth(error)
   }
 
   // Camino alternativo al enlace del correo: el mismo email de
@@ -348,9 +351,9 @@ export function AuthProvider({ children }) {
   // guarda la contraseña nueva.
   async function confirmPasswordResetWithCode(email, code, newPassword) {
     const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'recovery' })
-    if (error) throw new Error(traduceErrorAuth(error))
+    if (error) throw traduceErrorAuth(error)
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
-    if (updateError) throw new Error(traduceErrorAuth(updateError))
+    if (updateError) throw traduceErrorAuth(updateError)
     await loadProfileAndFloor(data.user?.id)
   }
 
@@ -384,21 +387,23 @@ export function AuthProvider({ children }) {
   )
 }
 
+// Devuelve un Error con `code` (para que las pantallas de acceso lo muestren en
+// el idioma activo, ver lib/authErrors.js) y el mensaje en español de siempre.
 function traduceErrorAuth(error) {
   const msg = error.message || ''
   if (msg.includes('already registered') || msg.includes('already exists')) {
-    return 'Ya existe una cuenta con ese email.'
+    return authError('emailTaken', 'Ya existe una cuenta con ese email.')
   }
   if (msg.includes('Invalid login credentials')) {
-    return 'Email o contraseña incorrectos.'
+    return authError('invalidCredentials', 'Email o contraseña incorrectos.')
   }
   if (msg.includes('Password should be at least')) {
-    return 'La contraseña debe tener al menos 6 caracteres.'
+    return authError('weakPassword', 'La contraseña debe tener al menos 6 caracteres.')
   }
   if (msg.includes('Token has expired') || msg.includes('invalid or has expired') || msg.includes('Invalid token')) {
-    return 'Ese código no es válido o ya caducó. Pide uno nuevo.'
+    return authError('invalidCode', 'Ese código no es válido o ya caducó. Pide uno nuevo.')
   }
-  return msg || 'Ha ocurrido un error inesperado.'
+  return msg ? new Error(msg) : authError('unexpected', 'Ha ocurrido un error inesperado.')
 }
 
 export function useAuth() {

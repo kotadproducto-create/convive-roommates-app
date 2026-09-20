@@ -236,6 +236,10 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
   const total = activeMemberIds.length
   const isPending = poll.status === 'pending'
   const canClose = isPending && (poll.createdBy === user?.id || isAdmin)
+  // Reinicio de saldo para todos: cada persona decide por sí misma; aprobar
+  // reinicia SU saldo al instante, así que un voto aprobado ya no se cambia.
+  const isBalanceReset = poll.kind === 'balance_reset'
+  const approvalLocked = isBalanceReset && myVote === 'Aprobar'
 
   async function handleClose() {
     if (!confirm(t('votaciones.closeConfirm'))) return
@@ -253,7 +257,7 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
           <div className="flex items-center gap-2 text-xs text-ink-900/50 dark:text-cream-100/50 mt-0.5 flex-wrap">
             <span>{t(`votaciones.${STATUS_KEY[poll.status]}`)}</span>
             <span>·</span>
-            <span>{poll.resolutionMode === 'unanimity' ? t('votaciones.modeUnanimity') : t('votaciones.modeMajority')}</span>
+            <span>{isBalanceReset ? t('votaciones.modeIndividual') : poll.resolutionMode === 'unanimity' ? t('votaciones.modeUnanimity') : t('votaciones.modeMajority')}</span>
             {(poll.deadlineAt || poll.deadline) && (
               <>
                 <span>·</span>
@@ -275,6 +279,12 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
         )}
       </div>
 
+      {isBalanceReset && (
+        <p className="text-xs font-semibold text-violet-500 mb-2">
+          {t('votaciones.resetNote', { amount: Number(poll.payload?.newBalance ?? 0).toFixed(2) })}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2 mb-3">
         {poll.options.map((option) => {
           const count = tally[option] || 0
@@ -283,19 +293,21 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
             <button
               key={option}
               type="button"
-              disabled={!isPending}
+              disabled={!isPending || approvalLocked}
               onClick={() => castVote(poll.id, option)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${
                 isMine
                   ? 'bg-gold-100 dark:bg-gold-400/25 border-ink-900 dark:border-cream-100/50 text-ink-900 dark:text-cream-100'
                   : 'border-ink-900/15 dark:border-cream-100/20 text-ink-900/70 dark:text-cream-100/70 hover:bg-cream-100 dark:hover:bg-ink-700'
-              } ${!isPending ? 'opacity-70 cursor-default' : ''}`}
+              } ${!isPending || approvalLocked ? 'opacity-70 cursor-default' : ''}`}
             >
               {option} · {count}
             </button>
           )
         })}
       </div>
+
+      {isPending && approvalLocked && <p className="text-xs font-semibold text-sage-500 mb-2">{t('votaciones.resetLocked')}</p>}
 
       <div className="h-1.5 rounded-full bg-cream-200 dark:bg-ink-700 overflow-hidden mb-2">
         <div className="h-full bg-violet-500" style={{ width: total ? `${(votedCount / total) * 100}%` : '0%' }} />
@@ -310,7 +322,9 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
 
       {!isPending && (
         <div className="mt-3 pt-3 border-t border-ink-900/10 dark:border-cream-100/15 flex flex-col gap-1">
-          {poll.status === 'resolved' ? (
+          {poll.status === 'resolved' && isBalanceReset ? (
+            <p className="text-xs font-semibold text-sage-500">{t('votaciones.resetDone')}</p>
+          ) : poll.status === 'resolved' ? (
             <p className="text-xs font-semibold text-sage-500">{t('votaciones.winnerLabel', { option: poll.resolvedOption })}</p>
           ) : (
             <p className="text-xs font-semibold text-ink-900/50 dark:text-cream-100/50">{t('votaciones.noWinner')}</p>

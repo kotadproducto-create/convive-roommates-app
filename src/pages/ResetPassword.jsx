@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
-import { PASSWORD_RULE, PASSWORD_RULE_MESSAGE } from '../lib/validation'
+import { PASSWORD_RULE } from '../lib/validation'
+import { authErrorMessage } from '../lib/authErrors'
 import { AuthShell } from './Login'
 
 export default function ResetPassword() {
@@ -19,7 +20,7 @@ export default function ResetPassword() {
     e.preventDefault()
     setError('')
     if (!PASSWORD_RULE.test(newPassword)) {
-      setError(PASSWORD_RULE_MESSAGE)
+      setError(t('auth.passwordRule'))
       return
     }
     if (newPassword !== confirmPassword) {
@@ -32,7 +33,7 @@ export default function ResetPassword() {
       setDone(true)
       setTimeout(() => navigate('/'), 1500)
     } catch (err) {
-      setError(err.message)
+      setError(authErrorMessage(err, t))
     } finally {
       setSubmitting(false)
     }

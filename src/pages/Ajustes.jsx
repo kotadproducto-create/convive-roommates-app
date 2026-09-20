@@ -1,3 +1,4 @@
+import LanguageSwitcher from '../components/LanguageSwitcher'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
@@ -23,7 +24,7 @@ export default function Ajustes() {
   const { user, membership, floor, changePassword, logout, verifyPassword, banAccount } = useAuth()
   const { removeMember, setMemberRole, updateProfile, members } = useData()
   const { showToast } = useToast()
-  const { t, language, setLanguage } = useLanguage()
+  const { t } = useLanguage()
 
   if (!user) return null
 
@@ -31,7 +32,7 @@ export default function Ajustes() {
     <AppLayout title={t('ajustes.title')}>
       <div className="flex flex-col gap-5 max-w-2xl">
         <Reveal>
-          <AppPreferencesCard t={t} language={language} setLanguage={setLanguage} />
+          <AppPreferencesCard t={t} />
         </Reveal>
         <Reveal delay={60}>
           <NotificationsCard t={t} />
@@ -72,7 +73,7 @@ export default function Ajustes() {
   )
 }
 
-function AppPreferencesCard({ t, language, setLanguage }) {
+function AppPreferencesCard({ t }) {
   const { theme, toggleTheme } = useTheme()
   const currentThemeLabel = theme === 'light' ? t('perfil.lightTheme') : t('perfil.darkTheme')
   const targetThemeLabel = theme === 'light' ? t('perfil.darkTheme') : t('perfil.lightTheme')
@@ -92,24 +93,7 @@ function AppPreferencesCard({ t, language, setLanguage }) {
 
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
         <span className="text-sm font-semibold">{t('topbar.language')}</span>
-        <div className="flex bg-cream-200 dark:bg-ink-700 rounded-lg p-0.5 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setLanguage('es')}
-            aria-pressed={language === 'es'}
-            className={`px-2.5 py-1 rounded-md ${language === 'es' ? 'bg-white dark:bg-ink-800 shadow-sm' : 'opacity-60'}`}
-          >
-            ES
-          </button>
-          <button
-            type="button"
-            onClick={() => setLanguage('en')}
-            aria-pressed={language === 'en'}
-            className={`px-2.5 py-1 rounded-md ${language === 'en' ? 'bg-white dark:bg-ink-800 shadow-sm' : 'opacity-60'}`}
-          >
-            EN
-          </button>
-        </div>
+        <LanguageSwitcher variant="compact" />
       </div>
     </div>
   )

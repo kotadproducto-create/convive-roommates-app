@@ -57,6 +57,15 @@ export function resolvePoll(poll, votesForPoll, activeMemberIds, todayISO, nowMs
     return { status: 'resolved', resolvedOption: vetoOption }
   }
 
+  // Reinicio de saldo "para todos" (kind 'balance_reset'): cada persona
+  // decide POR SÍ MISMA y solo se le cambia su propio saldo si aprueba, así
+  // que no hay ganador ni veto — la consulta sigue abierta para que todos
+  // puedan votar y termina cuando ya votaron todos (o vence el plazo).
+  if (poll.kind === 'balance_reset') {
+    if (everyoneVoted) return { status: 'resolved', resolvedOption: null }
+    return deadlineOutcome(poll, todayISO, nowMs, everyoneVoted)
+  }
+
   const tally = tallyVotes(relevantVotes)
 
   let winner = null
@@ -75,6 +84,12 @@ export function resolvePoll(poll, votesForPoll, activeMemberIds, todayISO, nowMs
   }
   if (winner) return { status: 'resolved', resolvedOption: winner }
 
+  return deadlineOutcome(poll, todayISO, nowMs, everyoneVoted)
+}
+
+/** Si el plazo ya venció: 'closed' (votaron todos pero sin resultado) o
+ * 'expired' (faltaba gente). Si no, null (sigue pendiente). */
+function deadlineOutcome(poll, todayISO, nowMs, everyoneVoted) {
   const deadlinePassed = poll.deadlineAt
     ? typeof nowMs === 'number' && nowMs >= new Date(poll.deadlineAt).getTime()
     : poll.deadline && poll.deadline < todayISO
@@ -82,7 +97,6 @@ export function resolvePoll(poll, votesForPoll, activeMemberIds, todayISO, nowMs
     if (everyoneVoted) return { status: 'closed', resolvedOption: null }
     return { status: 'expired', resolvedOption: null }
   }
-
   return null
 }
 
