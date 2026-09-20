@@ -86,18 +86,21 @@ export default function Login() {
   )
 }
 
+// min-h con dvh: en el navegador del móvil 100vh incluye la barra de direcciones y
+// deja parte del formulario fuera de la pantalla. El py evita que algo quede pegado
+// al borde; si el contenido no cabe en alto, la página hace scroll (no se encoge).
 export function AuthShell({ children }) {
   const { t } = useLanguage()
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-ink-900 px-4 relative overflow-hidden">
+    <div className="min-h-screen [min-height:100dvh] flex items-center justify-center bg-white dark:bg-ink-900 px-4 py-6 landscape-sm:py-3 relative overflow-x-hidden">
       <div className="dot-grid absolute inset-0 text-ink-900/[0.06] dark:text-cream-100/[0.05] pointer-events-none" />
-      <div className="relative w-full max-w-sm">
+      <div className="relative w-full max-w-sm min-w-0">
         {/* Selector de idioma: el mismo de Ajustes, disponible antes de entrar. */}
-        <div className="flex justify-end mb-3">
+        <div className="flex justify-end mb-3 landscape-sm:mb-1.5">
           <LanguageSwitcher />
         </div>
-        <div className="flex flex-col items-center gap-1 mb-7">
-          <Mascot className="w-20 h-20 mb-1" />
+        <div className="flex flex-col items-center gap-1 mb-7 landscape-sm:mb-3 [@media(max-height:700px)]:mb-4">
+          <Mascot className="w-20 h-20 mb-1 landscape-sm:w-10 landscape-sm:h-10 [@media(max-height:700px)]:w-14 [@media(max-height:700px)]:h-14" />
           <div className="flex items-center gap-2.5">
             <svg width="32" height="32" viewBox="0 0 32 32" className="chore-wheel">
               <circle cx="16" cy="16" r="13.5" fill="none" stroke="currentColor" className="text-ink-900 dark:text-cream-100" strokeWidth="2" strokeDasharray="1 7" strokeLinecap="round" opacity="0.5" />
@@ -110,7 +113,7 @@ export function AuthShell({ children }) {
           </div>
           <p className="text-xs font-medium text-ink-900/50 dark:text-cream-100/50 uppercase tracking-wide">{t('auth.tagline')}</p>
         </div>
-        <div className="card p-7">{children}</div>
+        <div className="card p-5 min-[380px]:p-7 landscape-sm:p-4">{children}</div>
       </div>
     </div>
   )

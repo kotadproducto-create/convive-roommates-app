@@ -53,3 +53,41 @@ textos en español, varios elementos a la vez) y confirmar que
 `document.documentElement.scrollWidth` no supera el ancho del viewport —
 un desbordamiento horizontal real casi siempre viene de una de las dos
 causas de arriba.
+
+## Verificación en varios tamaños de móvil (obligatoria antes de dar por terminado un cambio de UI)
+
+La app se usa desde el teléfono y **nadie debe necesitar hacer zoom** para
+usarla: todo texto queda dentro de su caja, nada se sale de la pantalla ni
+queda cortado o superpuesto, y si algo no cabe en alto la página hace
+**scroll** (nunca se encoge ni se rompe el diseño). Esto vale para TODA la
+app, no solo para la pantalla que se tocó.
+
+Antes de terminar un cambio de UI, comprobarlo en **320×568 (el más estrecho),
+360×740, 375×812, 430×932** y en horizontal (667×375), con contenido real:
+
+- `document.documentElement.scrollWidth` no supera el ancho del viewport
+  (sin scroll horizontal), en la pantalla y también con pop-ups/formularios
+  abiertos.
+- Ningún elemento con `getBoundingClientRect().right` mayor que el ancho,
+  salvo dentro de un contenedor con su propio scroll horizontal.
+
+Además de las reglas de arriba, patrones que ya causaron desbordes reales:
+
+- **Un grupo de botones con `shrink-0` dentro de una fila `flex-wrap` no
+  puede envolver** (su ancho mínimo es su contenido): usar `min-w-0` +
+  `justify-end`. `shrink-0` solo para íconos/badges pequeños.
+- **Barra de navegación inferior**: cada botón `flex-1 min-w-0` (no
+  `px-3` + `justify-around`), rótulos con `truncate`; 5 botones tienen que
+  caber a 320px.
+- **Pantallas a pantalla completa** (acceso, splash): `min-h-screen` +
+  `[min-height:100dvh]` (en móvil `100vh` incluye la barra de direcciones),
+  `py-*` para que nada toque el borde, y compactar con `landscape-sm:` /
+  `[@media(max-height:700px)]:` en vez de dejar que se corte.
+- **Filas con dos botones de acción** (aprobar/rechazar…): `flex-wrap` con
+  `gap-x-* gap-y-*`, para que bajen de línea en pantallas estrechas.
+- **Pop-ups `fixed` dentro de una tarjeta o de `Reveal`**: un ancestro con
+  `transform` los encierra (quedan del tamaño de la tarjeta). Dibujarlos con
+  `createPortal(..., document.body)` (ver ConfirmDialog, AwayPopup).
+- Captura de puntero (`setPointerCapture`) solo al empezar un arrastre real,
+  nunca en `pointerdown`: si no, los botones de adentro dejan de recibir el
+  toque.

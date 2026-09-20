@@ -9,7 +9,8 @@ import { useLanguage } from '../context/LanguageContext'
 import { getFloorHistory } from '../lib/db'
 import { getMemberColor } from '../lib/roomieColors'
 import { computeWallets } from '../lib/wallets'
-import { CameraIcon, AlertIcon, MailIcon } from '../components/icons'
+import { CameraIcon, AlertIcon, MailIcon, PersonIcon } from '../components/icons'
+import PageBanner, { SectionLabel } from '../components/PageBanner'
 import { format, formatDistanceToNowStrict } from 'date-fns'
 
 /**
@@ -59,11 +60,25 @@ export default function Perfil() {
           </Reveal>
         )}
         <Reveal>
+          <PageBanner
+            tone="violet"
+            Icon={PersonIcon}
+            title={t('perfil.bannerTitle')}
+            subtitle={t('perfil.bannerSubtitle')}
+            linkTo="/ajustes"
+            linkLabel={t('perfil.bannerLink')}
+          />
+        </Reveal>
+
+        <SectionLabel>{t('perfil.groupAbout')}</SectionLabel>
+        <Reveal>
           <ProfileHeader user={user} email={email} membership={membership} floor={floor} onSaved={refresh} t={t} />
         </Reveal>
         <Reveal delay={60}>
           <PersonalInfoCard user={user} updateProfile={updateProfile} showToast={showToast} onSaved={refresh} t={t} />
         </Reveal>
+
+        <SectionLabel>{t('perfil.groupAccount')}</SectionLabel>
         <Reveal delay={120}>
           <AccountCard
             user={user}
@@ -76,6 +91,7 @@ export default function Perfil() {
             dateLocale={dateLocale}
           />
         </Reveal>
+        <SectionLabel>{t('perfil.groupFloor')}</SectionLabel>
         <Reveal delay={150}>
           <RoomPartnerCard
             user={user}
@@ -547,7 +563,7 @@ function RoomPartnerCard({
         return (
           <div
             key={r.id}
-            className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-gold-100 dark:bg-gold-400/15 mt-2"
+            className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-gold-100 dark:bg-gold-400/15 mt-2"
           >
             <span className="text-sm min-w-0">
               {t('perfil.invitedYou', { name: requester?.name || t('perfil.someone') })}
@@ -565,7 +581,7 @@ function RoomPartnerCard({
       })}
 
       {outgoingPartnerRequest && (
-        <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700 mt-2">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700 mt-2">
           <span className="text-sm">{t('perfil.waitingConfirm', { name: outgoingTarget?.name || t('perfil.theOtherPerson') })}</span>
           <button
             onClick={() => cancelRoomPartner(outgoingPartnerRequest.id)}

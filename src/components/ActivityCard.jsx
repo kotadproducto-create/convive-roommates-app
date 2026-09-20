@@ -178,7 +178,7 @@ export default function ActivityCard({
                           : t('activities.nextTime', { day: dayName(occ.nextDateKey, dateLocale) })
                         : ''}
                 </p>
-                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
                   {timesDone > 0 && (
                     <button type="button" onClick={() => askProgress(completion, -1)} className="text-[11px] text-ink-900/40 dark:text-cream-100/40 hover:underline">
                       {t('activities.undo')}

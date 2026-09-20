@@ -172,7 +172,7 @@ function SwapRequestsBanner({ incoming, outgoing, acceptSwap, declineSwap, cance
     <div className="card p-4 mb-5 flex flex-col gap-2">
       <h3 className="font-display font-semibold text-sm">{t('convives.swapRequestsTitle')}</h3>
       {incoming.map((r) => (
-        <div key={r.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-gold-100 dark:bg-gold-400/15">
+        <div key={r.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-gold-100 dark:bg-gold-400/15">
           <span className="text-sm min-w-0">
             {t('convives.swapIncoming', { name: r.fromMember?.name || t('convives.swapSomeone'), title: r.title })}
           </span>
@@ -187,7 +187,7 @@ function SwapRequestsBanner({ incoming, outgoing, acceptSwap, declineSwap, cance
         </div>
       ))}
       {outgoing.map((r) => (
-        <div key={r.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+        <div key={r.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
           <span className="text-sm min-w-0">
             {t('convives.swapOutgoing', { name: r.toMember?.name || t('convives.swapYourRoommate'), title: r.title })}
           </span>

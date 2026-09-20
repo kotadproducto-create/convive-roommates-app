@@ -9,19 +9,20 @@ import { useTheme } from '../context/ThemeContext'
 import { usePush } from '../context/PushContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { LockIcon, MoonIcon, SunIcon, BellIcon, AlertIcon, MailIcon, InfoIcon } from '../components/icons'
+import { LockIcon, MoonIcon, SunIcon, BellIcon, AlertIcon, MailIcon, InfoIcon, GearIcon } from '../components/icons'
+import PageBanner, { SectionLabel } from '../components/PageBanner'
 
 const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/
 const APP_VERSION = '1.0.0'
 const SUPPORT_EMAIL = 'Kota.dproducto@gmail.com'
 
 /**
- * Configuraciones: cómo funciona la app para vos — tema, idioma,
+ * Configuración: cómo funciona la app para vos — tutorial, — tema, idioma,
  * notificaciones, seguridad de la cuenta y "acerca de". Todo lo de
  * identidad (quién sos, cómo te ven) vive en Perfil.jsx.
  */
 export default function Ajustes() {
-  const { user, membership, floor, changePassword, logout, verifyPassword, banAccount } = useAuth()
+  const { user, membership, floor, changePassword, logout, verifyPassword, banAccount, refresh } = useAuth()
   const { removeMember, setMemberRole, updateProfile, members } = useData()
   const { showToast } = useToast()
   const { t } = useLanguage()
@@ -32,11 +33,28 @@ export default function Ajustes() {
     <AppLayout title={t('ajustes.title')}>
       <div className="flex flex-col gap-5 max-w-2xl">
         <Reveal>
+          <PageBanner
+            tone="gold"
+            Icon={GearIcon}
+            title={t('ajustes.bannerTitle')}
+            subtitle={t('ajustes.bannerSubtitle')}
+            linkTo="/perfil"
+            linkLabel={t('ajustes.bannerLink')}
+          />
+        </Reveal>
+
+        <SectionLabel>{t('ajustes.groupApp')}</SectionLabel>
+        <Reveal>
+          <TutorialCard user={user} updateProfile={updateProfile} refresh={refresh} showToast={showToast} t={t} />
+        </Reveal>
+        <Reveal delay={40}>
           <AppPreferencesCard t={t} />
         </Reveal>
-        <Reveal delay={60}>
+        <Reveal delay={80}>
           <NotificationsCard t={t} />
         </Reveal>
+
+        <SectionLabel>{t('ajustes.groupAccount')}</SectionLabel>
         <Reveal delay={120}>
           <SecurityCard
             changePassword={changePassword}
@@ -65,11 +83,60 @@ export default function Ajustes() {
             t={t}
           />
         </Reveal>
+        <SectionLabel>{t('ajustes.groupInfo')}</SectionLabel>
         <Reveal delay={220}>
           <AboutCard t={t} />
         </Reveal>
       </div>
     </AppLayout>
+  )
+}
+
+/** "Tutorial de la aplicación" con el interruptor "Modo tutorial": activarlo
+ * vuelve a mostrar la guía de los botones principales (ver AppTutorial.jsx);
+ * al terminarla o cerrarla se desactiva sola. */
+function TutorialCard({ user, updateProfile, refresh, showToast, t }) {
+  const enabled = Boolean(user.tutorialEnabled)
+  const [saving, setSaving] = useState(false)
+
+  async function toggle() {
+    setSaving(true)
+    try {
+      await updateProfile(user.id, { tutorialEnabled: !enabled })
+      await refresh()
+    } catch (err) {
+      console.error('tutorial toggle', err)
+      showToast(t('ajustes.tutorialErrorToast'), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-display font-semibold mb-1">{t('ajustes.tutorialTitle')}</h2>
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">{t('ajustes.tutorialBody')}</p>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold min-w-0">{t('ajustes.tutorialMode')}</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label={t('ajustes.tutorialMode')}
+          disabled={saving}
+          onClick={toggle}
+          className="flex items-center gap-2 shrink-0 disabled:opacity-60"
+        >
+          <span className={`text-xs font-bold ${enabled ? 'text-sage-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
+            {enabled ? t('ajustes.tutorialOn') : t('ajustes.tutorialOff')}
+          </span>
+          <span className={`relative w-11 h-6 rounded-full border-2 border-ink-900/70 dark:border-cream-100/40 transition-colors ${enabled ? 'bg-sage-500' : 'bg-cream-200 dark:bg-ink-700'}`}>
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white border-2 border-ink-900/70 transition-all ${enabled ? 'left-[22px]' : 'left-0.5'}`} />
+          </span>
+        </button>
+      </div>
+      <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mt-3">{enabled ? t('ajustes.tutorialOnHint') : t('ajustes.tutorialOffHint')}</p>
+    </div>
   )
 }
 

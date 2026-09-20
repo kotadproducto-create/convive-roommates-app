@@ -385,8 +385,29 @@ export default {
     releasedToast: 'Done: {{space}} is now free',
     errorToast: 'Could not complete that. Please try again.'
   },
+  tutorial: {
+    ariaLabel: 'App tutorial',
+    stepOf: 'Step {{n}} of {{total}}',
+    next: 'Next',
+    back: 'Back',
+    skip: 'Skip tutorial',
+    done: 'Got it!',
+    steps: {
+      inicio: { title: 'Home', body: `Your flat at a glance: the week streak, your points and what's new. Everything starts here.` },
+      calendario: { title: 'Calendar', body: 'See and manage activities by date, and check the history of each day.' },
+      compras: { title: 'Shopping', body: 'Here you can manage your shopping list and organise the flat shopping.' },
+      pote: { title: 'Pot', body: `The flat's shared money: contributions, expenses and everyone's balance.` },
+      more: { title: 'More', body: 'Everything else lives here: Activities, Roommates, Votes, Rewards, Your flat and your Profile.' }
+    }
+  },
   perfil: {
-    title: 'Profile',
+    title: 'My profile',
+    bannerTitle: 'My profile',
+    bannerSubtitle: 'Your details, your photo and how the flat sees you.',
+    bannerLink: 'Go to Settings (language, notifications, tutorial)',
+    groupAbout: 'About you',
+    groupAccount: 'Your account',
+    groupFloor: 'Living together',
     removalPendingTitle: 'Exit pending confirmation',
     removalPendingBody:
       "An admin has started your exit from {{floorName}}, but it won't take effect without your confirmation. You can accept or reject it — if you reject it, you stay in the flat with no changes.",
@@ -878,6 +899,20 @@ export default {
   },
   ajustes: {
     title: 'Settings',
+    bannerTitle: 'Settings',
+    bannerSubtitle: 'How the app works: tutorial, language, notifications and account.',
+    bannerLink: 'Go to My profile (your personal details)',
+    groupApp: 'App',
+    groupAccount: 'Account and security',
+    groupInfo: 'Information',
+    tutorialTitle: 'App tutorial',
+    tutorialBody: 'A quick guide that points at the main buttons and explains what each one is for.',
+    tutorialMode: 'Tutorial mode',
+    tutorialOn: 'On',
+    tutorialOff: 'Off',
+    tutorialOnHint: 'The guide is showing now. When you finish or close it, tutorial mode turns itself off.',
+    tutorialOffHint: 'Turn it on to see the guide to the main buttons again whenever you want.',
+    tutorialErrorToast: 'Could not change tutorial mode. Please try again.',
     notificationsTitle: 'Notifications',
     dangerZoneTitle: 'Danger zone',
     deleteAccountTitle: 'Delete account',

@@ -217,7 +217,7 @@ export default function FloorSettings() {
             <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">{t('floorSettings.pendingRequestsSubtitle')}</p>
             <ul className="flex flex-col gap-2">
               {pendingJoinRequests.map((r) => (
-                <li key={r.membershipId} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+                <li key={r.membershipId} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
                   <span className="text-sm font-medium">{r.requesterName}</span>
                   <div className="flex gap-2 shrink-0">
                     <button
@@ -551,7 +551,7 @@ function RotationSection({
           <p className="text-sm font-medium mb-2">{t('floorSettings.pendingAbsenceTitle')}</p>
           <ul className="flex flex-col gap-2">
             {pendingAbsenceRequests.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
                 <span className="text-sm">
                   <strong>{memberById[r.userId]?.name || t('floorSettings.someone')}</strong> · {r.startDate} {t('floorSettings.toPreposition')} {r.endDate}
                   {r.reason && <span className="text-ink-900/50 dark:text-cream-100/50"> · {r.reason}</span>}

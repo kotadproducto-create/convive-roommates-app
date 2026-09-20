@@ -106,7 +106,9 @@ export default function PendingPopups({ user, floor, activities, activityComplet
   // automáticamente — no hace falta llevar un índice aparte.
   const popups = candidates.filter((c) => !isDismissedToday(keyFor(c.key)))
 
-  if (popups.length === 0) return null
+  // El tutorial guiado (AppTutorial) tiene prioridad: mientras esté activo no se
+  // muestran estos avisos (no se marcan como cerrados, salen al terminar).
+  if (popups.length === 0 || user?.tutorialEnabled) return null
 
   const current = popups[0]
   const Icon = current.icon

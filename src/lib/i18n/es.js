@@ -386,8 +386,29 @@ export default {
     releasedToast: 'Listo: {{space}} quedó libre',
     errorToast: 'No se pudo completar. Inténtalo de nuevo.'
   },
+  tutorial: {
+    ariaLabel: 'Tutorial de la aplicación',
+    stepOf: 'Paso {{n}} de {{total}}',
+    next: 'Siguiente',
+    back: 'Atrás',
+    skip: 'Saltar tutorial',
+    done: '¡Entendido!',
+    steps: {
+      inicio: { title: 'Inicio', body: 'Tu resumen del piso: la racha de la semana, tus puntos y las novedades. Aquí empieza todo.' },
+      calendario: { title: 'Calendario', body: 'Mira y gestiona las actividades por fecha, y consulta el historial de cada día.' },
+      compras: { title: 'Compras', body: 'Aquí puedes gestionar tu lista de compras y organizar tus compras del piso.' },
+      pote: { title: 'Pote', body: 'El dinero común del piso: aportes, gastos y el saldo de cada persona.' },
+      more: { title: 'Más', body: 'Aquí está todo lo demás: Actividades, Convives, Votaciones, Recompensas, Tu piso y tu Perfil.' }
+    }
+  },
   perfil: {
-    title: 'Perfil',
+    title: 'Mi perfil',
+    bannerTitle: 'Mi perfil',
+    bannerSubtitle: 'Tus datos, tu foto y cómo te ven en el piso.',
+    bannerLink: 'Ir a Configuración (idioma, notificaciones, tutorial)',
+    groupAbout: 'Sobre ti',
+    groupAccount: 'Tu cuenta',
+    groupFloor: 'Convivencia',
     removalPendingTitle: 'Salida pendiente de confirmación',
     removalPendingBody:
       'Un administrador ha iniciado tu salida de {{floorName}}, pero no se hará efectiva sin tu confirmación. Puedes aceptarla o rechazarla — si la rechazas, sigues en el piso sin ningún cambio.',
@@ -879,7 +900,21 @@ export default {
     next: 'Siguiente'
   },
   ajustes: {
-    title: 'Configuraciones',
+    title: 'Configuración',
+    bannerTitle: 'Configuración',
+    bannerSubtitle: 'Cómo funciona la aplicación: tutorial, idioma, notificaciones y cuenta.',
+    bannerLink: 'Ir a Mi perfil (tus datos personales)',
+    groupApp: 'Aplicación',
+    groupAccount: 'Cuenta y seguridad',
+    groupInfo: 'Información',
+    tutorialTitle: 'Tutorial de la aplicación',
+    tutorialBody: 'Una guía rápida que señala los botones principales y explica para qué sirve cada uno.',
+    tutorialMode: 'Modo tutorial',
+    tutorialOn: 'Activado',
+    tutorialOff: 'Desactivado',
+    tutorialOnHint: 'Se está mostrando la guía. Al terminarla o cerrarla, el modo tutorial se desactiva solo.',
+    tutorialOffHint: 'Actívalo para volver a ver la guía de los botones principales cuando quieras.',
+    tutorialErrorToast: 'No se pudo cambiar el modo tutorial. Inténtalo de nuevo.',
     notificationsTitle: 'Notificaciones',
     dangerZoneTitle: 'Zona de peligro',
     deleteAccountTitle: 'Eliminar cuenta',

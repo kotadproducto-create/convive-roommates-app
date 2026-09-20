@@ -163,8 +163,8 @@ export default function Votaciones() {
 
   return (
     <AppLayout title={t('nav.votaciones')}>
-      <div className="flex items-start justify-between gap-3 mb-5">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-3 mb-5">
+        <div className="min-w-0">
           <h2 className="font-display text-lg font-bold">{t('votaciones.heading')}</h2>
           <p className="text-sm text-ink-900/60 dark:text-cream-100/60">{t('votaciones.subtitle')}</p>
         </div>
@@ -342,7 +342,7 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
 
 function JoinRequestCard({ request, approveJoinRequest, rejectJoinRequest, t }) {
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
       <span className="text-sm min-w-0">{t('votaciones.joinRequestLabel', { name: request.requesterName })}</span>
       <div className="flex gap-2 shrink-0">
         <button onClick={() => rejectJoinRequest(request.membershipId)} className="btn-danger text-xs px-3 py-1.5">
@@ -365,7 +365,7 @@ function SwapRequestCard({ request, acceptSwap, declineSwap, showToast, t }) {
     if (result?.ok === false) showToast(result.message, 'default')
   }
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
       <span className="text-sm min-w-0">
         {t('votaciones.swapIncomingLabel', { name: request.fromMember?.name || t('votaciones.someone'), title: request.title })}
       </span>
@@ -406,7 +406,7 @@ function AbsenceRequestCard({ request, memberById, decideAbsenceRequest, t }) {
 function PartnerRequestCard({ request, members, acceptRoomPartner, rejectRoomPartner, t }) {
   const requester = members.find((m) => m.id === request.requesterId)
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
       <span className="text-sm min-w-0">{t('votaciones.partnerRequestLabel', { name: requester?.name || t('votaciones.someone') })}</span>
       <div className="flex gap-2 shrink-0">
         <button onClick={() => rejectRoomPartner(request.id)} className="btn-danger text-xs px-3 py-1.5">
@@ -431,7 +431,7 @@ function RemovalCard({ member, isSelf, isAdmin, removeMember, rejectMyRemoval, c
     showToast(t('votaciones.removalRejectedToast'), 'default')
   }
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-clay-100/50 dark:bg-clay-500/10">
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2.5 rounded-xl bg-clay-100/50 dark:bg-clay-500/10">
       <span className="text-sm min-w-0 text-clay-500 font-medium">
         {isSelf ? t('votaciones.removalSelfLabel') : t('votaciones.removalOtherLabel', { name: member.name })}
       </span>

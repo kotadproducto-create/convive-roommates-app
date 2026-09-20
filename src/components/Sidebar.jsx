@@ -95,14 +95,15 @@ export default function Sidebar() {
 
       {/* Móvil: barra inferior con 4 fijas + "Más" — más compacta en
           celular horizontal bajo, para no comerse media pantalla */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-ink-800/95 backdrop-blur border-t-[2.5px] border-ink-900 dark:border-cream-100/40 flex justify-around py-2 landscape-sm:py-1">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-ink-800/95 backdrop-blur border-t-[2.5px] border-ink-900 dark:border-cream-100/40 flex py-2 px-1 landscape-sm:py-1">
         {primaryItems.map(({ to, labelKey, Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
+            data-tour={`nav-${to}`}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 landscape-sm:px-2 landscape-sm:py-0.5 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
+              `flex-1 min-w-0 flex flex-col items-center gap-0.5 px-0 min-[360px]:px-1 py-1 landscape-sm:py-0.5 rounded-lg text-[11px] min-[360px]:text-xs tracking-tight min-[360px]:tracking-normal font-medium transition-transform duration-100 active:scale-90 ${
                 isActive ? 'text-ink-900 dark:text-cream-100' : 'text-ink-900/60 dark:text-cream-100/60'
               }`
             }
@@ -116,15 +117,16 @@ export default function Sidebar() {
                 >
                   <Icon className="w-5 h-5 landscape-sm:w-4 landscape-sm:h-4" />
                 </span>
-                <span className="landscape-sm:hidden">{t(labelKey)}</span>
+                <span className="landscape-sm:hidden max-w-full truncate">{t(labelKey)}</span>
               </>
             )}
           </NavLink>
         ))}
         <button
           type="button"
+          data-tour="nav-more"
           onClick={() => setShowMore(true)}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 landscape-sm:px-2 landscape-sm:py-0.5 rounded-lg text-xs font-medium transition-transform duration-100 active:scale-90 ${
+          className={`flex-1 min-w-0 flex flex-col items-center gap-0.5 px-0 min-[360px]:px-1 py-1 landscape-sm:py-0.5 rounded-lg text-[11px] min-[360px]:text-xs tracking-tight min-[360px]:tracking-normal font-medium transition-transform duration-100 active:scale-90 ${
             isMoreActive ? 'text-ink-900 dark:text-cream-100' : 'text-ink-900/60 dark:text-cream-100/60'
           }`}
         >
@@ -135,7 +137,7 @@ export default function Sidebar() {
           >
             <MoreIcon className="w-5 h-5 landscape-sm:w-4 landscape-sm:h-4" />
           </span>
-          <span className="landscape-sm:hidden">{t('nav.more')}</span>
+          <span className="landscape-sm:hidden max-w-full truncate">{t('nav.more')}</span>
         </button>
       </nav>
 
@@ -209,6 +211,7 @@ function NavItem({ to, label, Icon, end, badge = 0 }) {
     <NavLink
       to={to}
       end={end}
+      data-tour={`nav-${to}`}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold border-2 transition-transform duration-100 active:scale-95 ${
           isActive

@@ -41,6 +41,7 @@ create table if not exists profiles (
   age_public boolean not null default true, -- privacidad de presentación (no RLS): oculta la edad a otros en Convives
   phone_public boolean not null default true, -- ídem para el teléfono
   occupation_public boolean not null default true, -- ídem para la ocupación
+  tutorial_enabled boolean not null default false, -- "Modo tutorial": true = se muestra el tutorial guiado (AppTutorial). Se pone en true al registrarse y desde Configuración; al terminarlo o cerrarlo vuelve a false. Default false para no afectar cuentas existentes.
   onboarding_seen boolean not null default true, -- si ya vio /bienvenida; nuevo default true para no afectar cuentas existentes, se pone false explícito al registrarse
   points integer not null default 0,
   reputation_score numeric not null default 0, -- automática, no transferible, calculada desde el historial de tareas en todos los pisos (sin lógica todavía, Fase 1+)

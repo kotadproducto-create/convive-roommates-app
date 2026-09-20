@@ -26,12 +26,12 @@ export default function Topbar({ title, subheader }) {
   return (
     <header className="sticky top-0 bg-white/90 dark:bg-ink-900/90 backdrop-blur z-20 border-b border-ink-900/10 dark:border-cream-100/15">
       <div
-        className={`flex items-center justify-between px-5 landscape-sm:px-3 ${
+        className={`flex items-center justify-between gap-2 px-4 min-[360px]:px-5 landscape-sm:px-3 ${
           subheader ? 'pt-4 pb-2.5 landscape-sm:pt-2 landscape-sm:pb-1.5' : 'py-4 landscape-sm:py-2'
         }`}
       >
         <div className="min-w-0">
-          <h1 className="font-display text-xl landscape-sm:text-base font-bold tracking-tight truncate">{title}</h1>
+          <h1 className="font-display text-base min-[360px]:text-lg min-[380px]:text-xl landscape-sm:text-base font-bold tracking-tight truncate">{title}</h1>
           {floor && (
             <p className="text-xs text-ink-900/50 dark:text-cream-100/50 landscape-sm:hidden truncate">
               {floor.name} · código {floor.inviteCode}
@@ -58,7 +58,7 @@ export default function Topbar({ title, subheader }) {
           <button
             onClick={() => setOpen((o) => !o)}
             aria-label={t('topbar.notifications')}
-            className="relative w-10 h-10 landscape-sm:w-8 landscape-sm:h-8 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
+            className="relative w-9 h-9 min-[360px]:w-10 min-[360px]:h-10 landscape-sm:w-8 landscape-sm:h-8 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
           >
             <BellIcon className="w-5 h-5" />
             {unreadCount > 0 && (
@@ -115,7 +115,7 @@ export default function Topbar({ title, subheader }) {
           <button
             onClick={() => setSettingsOpen((o) => !o)}
             aria-label={t('topbar.settingsAria')}
-            className="w-10 h-10 landscape-sm:w-8 landscape-sm:h-8 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
+            className="w-9 h-9 min-[360px]:w-10 min-[360px]:h-10 landscape-sm:w-8 landscape-sm:h-8 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
           >
             <GearIcon className="w-5 h-5" />
           </button>
