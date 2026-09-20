@@ -1,3 +1,4 @@
+import MarqueeText from './MarqueeText'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
 
@@ -23,7 +24,7 @@ export default function RotationOrderBox() {
               <span className="w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 text-[10px] font-bold flex items-center justify-center shrink-0">
                 {idx + 1}
               </span>
-              <span className="min-w-0 truncate">{m.name}</span>
+              <MarqueeText className="min-w-0">{m.name}</MarqueeText>
             </li>
           )
         })}

@@ -13,7 +13,7 @@ import { LockIcon, MoonIcon, SunIcon, BellIcon, AlertIcon, MailIcon, InfoIcon, G
 import PageBanner, { SectionLabel } from '../components/PageBanner'
 
 const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/
-const APP_VERSION = '1.0.0'
+const APP_VERSION = '1.0.0 Beta'
 const SUPPORT_EMAIL = 'Kota.dproducto@gmail.com'
 
 /**

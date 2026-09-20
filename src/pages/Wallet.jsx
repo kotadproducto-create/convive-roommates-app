@@ -1,3 +1,4 @@
+import MarqueeText from '../components/MarqueeText'
 import { useMemo, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
@@ -240,7 +241,7 @@ export default function Wallet() {
                         {m.name[0].toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{m.name}{m.id === user.id ? t('wallet.you') : ''}</p>
+                        <MarqueeText as="p" className="text-sm font-medium">{m.name}{m.id === user.id ? t('wallet.you') : ''}</MarqueeText>
                         <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
                           {t('wallet.walletBreakdown', { contributed: w.contributed.toFixed(2), share: w.expenseShare.toFixed(2) })}
                           {w.resetAdjustment !== undefined &&
@@ -798,7 +799,7 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
       </div>
       <div className="mt-1 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs text-ink-900/50 dark:text-cream-100/50 min-w-0">
-          {c.note && <span className="truncate">{c.note}</span>}
+          {c.note && <MarqueeText>{c.note}</MarqueeText>}
           {c.receiptUrl && (
             <a href={c.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-violet-500 hover:underline shrink-0">
               {t('wallet.viewReceipt')}

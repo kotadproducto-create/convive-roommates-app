@@ -1,3 +1,4 @@
+import MarqueeText from './MarqueeText'
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -31,11 +32,11 @@ export default function Topbar({ title, subheader }) {
         }`}
       >
         <div className="min-w-0">
-          <h1 className="font-display text-base min-[360px]:text-lg min-[380px]:text-xl landscape-sm:text-base font-bold tracking-tight truncate">{title}</h1>
+          <MarqueeText as="h1" className="font-display text-base min-[360px]:text-lg min-[380px]:text-xl landscape-sm:text-base font-bold tracking-tight">{title}</MarqueeText>
           {floor && (
-            <p className="text-xs text-ink-900/50 dark:text-cream-100/50 landscape-sm:hidden truncate">
+            <MarqueeText as="p" className="text-xs text-ink-900/50 dark:text-cream-100/50 landscape-sm:hidden">
               {floor.name} · código {floor.inviteCode}
-            </p>
+            </MarqueeText>
           )}
         </div>
 

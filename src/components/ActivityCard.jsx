@@ -1,3 +1,4 @@
+import MarqueeText from './MarqueeText'
 import { useMemo } from 'react'
 import Avatar from './Avatar'
 import { SparkleIcon, EditIcon, TrashIcon, CartIcon, WasherIcon } from './icons'
@@ -100,7 +101,7 @@ export default function ActivityCard({
             <Icon className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <p className="font-display font-semibold truncate">{activity.title}</p>
+            <MarqueeText as="p" className="font-display font-semibold">{activity.title}</MarqueeText>
             <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{describeFrequency(activity, t, dateLocale)}</p>
           </div>
         </div>
@@ -136,11 +137,11 @@ export default function ActivityCard({
         <>
           <div className="flex items-center gap-2 min-w-0">
             {isEveryone ? (
-              <span className="text-sm font-medium truncate min-w-0">{t('activities.everyone')}</span>
+              <MarqueeText className="text-sm font-medium min-w-0">{t('activities.everyone')}</MarqueeText>
             ) : (
               <>
                 <Avatar url={assignee?.avatarUrl} name={assignee?.name} size="w-7 h-7" textSize="text-xs" />
-                <span className="text-sm font-medium truncate min-w-0">{assignee ? assignee.name : t('activities.unassigned')}</span>
+                <MarqueeText className="text-sm font-medium min-w-0">{assignee ? assignee.name : t('activities.unassigned')}</MarqueeText>
               </>
             )}
             {activity.assignmentMode === 'rotation' && activity.frequencyType !== 'once' && (

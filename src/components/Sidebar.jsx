@@ -1,3 +1,4 @@
+import BetaBadge from './BetaBadge'
 import { useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -201,7 +202,9 @@ function Brand() {
         <circle cx="23.5" cy="20.5" r="2.6" fill="#F5B942" />
         <path d="M16 11 10.5 18.5M16 11 21.5 18" stroke="#17131C" strokeWidth="1.4" strokeLinecap="round" opacity="0.55" />
       </svg>
-      <span className="font-display font-bold text-lg tracking-tight">Convive</span>
+      <span className="font-display font-bold text-lg tracking-tight">
+        Convive<BetaBadge />
+      </span>
     </div>
   )
 }

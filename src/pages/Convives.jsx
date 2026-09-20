@@ -1,3 +1,4 @@
+import MarqueeText from '../components/MarqueeText'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
@@ -118,7 +119,7 @@ function PendingItemRow({ item, members, currentUserId, requestSwap, hasOutgoing
     <div className="flex flex-col gap-1.5 px-3 py-2 rounded-xl bg-cream-100 dark:bg-ink-700">
       {progressDialog}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium min-w-0 truncate">{item.title}</span>
+        <MarqueeText className="text-sm font-medium min-w-0">{item.title}</MarqueeText>
         <div className="flex items-center gap-2 shrink-0">
           <button type="button" onClick={handleDone} className="text-xs font-semibold text-sage-500 hover:underline">
             {isStepped
@@ -324,15 +325,15 @@ function ConviveCard({
             <Avatar url={member.avatarUrl} name={member.name} size="w-10 h-10" />
           </span>
           <div className="min-w-0">
-            <p className="font-display font-bold truncate">
+            <MarqueeText as="p" className="font-display font-bold">
               {member.name}
               {isSelf && <span className="text-xs font-normal text-ink-900/40 dark:text-cream-100/40"> ({t('convives.you')})</span>}
-            </p>
+            </MarqueeText>
             {member.nickname && (
-              <p className="text-xs text-ink-900/50 dark:text-cream-100/50 truncate">@{member.nickname}</p>
+              <MarqueeText as="p" className="text-xs text-ink-900/50 dark:text-cream-100/50">@{member.nickname}</MarqueeText>
             )}
             {showOccupation && (
-              <p className="text-xs font-medium text-violet-500 dark:text-violet-300 truncate">{member.occupation}</p>
+              <MarqueeText as="p" className="text-xs font-medium text-violet-500 dark:text-violet-300">{member.occupation}</MarqueeText>
             )}
           </div>
         </div>

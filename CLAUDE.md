@@ -91,3 +91,8 @@ Además de las reglas de arriba, patrones que ya causaron desbordes reales:
 - Captura de puntero (`setPointerCapture`) solo al empezar un arrastre real,
   nunca en `pointerdown`: si no, los botones de adentro dejan de recibir el
   toque.
+- **Títulos y nombres largos**: usar `<MarqueeText>` (src/components/MarqueeText.jsx)
+  en vez de `truncate`. Solo se anima (desplazamiento lento de ida y vuelta)
+  cuando el texto NO cabe en su caja; si cabe, queda quieto. No cambia el
+  tamaño de la caja. Con "reducir movimiento" se recorta con "…".
+  `truncate` queda solo para textos secundarios muy cortos (rótulos de la barra).

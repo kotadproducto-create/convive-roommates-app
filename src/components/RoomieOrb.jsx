@@ -1,3 +1,4 @@
+import MarqueeText from './MarqueeText'
 import { useState } from 'react'
 import Avatar from './Avatar'
 import { getMemberColor, getOrbMotion } from '../lib/roomieColors'
@@ -114,7 +115,7 @@ function RoomieCard({ member, tasks, t, onClose }) {
         <span className="rounded-full p-0.5 border-2 shrink-0" style={{ borderColor: getMemberColor(member) }}>
           <Avatar url={member.avatarUrl} name={member.name} size="w-9 h-9" textSize="text-sm" />
         </span>
-        <p className="font-display font-bold text-sm truncate">{member.name}</p>
+        <MarqueeText as="p" className="font-display font-bold text-sm">{member.name}</MarqueeText>
       </div>
 
       {memberTasks.length === 0 ? (

@@ -1,3 +1,4 @@
+import MarqueeText from './MarqueeText'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -456,8 +457,8 @@ function EventRow({ e }) {
         <e.icon className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{e.title}</p>
-        {e.subtitle && <p className="text-xs text-ink-900/50 dark:text-cream-100/50 truncate">{e.subtitle}</p>}
+        <MarqueeText as="p" className="text-sm font-medium">{e.title}</MarqueeText>
+        {e.subtitle && <MarqueeText as="p" className="text-xs text-ink-900/50 dark:text-cream-100/50">{e.subtitle}</MarqueeText>}
       </div>
       <span className="text-xs text-ink-900/40 dark:text-cream-100/40 shrink-0">{format(new Date(e.time), 'HH:mm')}</span>
     </li>

@@ -1,3 +1,4 @@
+import BetaBadge from './BetaBadge'
 import Mascot from './Mascot'
 import { useLanguage } from '../context/LanguageContext'
 
@@ -24,7 +25,9 @@ export default function SplashScreen() {
             <circle cx="23.5" cy="20.5" r="2.6" fill="#F5B942" />
             <path d="M16 11 10.5 18.5M16 11 21.5 18" stroke="#17131C" strokeWidth="1.4" strokeLinecap="round" opacity="0.55" />
           </svg>
-          <span className="font-display font-bold text-2xl tracking-tight text-ink-900 dark:text-cream-100">Convive</span>
+          <span className="font-display font-bold text-2xl tracking-tight text-ink-900 dark:text-cream-100">
+            Convive<BetaBadge />
+          </span>
         </div>
         <div className="flex items-center gap-1.5 mt-1" role="status" aria-label={t('splash.loading')}>
           <span className="w-2 h-2 rounded-full bg-violet-500 splash-dot" style={{ animationDelay: '0ms' }} />

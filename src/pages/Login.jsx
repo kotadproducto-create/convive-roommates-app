@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext'
 import Mascot from '../components/Mascot'
 import PasswordInput from '../components/PasswordInput'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import BetaBadge from '../components/BetaBadge'
 import { authErrorMessage } from '../lib/authErrors'
 
 export default function Login() {
@@ -109,7 +110,9 @@ export function AuthShell({ children }) {
               <circle cx="23.5" cy="20.5" r="2.6" fill="#F5B942" />
               <path d="M16 11 10.5 18.5M16 11 21.5 18" stroke="#17131C" strokeWidth="1.4" strokeLinecap="round" opacity="0.55" />
             </svg>
-            <span className="font-display font-bold text-2xl tracking-tight">Convive</span>
+            <span className="font-display font-bold text-2xl tracking-tight">
+              Convive<BetaBadge />
+            </span>
           </div>
           <p className="text-xs font-medium text-ink-900/50 dark:text-cream-100/50 uppercase tracking-wide">{t('auth.tagline')}</p>
         </div>

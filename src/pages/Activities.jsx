@@ -1,3 +1,4 @@
+import MarqueeText from '../components/MarqueeText'
 import { useMemo, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
@@ -221,7 +222,7 @@ function HistoryEntry({ activity, completion, memberById, t, dateLocale }) {
         <Icon className="w-4 h-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{activity.title}</p>
+        <MarqueeText as="p" className="text-sm font-medium">{activity.title}</MarqueeText>
         <p className="text-xs text-ink-900/50 dark:text-cream-100/50">
           {t('activities.historyEntry', {
             name: assignee ? assignee.name : t('activities.everyone'),

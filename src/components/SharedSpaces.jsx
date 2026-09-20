@@ -1,3 +1,4 @@
+import MarqueeText from './MarqueeText'
 import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
@@ -107,7 +108,7 @@ function SpaceCard({ space }) {
           <Icon className="w-5 h-5" />
         </div>
         <div className="min-w-0">
-          <p className="font-display font-semibold truncate">{t(`sharedSpaces.spaces.${space.key}`)}</p>
+          <MarqueeText as="p" className="font-display font-semibold">{t(`sharedSpaces.spaces.${space.key}`)}</MarqueeText>
           <p className="text-xs text-ink-900/50 dark:text-cream-100/50">{t(`sharedSpaces.hints.${space.key}`)}</p>
         </div>
       </div>

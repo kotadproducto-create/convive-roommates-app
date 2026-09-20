@@ -1,3 +1,4 @@
+import MarqueeText from '../components/MarqueeText'
 import { useEffect, useRef, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
@@ -214,11 +215,11 @@ function ProfileHeader({ user, email, membership, floor, onSaved, t }) {
         </label>
       </div>
       <div className="min-w-0">
-        <p className="font-display text-xl font-bold truncate">
+        <MarqueeText as="p" className="font-display text-xl font-bold">
           {user.name}
           {user.nickname && <span className="text-base font-normal text-ink-900/50 dark:text-cream-100/50"> · @{user.nickname}</span>}
-        </p>
-        <p className="text-sm text-ink-900/60 dark:text-cream-100/60 truncate">{email}</p>
+        </MarqueeText>
+        <MarqueeText as="p" className="text-sm text-ink-900/60 dark:text-cream-100/60">{email}</MarqueeText>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-[10px] uppercase font-bold text-violet-500 bg-violet-50 dark:bg-violet-700/25 px-1.5 py-0.5 rounded-md">
             {membership?.role === 'admin' ? t('perfil.admin') : t('perfil.member')}
@@ -547,7 +548,7 @@ function RoomPartnerCard({
         <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-cream-100 dark:bg-ink-700">
           <div className="flex items-center gap-2 min-w-0">
             <Avatar url={myRoomPartner.member.avatarUrl} name={myRoomPartner.member.name} size="w-8 h-8" />
-            <span className="text-sm font-medium truncate">{myRoomPartner.member.name}</span>
+            <MarqueeText className="text-sm font-medium">{myRoomPartner.member.name}</MarqueeText>
           </div>
           <button
             onClick={() => cancelRoomPartner(myRoomPartner.requestId)}
