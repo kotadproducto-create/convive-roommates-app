@@ -107,6 +107,11 @@ export default {
       changePassword: 'Change password',
       resent: 'We sent you another code — the previous one no longer works.',
       resendPrompt: 'Didn’t get it? Resend code',
+      haveCode: 'I already have a code from my flat',
+      haveCodeTitle: 'Enter your code',
+      haveCodeBody: 'Enter the code a flat admin gave you for the account {{email}}, and choose a new password.',
+      emailFirst: 'Enter your account email first.',
+      changeEmail: 'Use a different email',
       codeErrorFormat: 'The code is 6 digits — check the email we sent you.',
       passwordMismatch: 'Passwords don’t match.',
       updatedTitle: 'Password updated',
@@ -799,6 +804,30 @@ export default {
   },
   floorSettings: {
     title: 'Your flat',
+    recovery: {
+      button: 'Recovery code',
+      title: 'Recovery code for {{name}}',
+      confirmBody: 'A one-time code will be generated so {{name}} can get back into their account. Give it only to that person.',
+      notifyNote: `{{name}} will get an in-app notice saying you generated this code.`,
+      generate: 'Generate code',
+      generating: 'Generating…',
+      codeFor: 'Code for {{name}}',
+      step1: 'Give it to {{name}} (for example, in the flat WhatsApp group).',
+      step2: 'In Convive: “Forgot your password?” → “I already have a code from my flat”.',
+      step3: 'They must enter their email, this code and choose a new password.',
+      copy: 'Copy code',
+      copied: 'Copied!',
+      whatsapp: 'Send via WhatsApp',
+      expires: 'The code is single-use and expires soon: ask them to use it right away.',
+      shareText: 'Your Convive recovery code is {{code}}. Open Convive → “Forgot your password?” → “I already have a code from my flat”, enter your email and this code, and choose a new password. It expires soon.',
+      errors: {
+        not_admin: 'Only a flat admin can generate this code.',
+        not_member: 'That person is no longer an active member of your flat.',
+        too_soon: 'You just generated a code for this person. Wait a few seconds and try again.',
+        not_found: `We couldn't find that person's account.`,
+        failed: 'Could not generate the code. Please try again in a moment.'
+      }
+    },
     leaveFloorSelfAlert: 'To leave the flat yourself, use "Leave the flat" in your Profile.',
     removeConfirm:
       "This starts {{name}}'s exit process: they'll need to accept or reject it from their own account before it takes effect. They won't be removed without their confirmation. Continue?",

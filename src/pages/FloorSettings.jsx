@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
+import RecoveryCodeDialog from '../components/RecoveryCodeDialog'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
@@ -22,7 +23,7 @@ function isValidHttpUrl(value) {
 }
 
 export default function FloorSettings() {
-  const { user, membership } = useAuth()
+  const { user, membership, generateRecoveryCodeFor } = useAuth()
   const {
     floor,
     members,
@@ -48,6 +49,7 @@ export default function FloorSettings() {
   const [threshold, setThreshold] = useState(floor?.potThreshold ?? 30)
   const [perPerson, setPerPerson] = useState(floor?.potPerPerson ?? 10)
   const [copied, setCopied] = useState(false)
+  const [recoveryFor, setRecoveryFor] = useState(null) // compañero al que se le genera un código de recuperación
   const [copyError, setCopyError] = useState(false)
   const [whatsappUrl, setWhatsappUrl] = useState(floor?.whatsappGroupUrl || '')
   const [whatsappError, setWhatsappError] = useState('')
@@ -239,20 +241,25 @@ export default function FloorSettings() {
           </Reveal>
         )}
 
+        {recoveryFor && <RecoveryCodeDialog member={recoveryFor} generate={generateRecoveryCodeFor} onClose={() => setRecoveryFor(null)} />}
+
         <Reveal as="section" delay={160} className="card p-5">
           <h2 className="font-display font-semibold mb-3">{t('floorSettings.roommatesTitle')}</h2>
           <ul className="flex flex-col gap-2">
             {members.map((m) => (
               <li key={m.id} className="flex flex-col gap-1 px-1 py-1.5 text-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <span className="font-medium">{m.name}</span>
                     <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40">
                       · <CoinIcon className="w-3.5 h-3.5" />{m.points || 0}
                     </span>
                   </div>
                   {isAdmin && m.id !== user.id && !m.removalRequestedBy && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+                      <button onClick={() => setRecoveryFor(m)} className="text-xs font-semibold text-gold-500 hover:underline">
+                        {t('floorSettings.recovery.button')}
+                      </button>
                       {m.role !== 'admin' && (
                         <button onClick={() => makeAdmin(m)} className="text-xs font-semibold text-violet-500 hover:underline">
                           {t('floorSettings.makeAdmin')}

@@ -13,6 +13,8 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
+  // "Ya tengo un código": el código lo generó un admin del piso (no llegó por correo).
+  const [haveCode, setHaveCode] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Paso 2: código de 6 dígitos que llega en el mismo correo + contraseña nueva.
@@ -89,9 +91,11 @@ export default function ForgotPassword() {
   if (sent) {
     return (
       <AuthShell>
-        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.forgot.checkEmailTitle')}</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{haveCode ? t('auth.forgot.haveCodeTitle') : t('auth.forgot.checkEmailTitle')}</h1>
         <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-6">
-          {(() => {
+          {haveCode
+            ? t('auth.forgot.haveCodeBody', { email })
+            : (() => {
             const [before, after] = t('auth.forgot.checkEmailBody').split('{{email}}')
             return (
               <>
@@ -136,7 +140,11 @@ export default function ForgotPassword() {
           </button>
         </form>
         <div className="text-sm mt-5 text-center text-ink-900/60 dark:text-cream-100/60">
-          {resent ? (
+          {haveCode ? (
+            <button type="button" onClick={() => { setHaveCode(false); setSent(false); setCodeError('') }} className="text-violet-500 font-semibold hover:underline">
+              {t('auth.forgot.changeEmail')}
+            </button>
+          ) : resent ? (
             t('auth.forgot.resent')
           ) : (
             <button type="button" onClick={handleResend} className="text-violet-500 font-semibold hover:underline">
@@ -168,7 +176,22 @@ export default function ForgotPassword() {
           {submitting ? t('auth.forgot.sending') : t('auth.forgot.submit')}
         </button>
       </form>
-      <p className="text-sm mt-5 text-center text-ink-900/60 dark:text-cream-100/60">
+      <button
+        type="button"
+        onClick={() => {
+          if (!email.trim()) {
+            setError(t('auth.forgot.emailFirst'))
+            return
+          }
+          setError('')
+          setHaveCode(true)
+          setSent(true)
+        }}
+        className="block w-full text-center text-sm mt-4 text-violet-500 font-semibold hover:underline"
+      >
+        {t('auth.forgot.haveCode')}
+      </button>
+      <p className="text-sm mt-4 text-center text-ink-900/60 dark:text-cream-100/60">
         <Link to="/login" className="text-violet-500 font-semibold hover:underline">
           {t('auth.forgot.backToLogin')}
         </Link>

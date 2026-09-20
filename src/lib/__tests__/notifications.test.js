@@ -12,6 +12,7 @@ describe('notificationRoute — a qué pantalla lleva cada notificación', () =>
     expect(notificationRoute('removal_requested')).toBe('/perfil')
     expect(notificationRoute('lavadora')).toBe('/actividades')
     expect(notificationRoute('shared_space')).toBe('/actividades')
+    expect(notificationRoute('account_recovery')).toBe('/ajustes')
     expect(notificationRoute('poll_resolved_pote')).toBe('/pote')
     expect(notificationRoute('poll_resolved_rotation')).toBe('/piso')
   })

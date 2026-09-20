@@ -108,6 +108,11 @@ export default {
       changePassword: 'Cambiar contraseña',
       resent: 'Te mandamos otro código — el anterior ya no sirve.',
       resendPrompt: '¿No te llegó? Reenviar código',
+      haveCode: 'Ya tengo un código de mi piso',
+      haveCodeTitle: 'Escribe tu código',
+      haveCodeBody: 'Escribe el código que te pasó un admin de tu piso para la cuenta {{email}}, y elige una contraseña nueva.',
+      emailFirst: 'Escribe primero el email de tu cuenta.',
+      changeEmail: 'Usar otro email',
       codeErrorFormat: 'El código son 6 números — revisa el correo que te enviamos.',
       passwordMismatch: 'Las contraseñas no coinciden.',
       updatedTitle: 'Contraseña actualizada',
@@ -800,6 +805,30 @@ export default {
   },
   floorSettings: {
     title: 'Tu piso',
+    recovery: {
+      button: 'Código de recuperación',
+      title: 'Código de recuperación para {{name}}',
+      confirmBody: 'Se generará un código de un solo uso para que {{name}} recupere su acceso. Pásaselo solo a esa persona.',
+      notifyNote: '{{name}} recibirá un aviso en la app diciendo que generaste este código.',
+      generate: 'Generar código',
+      generating: 'Generando…',
+      codeFor: 'Código para {{name}}',
+      step1: 'Pásaselo a {{name}} (por ejemplo, por el WhatsApp del piso).',
+      step2: 'En Convive: «¿Olvidaste tu contraseña?» → «Ya tengo un código de mi piso».',
+      step3: 'Debe escribir su email, este código y elegir una contraseña nueva.',
+      copy: 'Copiar código',
+      copied: '¡Copiado!',
+      whatsapp: 'Enviar por WhatsApp',
+      expires: 'El código es de un solo uso y caduca pronto: pídele que lo use enseguida.',
+      shareText: 'Tu código de recuperación de Convive es {{code}}. Entra a Convive → «¿Olvidaste tu contraseña?» → «Ya tengo un código de mi piso», escribe tu email y este código, y elige una contraseña nueva. Caduca pronto.',
+      errors: {
+        not_admin: 'Solo un admin del piso puede generar este código.',
+        not_member: 'Esa persona ya no es miembro activo de tu piso.',
+        too_soon: 'Acabas de generar un código para esta persona. Espera unos segundos e inténtalo de nuevo.',
+        not_found: 'No se encontró la cuenta de esa persona.',
+        failed: 'No se pudo generar el código. Inténtalo de nuevo en un momento.'
+      }
+    },
     leaveFloorSelfAlert: 'Para salir tú mismo del piso, usa "Dejar el piso" en tu Perfil.',
     removeConfirm:
       'Se iniciará el proceso de salida de {{name}}: deberá aceptarla o rechazarla desde su propia cuenta antes de que se haga efectiva. No se le eliminará sin su confirmación. ¿Continuar?',

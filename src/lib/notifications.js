@@ -25,6 +25,8 @@ const ROUTE_BY_TYPE = {
   // Ausencias (solicitudes con aprobación de un admin) se gestionan en Tu piso
   absence_requested: '/piso',
   absence_decided: '/piso',
+  // Un admin generó un código de recuperación para tu cuenta: cambia la contraseña en Configuración
+  account_recovery: '/ajustes',
   // Consultas
   poll_created: '/votaciones',
   poll_resolved: '/votaciones',

@@ -41,3 +41,16 @@ describe('authErrorMessage', () => {
     expect(authErrorMessage(undefined, tFor(en))).toBe('Something went wrong.')
   })
 })
+
+describe('recuperación asistida por un admin: textos en los dos idiomas', () => {
+  it('floorSettings.recovery tiene las mismas claves en es y en', () => {
+    expect(keysOf(en.floorSettings.recovery).sort()).toEqual(keysOf(es.floorSettings.recovery).sort())
+  })
+
+  it('cada error del diálogo tiene texto', () => {
+    for (const code of ['not_admin', 'not_member', 'too_soon', 'not_found', 'failed']) {
+      expect(es.floorSettings.recovery.errors[code], `es ${code}`).toBeTruthy()
+      expect(en.floorSettings.recovery.errors[code], `en ${code}`).toBeTruthy()
+    }
+  })
+})

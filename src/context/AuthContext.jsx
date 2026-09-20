@@ -336,6 +336,24 @@ export function AuthProvider({ children }) {
     if (error) throw authError('codeSendFailed', 'No se pudo enviar el código. Inténtalo de nuevo en un momento.')
   }
 
+  // Recuperación asistida por un admin del piso (ver la función
+  // admin-recovery-code): devuelve un código de un solo uso para un compañero,
+  // que el admin le pasa por WhatsApp. No manda ningún correo. Los errores
+  // llevan `code` ('not_admin' | 'not_member' | 'too_soon' | 'not_found' | 'failed').
+  async function generateRecoveryCodeFor(targetUserId) {
+    const { data, error } = await supabase.functions.invoke('admin-recovery-code', { body: { targetUserId } })
+    if (error) {
+      let code = 'failed'
+      try {
+        code = (await error.context.json())?.error || 'failed'
+      } catch {
+        // sin cuerpo legible: error genérico
+      }
+      throw authError(code, 'No se pudo generar el código.')
+    }
+    return data.code
+  }
+
   // Se llama desde la pantalla que abre el enlace del correo: Supabase ya
   // crea ahí una sesión temporal de recuperación al detectar el token en
   // la URL, así que no hace falta pedir la contraseña actual.
@@ -378,6 +396,7 @@ export function AuthProvider({ children }) {
         verifyPassword,
         banAccount,
         requestPasswordReset,
+        generateRecoveryCodeFor,
         updatePasswordWithRecovery,
         confirmPasswordResetWithCode,
         logout,
