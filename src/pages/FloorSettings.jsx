@@ -11,6 +11,7 @@ import { useLanguage } from '../context/LanguageContext'
 import { update, getRotationHistory } from '../lib/db'
 import { resetMemberPin } from '../lib/publicPollApi'
 import { inviteLink } from '../lib/invite'
+import PublicTurnsLinkCard from '../components/PublicTurnsLinkCard'
 import { TASK_LABEL, getMondayOfWeek } from '../lib/rotation'
 import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon } from '../components/icons'
 import { format, addDays } from 'date-fns'
@@ -167,6 +168,10 @@ export default function FloorSettings() {
           </div>
           {copied && <p className="text-xs font-semibold text-sage-500 mt-2 text-center">{t('floorSettings.inviteCopied')}</p>}
           {copyError && <p className="text-xs font-semibold text-clay-500 mt-2 text-center">{t('floorSettings.copyError')}</p>}
+        </Reveal>
+
+        <Reveal as="section" delay={20} className="card p-5">
+          <PublicTurnsLinkCard floorId={floor?.id} floorName={floor?.name} isAdmin={isAdmin} />
         </Reveal>
 
         <Reveal as="section" delay={40} className="card p-5">
