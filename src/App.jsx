@@ -26,6 +26,7 @@ import Terminos from './pages/Terminos'
 import Privacidad from './pages/Privacidad'
 import FloorSettings from './pages/FloorSettings'
 import Votaciones from './pages/Votaciones'
+import PublicPoll from './pages/PublicPoll'
 
 function AuthedData({ children }) {
   // DataProvider depende del piso del usuario autenticado, así que vive
@@ -47,6 +48,8 @@ export default function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/olvide-contrasena" element={<ForgotPassword />} />
             <Route path="/restablecer-contrasena" element={<ResetPassword />} />
+            {/* Votar una consulta desde el link de WhatsApp, sin sesión (PIN personal). */}
+            <Route path="/votar/:pollId" element={<PublicPoll />} />
             <Route
               path="/"
               element={

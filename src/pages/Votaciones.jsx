@@ -7,8 +7,9 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { tallyVotes } from '../lib/polls'
-import { CloseIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons'
+import { tallyVotes, pollDeadlineAt, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS } from '../lib/polls'
+import { canSharePoll, publicPollLink } from '../lib/publicPoll'
+import { CloseIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, ShareIcon } from '../components/icons'
 
 /**
  * Centro de decisiones del piso: una sola bandeja "Pendientes" que junta
@@ -241,9 +242,32 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
   const isBalanceReset = poll.kind === 'balance_reset'
   const approvalLocked = isBalanceReset && myVote === 'Aprobar'
 
+  const { showToast } = useToast()
+
   async function handleClose() {
     if (!confirm(t('votaciones.closeConfirm'))) return
     await closePoll(poll.id)
+  }
+
+  // Link para votar sin iniciar sesión (PIN personal): el menú de compartir del
+  // teléfono si existe (WhatsApp…), si no se copia al portapapeles.
+  async function handleShare() {
+    const url = publicPollLink(poll.id, window.location.origin)
+    const text = t('votaciones.shareText', { question: poll.question })
+    try {
+      if (navigator.share) {
+        await navigator.share({ text, url })
+        return
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return
+    }
+    try {
+      await navigator.clipboard.writeText(`${text} ${url}`)
+      showToast(t('votaciones.linkCopied'), 'success')
+    } catch {
+      showToast(url, 'default')
+    }
   }
 
   return (
@@ -318,6 +342,13 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
         <p className="text-xs font-medium text-gold-500 mt-1">
           {t('votaciones.missingVoters', { names: missingMembers.map((m) => m.name).join(', ') })}
         </p>
+      )}
+
+      {canSharePoll(poll) && (
+        <button type="button" onClick={handleShare} className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-violet-500 hover:underline">
+          <ShareIcon className="w-3.5 h-3.5 shrink-0" />
+          {t('votaciones.shareLink')}
+        </button>
       )}
 
       {!isPending && (
@@ -466,9 +497,9 @@ function CreatePollModal({ onCancel, onCreate, showToast, t }) {
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState(['', ''])
   const [resolutionMode, setResolutionMode] = useState('majority')
-  const [deadline, setDeadline] = useState('')
+  // Duración desde que se crea: 12, 24 o 72 horas (por defecto 72).
+  const [durationHours, setDurationHours] = useState(DEFAULT_POLL_HOURS)
   const [submitting, setSubmitting] = useState(false)
-  const todayISO = new Date().toISOString().slice(0, 10)
 
   function updateOption(i, value) {
     setOptions((prev) => prev.map((o, idx) => (idx === i ? value : o)))
@@ -486,7 +517,12 @@ function CreatePollModal({ onCancel, onCreate, showToast, t }) {
     if (!question.trim() || cleanOptions.length < 2) return
     setSubmitting(true)
     try {
-      await onCreate({ question: question.trim(), options: cleanOptions, resolutionMode, deadline: deadline || null })
+      await onCreate({
+        question: question.trim(),
+        options: cleanOptions,
+        resolutionMode,
+        deadlineAt: pollDeadlineAt(durationHours)
+      })
       showToast(t('votaciones.createdToast'), 'success')
       onCancel()
     } finally {
@@ -574,10 +610,27 @@ function CreatePollModal({ onCancel, onCreate, showToast, t }) {
           </div>
         </div>
 
-        <label className="text-sm block mb-5">
-          {t('votaciones.deadlineOptionalLabel')}
-          <input type="date" className="input mt-1" value={deadline} min={todayISO} onChange={(e) => setDeadline(e.target.value)} />
-        </label>
+        <div className="mb-5">
+          <p className="text-sm mb-1.5">{t('votaciones.durationLabel')}</p>
+          <div className="flex flex-wrap gap-2">
+            {POLL_DURATION_OPTIONS.map((hours) => (
+              <button
+                key={hours}
+                type="button"
+                aria-pressed={durationHours === hours}
+                onClick={() => setDurationHours(hours)}
+                className={`flex-1 min-w-0 text-xs font-semibold px-3 py-2 rounded-xl border-2 ${
+                  durationHours === hours
+                    ? 'bg-gold-100 dark:bg-gold-400/25 border-ink-900 dark:border-cream-100/50 text-ink-900 dark:text-cream-100'
+                    : 'border-ink-900/15 dark:border-cream-100/20 text-ink-900/70 dark:text-cream-100/70'
+                }`}
+              >
+                {t('votaciones.durationOption', { n: hours })}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-1.5">{t('votaciones.durationHint')}</p>
+        </div>
 
         <div className="flex gap-2">
           <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel} disabled={submitting}>

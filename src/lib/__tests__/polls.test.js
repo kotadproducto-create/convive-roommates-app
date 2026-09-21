@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolvePoll, tallyVotes } from '../polls.js'
+import { resolvePoll, tallyVotes, pollDeadlineAt, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS, ROTATION_POLL_HOURS } from '../polls.js'
 
 const TODAY = '2026-09-20'
 
@@ -232,5 +232,39 @@ describe('tallyVotes', () => {
 
   it('lista vacía da un objeto vacío', () => {
     expect(tallyVotes([])).toEqual({})
+  })
+})
+
+describe('pollDeadlineAt — duración elegida al crear una consulta (12, 24 o 72 h)', () => {
+  const now = Date.UTC(2026, 8, 21, 12, 0, 0)
+
+  it('las opciones son exactamente 12, 24 y 72 horas', () => {
+    expect(POLL_DURATION_OPTIONS).toEqual([12, 24, 72])
+  })
+
+  it('suma esas horas desde ahora', () => {
+    expect(pollDeadlineAt(12, now)).toBe('2026-09-22T00:00:00.000Z')
+    expect(pollDeadlineAt(24, now)).toBe('2026-09-22T12:00:00.000Z')
+    expect(pollDeadlineAt(72, now)).toBe('2026-09-24T12:00:00.000Z')
+  })
+
+  it('por defecto y en la rotación dura 72 horas', () => {
+    expect(DEFAULT_POLL_HOURS).toBe(72)
+    expect(ROTATION_POLL_HOURS).toBe(72)
+    expect(pollDeadlineAt(undefined, now)).toBe('2026-09-24T12:00:00.000Z')
+  })
+
+  it('una duración que no está entre las opciones cae en la de por defecto', () => {
+    for (const bad of [0, 5, 48, 9999, 'abc', null]) {
+      expect(pollDeadlineAt(bad, now)).toBe('2026-09-24T12:00:00.000Z')
+    }
+  })
+
+  it('una consulta de 72 h sigue abierta a las 71 h y vence a las 72 h', () => {
+    const poll = { status: 'pending', resolutionMode: 'majority', deadlineAt: pollDeadlineAt(72, now) }
+    const votes = [{ userId: 'a', option: 'Sí' }]
+    const members = ['a', 'b']
+    expect(resolvePoll(poll, votes, members, '2026-09-24', now + 71 * 3600000)).toBeNull()
+    expect(resolvePoll(poll, votes, members, '2026-09-24', now + 72 * 3600000)).toEqual({ status: 'expired', resolvedOption: null })
   })
 })

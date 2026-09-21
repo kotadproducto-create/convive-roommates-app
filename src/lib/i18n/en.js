@@ -373,6 +373,40 @@ export default {
   virtual: {
     tag: 'Virtual profile'
   },
+  publicPoll: {
+    loading: 'Loading…',
+    fromFloor: 'Poll from {{floor}}',
+    votedCount: '{{voted}} of {{total}} have voted',
+    notFoundTitle: "We couldn't find this poll",
+    notFoundBody: "The link may be copied wrong, or this poll can't be voted on here anymore.",
+    errorTitle: "Couldn't load",
+    errorBody: 'Check your connection and try again.',
+    retry: 'Try again',
+    closedTitle: 'This poll no longer accepts votes.',
+    hello: 'Hi, {{name}}',
+    notMe: "That's not me",
+    whoAreYou: 'Who are you?',
+    pickName: 'Pick your name',
+    noPinSuffix: '(no PIN)',
+    noPinHint: "You don't have a PIN yet. Create it in the app, under Settings → Security, then come back to this link.",
+    pinLabel: 'Your 6-digit PIN',
+    chooseOption: 'Choose your vote',
+    canChange: 'You can change your vote by tapping another option while the poll is open.',
+    remember: "Remember this phone (it won't ask for the PIN next time)",
+    vote: 'Vote',
+    voting: 'Sending…',
+    voted: 'Your vote is in: {{option}}',
+    errWrongPin: 'Wrong PIN.',
+    errLocked: 'Too many failed attempts. Try again in about 15 minutes.',
+    errNoPin: "That person doesn't have a PIN yet. It's created in the app, under Settings → Security.",
+    errClosed: 'This poll no longer accepts votes.',
+    errNotMember: 'That person is no longer in the flat.',
+    errDevice: 'This phone is no longer remembered. Pick your name and enter your PIN again.',
+    errNotFound: "We couldn't find this poll.",
+    errGeneric: "Your vote couldn't be saved. Please try again.",
+    goVotaciones: "You're signed in: vote from Votes",
+    openApp: 'Open Convive'
+  },
   sharedSpaces: {
     title: 'Shared spaces',
     subtitle: 'Things everyone uses. Let people know before you use them so you do not overlap.',
@@ -817,6 +851,12 @@ export default {
     expiresLabel: 'Expires {{date}}'
   },
   floorSettings: {
+    resetPin: 'Reset PIN',
+    resetPinTitle: "Reset {{name}}'s PIN",
+    resetPinBody: "{{name}}'s PIN is deleted and their remembered phones are signed out. They can create a new one in the app, under Settings → Security.",
+    resetPinYes: 'Yes, reset',
+    resetPinWorking: 'Resetting…',
+    resetPinDone: "{{name}}'s PIN was reset",
     virtual: {
       add: 'Add virtual profile',
       edit: 'Edit',
@@ -915,7 +955,7 @@ export default {
     editRotation: 'Edit rotation order',
     editRotationConfirmTitle: 'Edit the rotation order?',
     editRotationConfirmBody:
-      'Any change to the order of people, the mode or the frequency will need the floor to approve it, within less than 24 hours.',
+      'Any change to the order of people, the mode or the frequency will need the floor to approve it, within 72 hours.',
     continueButton: 'Continue',
     pendingProposalBanner: 'There\'s a rotation-change proposal waiting for the floor to approve.',
     voteNow: 'Vote now',
@@ -973,6 +1013,22 @@ export default {
     next: 'Next'
   },
   ajustes: {
+    pin: {
+      title: 'PIN to vote from a link',
+      body: 'With a 6-digit PIN you can vote on flat polls from the link shared on WhatsApp, without signing in.',
+      hasPin: 'You already have a PIN.',
+      placeholder: '6-digit PIN',
+      newPlaceholder: 'New 6-digit PIN',
+      confirmPlaceholder: 'Repeat the PIN',
+      changeNote: 'When you change it, phones that remembered your PIN will ask for it again.',
+      save: 'Create PIN',
+      change: 'Change PIN',
+      saving: 'Saving…',
+      savedToast: 'PIN saved',
+      errFormat: 'The PIN is exactly 6 digits.',
+      errMismatch: "The two PINs don't match.",
+      errGeneric: "Couldn't save the PIN. Please try again."
+    },
     title: 'Settings',
     bannerTitle: 'Settings',
     bannerSubtitle: 'How the app works: tutorial, language, notifications and account.',
@@ -1051,6 +1107,12 @@ export default {
     sending: 'Sending…'
   },
   votaciones: {
+    durationLabel: 'Poll duration',
+    durationOption: '{{n}} hours',
+    durationHint: 'It closes by itself once this time has passed since you create it.',
+    shareLink: 'Share link to vote',
+    shareText: 'Flat poll: "{{question}}". Vote here:',
+    linkCopied: 'Link copied. Paste it in WhatsApp.',
     heading: 'Decision hub',
     subtitle: "Everything the flat has pending, in one place.",
     newPoll: '+ New poll',

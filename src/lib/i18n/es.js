@@ -374,6 +374,40 @@ export default {
   virtual: {
     tag: 'Perfil virtual'
   },
+  publicPoll: {
+    loading: 'Cargando…',
+    fromFloor: 'Consulta del piso {{floor}}',
+    votedCount: '{{voted}} de {{total}} han votado',
+    notFoundTitle: 'No encontramos esta consulta',
+    notFoundBody: 'El enlace puede estar mal copiado o la consulta ya no se puede votar por aquí.',
+    errorTitle: 'No se pudo cargar',
+    errorBody: 'Revisa tu conexión e inténtalo de nuevo.',
+    retry: 'Reintentar',
+    closedTitle: 'Esta consulta ya no admite votos.',
+    hello: 'Hola, {{name}}',
+    notMe: 'No soy yo',
+    whoAreYou: '¿Quién eres?',
+    pickName: 'Elige tu nombre',
+    noPinSuffix: '(sin PIN)',
+    noPinHint: 'Aún no tienes un PIN. Créalo en la app, en Configuración → Seguridad, y vuelve a este enlace.',
+    pinLabel: 'Tu PIN de 6 dígitos',
+    chooseOption: 'Elige tu voto',
+    canChange: 'Puedes cambiar tu voto tocando otra opción mientras la consulta siga abierta.',
+    remember: 'Recordar este móvil (no me pedirá el PIN la próxima vez)',
+    vote: 'Votar',
+    voting: 'Enviando…',
+    voted: 'Tu voto quedó registrado: {{option}}',
+    errWrongPin: 'PIN incorrecto.',
+    errLocked: 'Demasiados intentos fallidos. Vuelve a intentarlo en unos 15 minutos.',
+    errNoPin: 'Esa persona aún no tiene un PIN. Se crea en la app, en Configuración → Seguridad.',
+    errClosed: 'Esta consulta ya no admite votos.',
+    errNotMember: 'Esa persona ya no está en el piso.',
+    errDevice: 'Este móvil ya no está recordado. Elige tu nombre y pon tu PIN otra vez.',
+    errNotFound: 'No encontramos esta consulta.',
+    errGeneric: 'No se pudo registrar el voto. Inténtalo de nuevo.',
+    goVotaciones: 'Ya tienes sesión: votar desde Votaciones',
+    openApp: 'Abrir Convive'
+  },
   sharedSpaces: {
     title: 'Espacios compartidos',
     subtitle: 'Lo que se usa entre todos. Avisa antes de usarlo para no coincidir con nadie.',
@@ -818,6 +852,12 @@ export default {
     expiresLabel: 'Expira {{date}}'
   },
   floorSettings: {
+    resetPin: 'Restablecer PIN',
+    resetPinTitle: 'Restablecer el PIN de {{name}}',
+    resetPinBody: 'Se borra el PIN de {{name}} y se cierra su sesión en los móviles recordados. Podrá crear uno nuevo en la app, en Configuración → Seguridad.',
+    resetPinYes: 'Sí, restablecer',
+    resetPinWorking: 'Restableciendo…',
+    resetPinDone: 'El PIN de {{name}} se restableció',
     virtual: {
       add: 'Agregar perfil virtual',
       edit: 'Editar',
@@ -917,7 +957,7 @@ export default {
     editRotation: 'Editar orden de rotación',
     editRotationConfirmTitle: '¿Editar el orden de rotación?',
     editRotationConfirmBody:
-      'Cualquier cambio en el orden de las personas, el modo o la frecuencia deberá ser aprobado por el piso, con un plazo de menos de 24 horas.',
+      'Cualquier cambio en el orden de las personas, el modo o la frecuencia deberá ser aprobado por el piso, con un plazo de 72 horas.',
     continueButton: 'Continuar',
     pendingProposalBanner: 'Hay una propuesta de cambio de rotación esperando aprobación del piso.',
     voteNow: 'Votar ahora',
@@ -975,6 +1015,22 @@ export default {
     next: 'Siguiente'
   },
   ajustes: {
+    pin: {
+      title: 'PIN para votar desde un enlace',
+      body: 'Con un PIN de 6 dígitos puedes votar las consultas del piso desde el enlace que se comparte por WhatsApp, sin iniciar sesión.',
+      hasPin: 'Ya tienes un PIN creado.',
+      placeholder: 'PIN de 6 dígitos',
+      newPlaceholder: 'PIN nuevo de 6 dígitos',
+      confirmPlaceholder: 'Repite el PIN',
+      changeNote: 'Al cambiarlo, los móviles que recordaban tu PIN te lo volverán a pedir.',
+      save: 'Crear PIN',
+      change: 'Cambiar PIN',
+      saving: 'Guardando…',
+      savedToast: 'PIN guardado',
+      errFormat: 'El PIN son exactamente 6 números.',
+      errMismatch: 'Los dos PIN no coinciden.',
+      errGeneric: 'No se pudo guardar el PIN. Inténtalo de nuevo.'
+    },
     title: 'Configuración',
     bannerTitle: 'Configuración',
     bannerSubtitle: 'Cómo funciona la aplicación: tutorial, idioma, notificaciones y cuenta.',
@@ -1053,6 +1109,12 @@ export default {
     sending: 'Enviando…'
   },
   votaciones: {
+    durationLabel: 'Duración de la consulta',
+    durationOption: '{{n}} horas',
+    durationHint: 'Se cierra sola cuando pasa este tiempo desde que la creas.',
+    shareLink: 'Compartir link para votar',
+    shareText: 'Consulta del piso: "{{question}}". Vota aquí:',
+    linkCopied: 'Link copiado. Pégalo en WhatsApp.',
     heading: 'Centro de decisiones',
     subtitle: 'Todo lo pendiente por decidir entre el piso, en un solo lugar.',
     newPoll: '+ Nueva consulta',

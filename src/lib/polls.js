@@ -28,7 +28,8 @@ const VETO_OPTION_BY_KIND = { pot_adjustment: 'Rechazar' }
  *
  * `deadlineAt` (opcional, timestamp preciso en vez de solo fecha) es para
  * consultas que necesitan un plazo más corto que "un día calendario" —
- * por ahora, la de aprobar un cambio de orden de rotación (<24h). Si el
+ * por ahora, la de aprobar un cambio de orden de rotación (72 h) y las
+ * consultas normales, cuyo plazo se elige entre 12, 24 o 72 horas. Si el
  * poll trae `deadlineAt`, se usa esa comparación exacta en vez de
  * `deadline < todayISO`; si no, el comportamiento es idéntico al de
  * siempre.
@@ -106,4 +107,23 @@ export function tallyVotes(votesForPoll) {
   const tally = {}
   for (const v of votesForPoll) tally[v.option] = (tally[v.option] || 0) + 1
   return tally
+}
+
+/** Duraciones (en horas) que se pueden elegir al crear una consulta normal. */
+export const POLL_DURATION_OPTIONS = [12, 24, 72]
+
+/** Duración por defecto de una consulta normal. */
+export const DEFAULT_POLL_HOURS = 72
+
+/** Plazo de una consulta de aprobación de cambio de rotación (no se elige). */
+export const ROTATION_POLL_HOURS = 72
+
+/**
+ * Momento (ISO) en que vence una consulta que dura `hours` horas contadas desde
+ * `nowMs`. Solo valen las duraciones de POLL_DURATION_OPTIONS; cualquier otro
+ * valor cae en la duración por defecto.
+ */
+export function pollDeadlineAt(hours, nowMs = Date.now()) {
+  const h = POLL_DURATION_OPTIONS.includes(Number(hours)) ? Number(hours) : DEFAULT_POLL_HOURS
+  return new Date(nowMs + h * 60 * 60 * 1000).toISOString()
 }

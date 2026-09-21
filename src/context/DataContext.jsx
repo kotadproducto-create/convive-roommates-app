@@ -19,7 +19,7 @@ import {
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
 import { SHARED_SPACE_BY_KEY, currentSpaceUse } from '../lib/sharedSpaces'
 import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark } from '../lib/activities'
-import { resolvePoll } from '../lib/polls'
+import { resolvePoll, pollDeadlineAt, ROTATION_POLL_HOURS } from '../lib/polls'
 import { realMembers, virtualIdSet } from '../lib/virtualMembers'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
@@ -285,6 +285,22 @@ export function DataProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [members, todayISO, currentFloor?.id])
 
+  // Las consultas con plazo en horas (deadlineAt) vencen a una hora exacta: se
+  // agenda un aviso para el primer vencimiento pendiente y se vuelve a evaluar
+  // entonces, sin esperar a que cambie otro dato ni a recargar la app.
+  const [pollClock, setPollClock] = useState(0)
+  useEffect(() => {
+    const now = Date.now()
+    const upcoming = polls
+      .filter((p) => p.status === 'pending' && p.deadlineAt)
+      .map((p) => new Date(p.deadlineAt).getTime())
+      .filter((ms) => ms > now)
+    if (!upcoming.length) return undefined
+    const wait = Math.min(Math.min(...upcoming) - now + 1000, 2147483647)
+    const id = setTimeout(() => setPollClock((c) => c + 1), wait)
+    return () => clearTimeout(id)
+  }, [polls, pollClock])
+
   // Resolución oportunista de consultas (Votaciones): igual que las dos
   // expiraciones de arriba, no hay cron — se revisa cada vez que alguien
   // del piso tiene la app abierta. resolvePoll es pura (ver lib/polls.js);
@@ -405,7 +421,7 @@ export function DataProvider({ children }) {
 
     run()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polls, pollVotes, members, todayISO, currentFloor?.id])
+  }, [polls, pollVotes, members, todayISO, currentFloor?.id, pollClock])
 
   // Genera (una sola vez, de forma idempotente) las finalizaciones de
   // la semana actual de las 3 fijas y las notificaciones de
@@ -1521,7 +1537,7 @@ export function DataProvider({ children }) {
   // el modo (mode: 'random' | 'period') y/o la frecuencia (periodUnit +
   // periodInterval), lo que venga en `changes`. No toca floors todavía:
   // crea una consulta de aprobación (kind:'rotation_order') con un plazo de
-  // menos de 24h. Solo si el piso la aprueba por mayoría se aplica de
+  // 72 h. Solo si el piso la aprueba por mayoría se aplica de
   // verdad (ver el efecto de arriba que invoca resolvePoll). Mientras haya
   // una de estas pendiente, pendingRotationOrderPoll (más abajo) evita que
   // se proponga una segunda.
@@ -1547,7 +1563,7 @@ export function DataProvider({ children }) {
         resolutionMode: 'majority',
         kind: 'rotation_order',
         payload: changes,
-        deadlineAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
+        deadlineAt: pollDeadlineAt(ROTATION_POLL_HOURS)
       })
     },
     [createPoll, user]

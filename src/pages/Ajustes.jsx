@@ -1,5 +1,5 @@
 import LanguageSwitcher from '../components/LanguageSwitcher'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
@@ -11,6 +11,8 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { LockIcon, MoonIcon, SunIcon, BellIcon, AlertIcon, MailIcon, InfoIcon, GearIcon } from '../components/icons'
 import PageBanner, { SectionLabel } from '../components/PageBanner'
+import { cleanPinInput, isValidPin } from '../lib/publicPoll'
+import { hasPollPin, setPollPin } from '../lib/publicPollApi'
 
 const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/
 const APP_VERSION = '1.0.0 Beta'
@@ -275,6 +277,8 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
         </button>
       </form>
 
+      <PollPinSection showToast={showToast} t={t} />
+
       <div className="flex flex-wrap gap-2 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
         <button type="button" className="btn-secondary text-sm" onClick={logout}>
           {t('perfil.logout')}
@@ -286,6 +290,89 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
         )}
       </div>
     </div>
+  )
+}
+
+/** PIN personal de 6 dígitos para votar consultas desde un link, sin iniciar
+ * sesión (ver PublicPoll.jsx). Se guarda cifrado en la base; cambiarlo cierra
+ * la sesión de los móviles recordados. */
+function PollPinSection({ showToast, t }) {
+  const [hasPin, setHasPin] = useState(null)
+  const [pin, setPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    hasPollPin()
+      .then((value) => active && setHasPin(Boolean(value)))
+      .catch((err) => console.error('has_poll_pin', err))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    if (!isValidPin(pin)) {
+      setError(t('ajustes.pin.errFormat'))
+      return
+    }
+    if (pin !== confirmPin) {
+      setError(t('ajustes.pin.errMismatch'))
+      return
+    }
+    setSaving(true)
+    try {
+      const result = await setPollPin(pin)
+      if (!result?.ok) throw new Error(result?.error || 'set_poll_pin')
+      showToast(t('ajustes.pin.savedToast'), 'success')
+      setHasPin(true)
+      setPin('')
+      setConfirmPin('')
+    } catch (err) {
+      console.error('set_poll_pin', err)
+      setError(t('ajustes.pin.errGeneric'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 mb-5 pb-5 border-b border-ink-900/10 dark:border-cream-100/15">
+      <p className="text-sm font-medium">{t('ajustes.pin.title')}</p>
+      <p className="text-xs text-ink-900/60 dark:text-cream-100/60">{t('ajustes.pin.body')}</p>
+      {hasPin && <p className="text-xs font-semibold text-sage-500">{t('ajustes.pin.hasPin')}</p>}
+      <input
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={6}
+        className="input"
+        placeholder={t(hasPin ? 'ajustes.pin.newPlaceholder' : 'ajustes.pin.placeholder')}
+        value={pin}
+        onChange={(e) => setPin(cleanPinInput(e.target.value))}
+        required
+      />
+      <input
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={6}
+        className="input"
+        placeholder={t('ajustes.pin.confirmPlaceholder')}
+        value={confirmPin}
+        onChange={(e) => setConfirmPin(cleanPinInput(e.target.value))}
+        required
+      />
+      {hasPin && <p className="text-xs text-ink-900/40 dark:text-cream-100/40">{t('ajustes.pin.changeNote')}</p>}
+      {error && <p className="text-sm font-medium text-clay-500">{error}</p>}
+      <button className="btn-secondary text-sm self-start" type="submit" disabled={saving}>
+        {saving ? t('ajustes.pin.saving') : t(hasPin ? 'ajustes.pin.change' : 'ajustes.pin.save')}
+      </button>
+    </form>
   )
 }
 

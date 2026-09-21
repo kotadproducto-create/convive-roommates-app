@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
 import { update, getRotationHistory } from '../lib/db'
+import { resetMemberPin } from '../lib/publicPollApi'
 import { TASK_LABEL, getMondayOfWeek } from '../lib/rotation'
 import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon } from '../components/icons'
 import { format, addDays } from 'date-fns'
@@ -56,6 +57,7 @@ export default function FloorSettings() {
   const [perPerson, setPerPerson] = useState(floor?.potPerPerson ?? 10)
   const [copied, setCopied] = useState(false)
   const { showToast } = useToast()
+  const [pinResetFor, setPinResetFor] = useState(null) // miembro al que se le restablece el PIN de votar por link
   const [virtualDialog, setVirtualDialog] = useState(null) // { mode: 'create' | 'edit' | 'link', member? }
   const [recoveryFor, setRecoveryFor] = useState(null) // compañero al que se le genera un código de recuperación
   const [copyError, setCopyError] = useState(false)
@@ -293,6 +295,21 @@ export default function FloorSettings() {
             }}
           />
         )}
+        {pinResetFor && (
+          <ConfirmVirtualDialog
+            danger
+            title={t('floorSettings.resetPinTitle', { name: pinResetFor.name })}
+            body={t('floorSettings.resetPinBody', { name: pinResetFor.name })}
+            confirmLabel={t('floorSettings.resetPinYes')}
+            workingLabel={t('floorSettings.resetPinWorking')}
+            onClose={() => setPinResetFor(null)}
+            onConfirm={async () => {
+              const result = await resetMemberPin(pinResetFor.id)
+              if (!result?.ok) throw new Error(result?.error || 'reset_member_pin')
+              showToast(t('floorSettings.resetPinDone', { name: pinResetFor.name }), 'success')
+            }}
+          />
+        )}
         {recoveryFor && <RecoveryCodeDialog member={recoveryFor} generate={generateRecoveryCodeFor} onClose={() => setRecoveryFor(null)} />}
 
         <Reveal as="section" delay={160} className="card p-5">
@@ -335,6 +352,9 @@ export default function FloorSettings() {
                     <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
                       <button onClick={() => setRecoveryFor(m)} className="text-xs font-semibold text-gold-500 hover:underline">
                         {t('floorSettings.recovery.button')}
+                      </button>
+                      <button onClick={() => setPinResetFor(m)} className="text-xs font-semibold text-gold-500 hover:underline">
+                        {t('floorSettings.resetPin')}
                       </button>
                       {m.role !== 'admin' && (
                         <button onClick={() => makeAdmin(m)} className="text-xs font-semibold text-violet-500 hover:underline">
