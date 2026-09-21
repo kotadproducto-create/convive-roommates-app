@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 import { useToast } from '../context/ToastContext'
@@ -8,22 +8,43 @@ import { AuthShell } from './Login'
 import { authErrorMessage } from '../lib/authErrors'
 import { PIN_LENGTH, cleanPinInput, isValidPin } from '../lib/publicPoll'
 import { setPollPin } from '../lib/publicPollApi'
+import { getAll } from '../lib/db'
+import { normalizeInviteCode, savePendingInvite, clearPendingInvite } from '../lib/invite'
 
 export default function Register() {
-  const { registerAndCreateFloor, registerAndRequestJoin } = useAuth()
+  const { registerAndCreateFloor, registerAndRequestJoin, user, loading } = useAuth()
   const { t } = useLanguage()
   const { showToast } = useToast()
   const navigate = useNavigate()
-  const [mode, setMode] = useState('create') // 'create' | 'join'
+  // Llegando por un link de invitación (/unirse/<código>) se abre directo en "Unirme a un piso".
+  const linkCode = normalizeInviteCode(useParams().code)
+  const [mode, setMode] = useState(linkCode ? 'join' : 'create') // 'create' | 'join'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [floorName, setFloorName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
+  const [inviteCode, setInviteCode] = useState(linkCode)
+  // Piso al que invita el link: undefined = comprobando, null = no existe, texto = su nombre.
+  const [invitedFloor, setInvitedFloor] = useState(undefined)
   // PIN opcional para votar consultas desde un link, sin iniciar sesión (ver PublicPoll.jsx).
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!linkCode) return undefined
+    let active = true
+    savePendingInvite(linkCode)
+    getAll('floors', { inviteCode: linkCode })
+      .then((rows) => active && setInvitedFloor(rows[0]?.name || null))
+      .catch((err) => {
+        console.error('invited floor', err)
+        if (active) setInvitedFloor(undefined)
+      })
+    return () => {
+      active = false
+    }
+  }, [linkCode])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -62,6 +83,7 @@ export default function Register() {
           showToast(t('auth.register.pinLater'), 'default')
         }
       }
+      clearPendingInvite()
       navigate('/bienvenida')
     } catch (err) {
       setError(authErrorMessage(err, t))
@@ -70,12 +92,27 @@ export default function Register() {
     }
   }
 
+  // Con sesión ya abierta el link no tiene nada que registrar: sin piso, la pantalla de
+  // unirse deja el código puesto; con piso, va a la app. (Sin esto solo si llegó por el
+  // link: /register a secas se comporta como siempre.)
+  if (linkCode && !loading && user && !submitting) return <Navigate to="/" replace />
+
   return (
     <AuthShell>
       <h1 className="font-display text-2xl font-bold tracking-tight mb-1">{t('auth.register.title')}</h1>
       <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-5">
         {t('auth.register.subtitle')}
       </p>
+
+      {linkCode && invitedFloor !== undefined && (
+        <p
+          className={`text-sm font-semibold rounded-xl px-3 py-2 mb-4 break-words ${
+            invitedFloor ? 'bg-sage-100 dark:bg-sage-500/20 text-ink-900 dark:text-cream-100' : 'bg-clay-100 dark:bg-clay-500/20 text-clay-500'
+          }`}
+        >
+          {invitedFloor ? t('auth.register.invitedBanner', { floor: invitedFloor }) : t('auth.register.invitedInvalid')}
+        </p>
+      )}
 
       <div className="flex bg-cream-200 dark:bg-ink-700 rounded-xl p-1 mb-5 text-sm font-semibold">
         <button

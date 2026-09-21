@@ -46,6 +46,8 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            {/* Link de invitación al piso: registro con el código puesto. */}
+            <Route path="/unirse/:code" element={<Register />} />
             <Route path="/olvide-contrasena" element={<ForgotPassword />} />
             <Route path="/restablecer-contrasena" element={<ResetPassword />} />
             {/* Votar una consulta desde el link de WhatsApp, sin sesión (PIN personal). */}

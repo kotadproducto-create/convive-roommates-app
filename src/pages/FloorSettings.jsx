@@ -10,6 +10,7 @@ import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
 import { update, getRotationHistory } from '../lib/db'
 import { resetMemberPin } from '../lib/publicPollApi'
+import { inviteLink } from '../lib/invite'
 import { TASK_LABEL, getMondayOfWeek } from '../lib/rotation'
 import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon } from '../components/icons'
 import { format, addDays } from 'date-fns'
@@ -113,24 +114,28 @@ export default function FloorSettings() {
 
   async function handleShareInvite() {
     const code = floor?.inviteCode || ''
+    // El link lleva directo al registro del piso con el código puesto; quien llegue
+    // sigue necesitando que un miembro del piso apruebe su solicitud.
+    const link = inviteLink(window.location.origin, code)
     const text = t('floorSettings.shareInviteText', { floor: floor?.name, code })
     setCopyError(false)
 
     if (navigator.share) {
       try {
-        await navigator.share({ title: t('floorSettings.shareInviteTitle'), text })
+        await navigator.share({ title: t('floorSettings.shareInviteTitle'), text, url: link })
       } catch {
         // El usuario cerró el diálogo de compartir: no hacer nada.
       }
       return
     }
 
+    const copyText = `${text} ${link}`
     try {
-      await navigator.clipboard.writeText(code)
+      await navigator.clipboard.writeText(copyText)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      if (copyWithFallback(code)) {
+      if (copyWithFallback(copyText)) {
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
       } else {
@@ -160,7 +165,7 @@ export default function FloorSettings() {
               {copied ? '✓' : <ShareIcon className="w-4 h-4" />}
             </button>
           </div>
-          {copied && <p className="text-xs font-semibold text-sage-500 mt-2 text-center">{t('floorSettings.codeCopied')}</p>}
+          {copied && <p className="text-xs font-semibold text-sage-500 mt-2 text-center">{t('floorSettings.inviteCopied')}</p>}
           {copyError && <p className="text-xs font-semibold text-clay-500 mt-2 text-center">{t('floorSettings.copyError')}</p>}
         </Reveal>
 

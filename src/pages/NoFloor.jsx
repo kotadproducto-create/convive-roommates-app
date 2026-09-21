@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 import { AuthShell } from './Login'
+import { getPendingInvite, clearPendingInvite } from '../lib/invite'
 
 /**
  * Pantalla que ve cualquier usuario autenticado sin piso activo: mientras
@@ -59,7 +60,8 @@ export default function NoFloor() {
 }
 
 function JoinForm({ requestJoinFloor, logout, t }) {
-  const [inviteCode, setInviteCode] = useState('')
+  // Si llegó por un link de invitación y tuvo que iniciar sesión, el código queda puesto.
+  const [inviteCode, setInviteCode] = useState(() => getPendingInvite())
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -69,6 +71,7 @@ function JoinForm({ requestJoinFloor, logout, t }) {
     setSubmitting(true)
     try {
       await requestJoinFloor(inviteCode)
+      clearPendingInvite()
     } catch (err) {
       setError(err.message)
     } finally {
