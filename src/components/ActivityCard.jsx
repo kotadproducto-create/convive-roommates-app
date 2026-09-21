@@ -1,3 +1,5 @@
+import { useData } from '../context/DataContext'
+import { VirtualTag } from './VirtualMembers'
 import MarqueeText from './MarqueeText'
 import { useMemo } from 'react'
 import Avatar from './Avatar'
@@ -78,10 +80,12 @@ export default function ActivityCard({
   const isDone = completion?.completed || false
   const notThisPeriod = activity.frequencyType === 'recurring' && !completion
   const { user } = useAuth()
+  const { virtualMemberIds } = useData()
   const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
   // "Marcar hecho" = cumplir lo asignado: solo si el turno es de este usuario
   // (o de "Todos") y ya toca la ocasión. "+ Extra" no depende de nada de eso.
-  const isMyTurn = canUserMark(activity, completion, user?.id)
+  const isMyTurn = canUserMark(activity, completion, user?.id, virtualMemberIds)
+  const assigneeIsVirtual = Boolean(assignee?.isVirtual)
   const Icon = (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon
 
   // Solo se calcula (y se muestra) una vez que la actividad ya quedó
@@ -142,6 +146,7 @@ export default function ActivityCard({
               <>
                 <Avatar url={assignee?.avatarUrl} name={assignee?.name} size="w-7 h-7" textSize="text-xs" />
                 <MarqueeText className="text-sm font-medium min-w-0">{assignee ? assignee.name : t('activities.unassigned')}</MarqueeText>
+                {assigneeIsVirtual && <VirtualTag className="shrink-0" />}
               </>
             )}
             {activity.assignmentMode === 'rotation' && activity.frequencyType !== 'once' && (
@@ -171,7 +176,9 @@ export default function ActivityCard({
                 <p className={`text-xs min-w-0 ${isDone ? 'font-semibold text-sage-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
                   {isDone
                     ? t('activities.completed')
-                    : !isMyTurn
+                    : assigneeIsVirtual && !(occ.gated && !occ.canMark)
+                      ? t('activities.virtualTurn', { name: assignee?.name || '' })
+                      : !isMyTurn
                       ? t('activities.turnOf', { name: assignee?.name || '' })
                       : occ.gated && occ.nextDateKey
                         ? occ.canMark

@@ -207,6 +207,7 @@ export default {
     undo: 'Undo'
   },
   convives: {
+    virtualAway: 'Mark as away',
     heading: 'Who lives here',
     subtitle: "The record of everyone who shares the flat with you.",
     you: 'you',
@@ -261,6 +262,8 @@ export default {
     swapTargetActivity: 'an activity'
   },
   activities: {
+    virtualTurn: "{{name}}'s turn (virtual profile) · mark it for them",
+    confirmMarkBodyBehalf: '{{name}} doesn\'t use the app: you are about to mark "{{title}}" as done on their behalf. It will show in the history and earns no points.',
     subtitle: 'Everything that needs doing around the flat, and who does it.',
     cancel: 'Cancel',
     newActivity: '+ New activity',
@@ -366,6 +369,9 @@ export default {
     noteEditedBy: 'Edited by {{name}} · {{time}}',
     noteSomeone: 'someone',
     noteEmpty: 'No notes yet — anyone on the floor can leave a reminder here.'
+  },
+  virtual: {
+    tag: 'Virtual profile'
   },
   sharedSpaces: {
     title: 'Shared spaces',
@@ -523,6 +529,8 @@ export default {
       'On iPhone/iPad: first add Convive to your home screen (Share → "Add to Home Screen") and open it from there to turn these on.'
   },
   shopping: {
+    paidBy: 'Who made the purchase',
+    paidByMe: 'Me',
     title: 'Shopping',
     whatToDo: 'What do you need to do?',
     outOfStockBanner: '{{count}} item{{plural}} out of stock: time to restock.',
@@ -594,6 +602,7 @@ export default {
     closePhotoTitle: 'Close'
   },
   calendar: {
+    markedDoneBehalf: '{{by}} marked "{{title}}" as done on behalf of {{name}}',
     title: 'Weekly calendar',
     restockBanner: 'Restock: {{items}}',
     calendarHeading: 'Calendar',
@@ -657,6 +666,11 @@ export default {
     healthy: "You're doing great! 🌿"
   },
   wallet: {
+    actingAs: 'Record as',
+    actingAsMe: 'Me',
+    recordedBy: 'recorded by {{name}}',
+    confirmContributeBodyBehalf: 'You are about to add {{amount}}€ to the pot on behalf of {{name}}.',
+    confirmExpenseBodyBehalf: 'You are about to withdraw {{amount}}€ from the pot on behalf of {{name}}.',
     title: 'Money pot',
     contributedToast: 'You contributed €{{amount}} to the pot!',
     expenseRecordedToast: 'You logged a €{{amount}} expense',
@@ -803,6 +817,38 @@ export default {
     expiresLabel: 'Expires {{date}}'
   },
   floorSettings: {
+    virtual: {
+      add: 'Add virtual profile',
+      edit: 'Edit',
+      link: 'Link',
+      remove: 'Remove',
+      removeTitle: 'Remove {{name}}',
+      removeConfirm: 'Are you sure you want to remove {{name}} from the flat? Their history is kept and their pending activities go to other people.',
+      removeYes: 'Yes, remove',
+      removing: 'Removing…',
+      linkSureTitle: 'Are you sure you want to link?',
+      linkSureBody: "{{name}}'s virtual profile will be merged into {{real}}'s account: their turns, history, pot and place in the rotation move to that account and the virtual profile disappears. This can't be undone.",
+      linkSureYes: 'Yes, link',
+      removedToast: '{{name}} is no longer in the flat',
+      createdToast: '{{name}} was added as a virtual profile',
+      updatedToast: 'Virtual profile updated',
+      linkedToast: "{{name}}'s virtual profile was linked to their account",
+      createTitle: 'New virtual profile',
+      editTitle: 'Edit virtual profile',
+      createBody: "For someone in the flat who doesn't use the app. They join the rotation and get activities; the rest of the flat marks and records for them.",
+      nameLabel: 'Name',
+      colorLabel: 'Color',
+      create: 'Add',
+      save: 'Save',
+      error: "Couldn't save. Please try again.",
+      linkTitle: "Link {{name}} to their account",
+      linkNone: "There is no one else with an account in the flat yet. Once {{name}} joins Convive and is approved, you can link them here.",
+      linkBody: "When {{name}} joins with their own account, their turns, history, pot and place in the rotation move to that account and the virtual profile disappears. This can't be undone.",
+      linkPick: "Person's account",
+      linkConfirm: 'Link',
+      linking: 'Linking…',
+      close: 'Close'
+    },
     title: 'Your flat',
     recovery: {
       button: 'Recovery code',

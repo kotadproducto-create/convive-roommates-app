@@ -62,7 +62,7 @@ export function ConfirmDialog({ title, body, confirmLabel, onCancel, onConfirm, 
  */
 export function useProgressConfirm() {
   const { user } = useAuth()
-  const { activities, activityMarks, members, setActivityProgress } = useData()
+  const { activities, activityMarks, members, setActivityProgress, virtualMemberIds } = useData()
   const { showToast } = useToast()
   const { t } = useLanguage()
   const { fly } = usePointsFx()
@@ -72,7 +72,7 @@ export function useProgressConfirm() {
     if (!completion) return
     // Marcar hecho es solo del responsable del turno: se avisa sin abrir el pop-up.
     const activity = activities.find((a) => a.id === completion.activityId)
-    if (delta > 0 && activity && !canUserMark(activity, completion, user?.id)) {
+    if (delta > 0 && activity && !canUserMark(activity, completion, user?.id, virtualMemberIds)) {
       const name = members.find((m) => m.id === (completion.assignedUserId || activity.assignedUserId))?.name || ''
       showToast(t('activities.notYourTurnToast', { name }), 'default')
       return
@@ -89,10 +89,17 @@ export function useProgressConfirm() {
     const timesDone = completion.timesDone || 0
     let heading, body, confirmLabel
     let earned = 0
+    let behalfName = null
     if (delta > 0) {
-      earned = occurrencePoints(activity?.points, timesDone, target)
+      // Actividad de un perfil virtual (no usa la app): cualquiera la marca, sin puntos.
+      const assigneeId = completion.assignedUserId || activity?.assignedUserId
+      behalfName = virtualMemberIds.has(assigneeId) ? members.find((m) => m.id === assigneeId)?.name || '' : null
+      earned = behalfName !== null ? 0 : occurrencePoints(activity?.points, timesDone, target)
       heading = t('activities.confirmMarkTitle')
-      body = t(earned ? 'activities.confirmMarkBody' : 'activities.confirmMarkBodyNoPoints', { title, points: earned })
+      body =
+        behalfName !== null
+          ? t('activities.confirmMarkBodyBehalf', { title, name: behalfName })
+          : t(earned ? 'activities.confirmMarkBody' : 'activities.confirmMarkBodyNoPoints', { title, points: earned })
       confirmLabel = t('activities.confirmMarkYes')
     } else {
       const top = activeRoutineMarks(activityMarks, completion.id).at(-1)
@@ -119,7 +126,7 @@ export function useProgressConfirm() {
             showToast(t(result.reason === 'not_yours' ? 'activities.notYoursToast' : 'activities.notYetToast'), 'default')
           } else if (delta > 0) {
             fly(earned, origin)
-            if (timesDone + 1 >= target) showToast(t('taskCard.completedToast', { label: title, points: earned }), 'success')
+            if (timesDone + 1 >= target && behalfName === null) showToast(t('taskCard.completedToast', { label: title, points: earned }), 'success')
           }
         }}
       />

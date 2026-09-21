@@ -70,6 +70,13 @@ export async function create(table, doc) {
   return toCamel(data)
 }
 
+/** Llama a una función de la base (RPC), p. ej. create_virtual_member. Lanza el error de Postgres. */
+export async function callRpc(fn, args = {}) {
+  const { data, error } = await supabase.rpc(fn, args)
+  if (error) throw error
+  return data
+}
+
 export async function update(table, id, patch) {
   const { data, error } = await supabase.from(table).update(toSnake(patch)).eq('id', id).select().single()
   if (error) throw error

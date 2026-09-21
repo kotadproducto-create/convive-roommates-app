@@ -526,7 +526,7 @@ function RoomPartnerCard({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [selected, setSelected] = useState('')
-  const otherMembers = members.filter((m) => m.id !== user.id)
+  const otherMembers = members.filter((m) => m.id !== user.id && !m.isVirtual)
   const outgoingTarget = outgoingPartnerRequest
     ? members.find((m) => m.id === outgoingPartnerRequest.partnerId)
     : null

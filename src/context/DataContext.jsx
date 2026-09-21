@@ -12,12 +12,15 @@ import {
   claimPendingJoinRequests,
   subscribePendingRequests,
   upsertIgnoreDuplicates,
-  deterministicUuid
+  deterministicUuid,
+  getFloorMembers,
+  callRpc
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
 import { SHARED_SPACE_BY_KEY, currentSpaceUse } from '../lib/sharedSpaces'
-import { ensureActivityPeriods, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark } from '../lib/activities'
+import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark } from '../lib/activities'
 import { resolvePoll } from '../lib/polls'
+import { realMembers, virtualIdSet } from '../lib/virtualMembers'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
 
@@ -290,7 +293,7 @@ export function DataProvider({ children }) {
   // para que un efecto que se dispare más de una vez no duplique el aviso.
   useEffect(() => {
     if (!currentFloor) return
-    const activeMemberIds = members.map((m) => m.id)
+    const activeMemberIds = realMembers(members).map((m) => m.id)
     const pending = polls.filter((p) => p.status === 'pending')
     if (!pending.length) return
 
@@ -595,8 +598,13 @@ export function DataProvider({ children }) {
   // el efecto se dispara dos veces, la segunda no crea una fila
   // repetida. No usar para notificaciones que sí pueden repetirse
   // legítimamente (ej. varias propuestas de intercambio).
+  // Perfiles virtuales (personas del piso sin cuenta): ver lib/virtualMembers.js.
+  const virtualMemberIds = useMemo(() => virtualIdSet(members), [members])
+
   const notifyUser = useCallback(
     async (targetFloorId, userId, type, message, weekKeyArg = null, dedupeKey = null) => {
+      // Un perfil virtual no usa la app: nunca se le crea una notificación.
+      if (userId && virtualMemberIds.has(userId)) return
       async function insertOne(forUserId) {
         const row = { floorId: targetFloorId, userId: forUserId, type, weekKey: weekKeyArg, read: false, message }
         if (dedupeKey) {
@@ -619,7 +627,7 @@ export function DataProvider({ children }) {
         await insertOne(partnerUserId)
       }
     },
-    [roomPartners]
+    [roomPartners, virtualMemberIds]
   )
 
   const requestRoomPartner = useCallback(
@@ -767,6 +775,33 @@ export function DataProvider({ children }) {
     [currentFloor, members]
   )
 
+  // Quitar un perfil virtual (solo admins): igual que una salida normal —su
+  // historial se conserva— pero además sus turnos pendientes de ESTE período
+  // pasan a quien corresponde ahora en la rotación. Sin eso quedarían asignados
+  // a alguien que ya no está en el piso y nadie podría marcarlos.
+  const removeVirtualMember = useCallback(
+    async (member) => {
+      if (!currentFloor || !member?.isVirtual) return
+      const newOrder = (currentFloor.rotationOrder || []).filter((id) => id !== member.id)
+      const effectiveOrder = newOrder.filter((id) => !awayUserIds.has(id))
+      for (const c of activityCompletions) {
+        if (c.assignedUserId !== member.id || c.completed) continue
+        const activity = activities.find((a) => a.id === c.activityId)
+        if (!activity) continue
+        const isCurrent = activity.frequencyType === 'once' || c.periodKey === currentPeriodKey(activity, weekKey)
+        if (!isCurrent) continue
+        const next = assigneeFor(activity, effectiveOrder, weekKey, currentFloor)
+        await update('activity_completions', c.id, { assignedUserId: next && next !== member.id ? next : null })
+      }
+      // Actividades fijas a su nombre: pasan a "Todos".
+      for (const a of activities) {
+        if (a.assignedUserId === member.id) await update('activities', a.id, { assignedUserId: null })
+      }
+      await removeMember(member.membershipId, member.id)
+    },
+    [currentFloor, activities, activityCompletions, weekKey, awayUserIds, removeMember]
+  )
+
   // Un admin inicia la salida de OTRO miembro: no lo elimina al instante,
   // solo lo marca "pendiente de confirmación" y le avisa. El propio
   // afectado tiene que confirmar (confirmMyRemoval / removeMember) para
@@ -896,12 +931,19 @@ export function DataProvider({ children }) {
   }, [])
 
   const addPotContribution = useCallback(
-    async (amount) => {
+    async (amount, onBehalfOfId = null) => {
       if (!currentFloor || !user) return
-      await create('pot_contributions', { floorId: currentFloor.id, userId: user.id, amount: Number(amount) })
+      // En nombre de un perfil virtual: el aporte es suyo, queda anotado quién lo registró.
+      const onBehalf = onBehalfOfId && virtualMemberIds.has(onBehalfOfId) ? onBehalfOfId : null
+      await create('pot_contributions', {
+        floorId: currentFloor.id,
+        userId: onBehalf || user.id,
+        amount: Number(amount),
+        recordedBy: onBehalf ? user.id : null
+      })
       await update('floors', currentFloor.id, { potAmount: (currentFloor.potAmount || 0) + Number(amount) })
     },
-    [currentFloor, user]
+    [currentFloor, user, virtualMemberIds]
   )
 
   const setMemberPotActive = useCallback(
@@ -1031,15 +1073,17 @@ export function DataProvider({ children }) {
   )
 
   const addPotExpense = useCallback(
-    async (amount, { note, receiptFile } = {}) => {
+    async (amount, { note, receiptFile, onBehalfOfId = null } = {}) => {
       if (!currentFloor || !user) return
+      const onBehalf = onBehalfOfId && virtualMemberIds.has(onBehalfOfId) ? onBehalfOfId : null
       let receiptUrl = null
       if (receiptFile) {
         receiptUrl = await uploadPotReceipt(receiptFile, currentFloor.id)
       }
       const created = await create('pot_contributions', {
         floorId: currentFloor.id,
-        userId: user.id,
+        userId: onBehalf || user.id,
+        recordedBy: onBehalf ? user.id : null,
         amount: -Math.abs(Number(amount)),
         note: note || null,
         receiptUrl,
@@ -1052,7 +1096,7 @@ export function DataProvider({ children }) {
       await update('floors', currentFloor.id, { potAmount: Math.max(0, (currentFloor.potAmount || 0) - Number(amount)) })
       return created
     },
-    [currentFloor, user, members]
+    [currentFloor, user, members, virtualMemberIds]
   )
 
   // Solo el autor de un gasto puede editarlo/borrarlo, y solo durante las
@@ -1274,7 +1318,7 @@ export function DataProvider({ children }) {
     async (completion, delta, { force = false } = {}) => {
       const activity = activities.find((a) => a.id === completion.activityId)
       const target = activity?.timesPerWeek || 1
-      if (delta > 0 && !force && activity && !canUserMark(activity, completion, user?.id)) {
+      if (delta > 0 && !force && activity && !canUserMark(activity, completion, user?.id, virtualMemberIds)) {
         return { ok: false, reason: 'not_your_turn' }
       }
       if (delta > 0 && !force && activity) {
@@ -1307,7 +1351,9 @@ export function DataProvider({ children }) {
       if (currentFloor && user) {
         const points = {} // profileId → variación de puntos
         for (let i = before; i < timesDone; i++) {
-          const earned = occurrencePoints(activity?.points, i, target)
+          // Marcar en nombre de un perfil virtual no da puntos a nadie.
+          const onBehalf = virtualMemberIds.has(completion.assignedUserId || activity?.assignedUserId)
+          const earned = onBehalf ? 0 : occurrencePoints(activity?.points, i, target)
           await create('activity_marks', {
             floorId: currentFloor.id,
             activityId: completion.activityId,
@@ -1385,19 +1431,20 @@ export function DataProvider({ children }) {
   // una vez (cuenta para la racha y las recompensas, sin tener que ir
   // aparte al Calendario a marcarlo).
   const recordPurchaseSession = useCallback(
-    async ({ itemIds, totalAmount, receiptFile }) => {
+    async ({ itemIds, totalAmount, receiptFile, paidById = null }) => {
       if (!currentFloor || !user) return
+      const buyerId = paidById && virtualMemberIds.has(paidById) ? paidById : user.id
 
       let potContributionId = null
       const amount = Number(totalAmount) || 0
       if (amount > 0) {
-        const contribution = await addPotExpense(amount, { note: 'Compra del piso', receiptFile })
+        const contribution = await addPotExpense(amount, { note: 'Compra del piso', receiptFile, onBehalfOfId: buyerId === user.id ? null : buyerId })
         potContributionId = contribution?.id || null
       }
 
       const session = await create('purchase_sessions', {
         floorId: currentFloor.id,
-        userId: user.id,
+        userId: buyerId,
         potContributionId
       })
 
@@ -1411,7 +1458,7 @@ export function DataProvider({ children }) {
           floorId: currentFloor.id,
           itemId,
           itemName: item.name,
-          userId: user.id,
+          userId: buyerId,
           price: null,
           potContributionId,
           sessionId: session.id
@@ -1439,7 +1486,7 @@ export function DataProvider({ children }) {
         }
       }
     },
-    [currentFloor, user, shoppingItems, activities, activityCompletions, weekKey, addPotExpense, setActivityProgress]
+    [currentFloor, user, shoppingItems, activities, activityCompletions, weekKey, addPotExpense, setActivityProgress, virtualMemberIds]
   )
 
   // Consulta nueva (Votaciones): notificación floor-wide de una, no hace
@@ -1639,7 +1686,43 @@ export function DataProvider({ children }) {
 
   const closePoll = useCallback((pollId) => update('polls', pollId, { status: 'closed', resolvedAt: new Date().toISOString() }), [])
 
-  const leaderboard = useMemo(() => [...members].sort((a, b) => (b.points || 0) - (a.points || 0)), [members])
+  // Perfiles virtuales (solo admins; ver supabase/virtual_members.sql). Al
+  // terminar se relee la lista de miembros para que se vea al instante.
+  const refreshMembers = useCallback(async () => {
+    if (currentFloor) setMembers(await getFloorMembers(currentFloor.id))
+  }, [currentFloor])
+
+  const createVirtualMember = useCallback(
+    async (name, color) => {
+      if (!currentFloor) return null
+      const id = await callRpc('create_virtual_member', { p_floor_id: currentFloor.id, p_name: name, p_color: color || null })
+      await refreshMembers()
+      return id
+    },
+    [currentFloor, refreshMembers]
+  )
+
+  const updateVirtualMember = useCallback(
+    async (id, name, color) => {
+      await callRpc('update_virtual_member', { p_id: id, p_name: name, p_color: color || null })
+      await refreshMembers()
+    },
+    [refreshMembers]
+  )
+
+  // Vincula el perfil virtual con la cuenta real de la misma persona: turnos,
+  // historial, Pote y posición en la rotación pasan a la cuenta real.
+  const linkVirtualMember = useCallback(
+    async (virtualId, realId) => {
+      await callRpc('link_virtual_member', { p_virtual_id: virtualId, p_real_id: realId })
+      await refreshMembers()
+      // El orden de rotación cambió en la base: se relee el piso.
+      refreshAuth()
+    },
+    [refreshMembers, refreshAuth]
+  )
+
+  const leaderboard = useMemo(() => realMembers(members).sort((a, b) => (b.points || 0) - (a.points || 0)), [members])
 
   const value = {
     floor: currentFloor,
@@ -1650,6 +1733,11 @@ export function DataProvider({ children }) {
     notifications: myNotifications,
     unreadCount,
     leaderboard,
+    virtualMemberIds,
+    createVirtualMember,
+    removeVirtualMember,
+    updateVirtualMember,
+    linkVirtualMember,
     redemptions,
     potContributions,
     walletResets,

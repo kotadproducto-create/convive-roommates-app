@@ -1,4 +1,5 @@
 import MarqueeText from '../components/MarqueeText'
+import { VirtualTag } from '../components/VirtualMembers'
 import { useMemo, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
@@ -57,6 +58,10 @@ export default function Wallet() {
   const [showAdjustDialog, setShowAdjustDialog] = useState(false)
   // "Reiniciar saldo": solo para mí (al instante) o para todos (consulta en Votaciones).
   const [showResetDialog, setShowResetDialog] = useState(false)
+  // Registrar aportes/gastos en nombre de un perfil virtual (no usa la app): '' = yo.
+  const [actingAs, setActingAs] = useState('')
+  const virtualMembers = useMemo(() => members.filter((m) => m.isVirtual), [members])
+  const behalfName = virtualMembers.find((m) => m.id === actingAs)?.name || null
 
   // Wallet de cada persona: suma lo que aporta y resta su parte de cada
   // gasto (Pote o Compras), repartido en partes iguales — ver lib/wallets.js.
@@ -67,7 +72,7 @@ export default function Wallet() {
   // vive en confirmPending(), que se dispara al pulsar "Confirmar" ahí.
   function requestContribute() {
     if (!amount || Number(amount) <= 0) return
-    setPendingAction({ type: 'contribute', amount })
+    setPendingAction({ type: 'contribute', amount, onBehalfOfId: behalfName ? actingAs : null, onBehalfName: behalfName })
   }
 
   function handleReceiptChange(e) {
@@ -82,20 +87,20 @@ export default function Wallet() {
   function requestExpense(e) {
     e.preventDefault()
     if (!expenseAmount || Number(expenseAmount) <= 0) return
-    setPendingAction({ type: 'expense', amount: expenseAmount, note: expenseNote, receiptFile })
+    setPendingAction({ type: 'expense', amount: expenseAmount, note: expenseNote, receiptFile, onBehalfOfId: behalfName ? actingAs : null, onBehalfName: behalfName })
   }
 
   async function confirmPending() {
     if (!pendingAction) return
     if (pendingAction.type === 'contribute') {
-      await addPotContribution(pendingAction.amount)
+      await addPotContribution(pendingAction.amount, pendingAction.onBehalfOfId)
       showToast(t('wallet.contributedToast', { amount: pendingAction.amount }), 'success')
       setPendingAction(null)
       return
     }
     setSubmittingExpense(true)
     try {
-      await addPotExpense(pendingAction.amount, { note: pendingAction.note.trim() || null, receiptFile: pendingAction.receiptFile })
+      await addPotExpense(pendingAction.amount, { note: pendingAction.note.trim() || null, receiptFile: pendingAction.receiptFile, onBehalfOfId: pendingAction.onBehalfOfId })
       showToast(t('wallet.expenseRecordedToast', { amount: pendingAction.amount }), 'default')
       setExpenseAmount('')
       setExpenseNote('')
@@ -173,6 +178,20 @@ export default function Wallet() {
             </div>
           </div>
 
+          {virtualMembers.length > 0 && (
+            <label className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-900/60 dark:text-cream-100/60">
+              {t('wallet.actingAs')}
+              <select className="input !w-auto min-w-0 max-w-full text-xs py-1.5" value={actingAs} onChange={(e) => setActingAs(e.target.value)}>
+                <option value="">{t('wallet.actingAsMe')}</option>
+                {virtualMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({t('virtual.tag')})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {showExpenseForm && (
             <form onSubmit={requestExpense} className="flex flex-col gap-3 pt-4 border-t border-ink-900/10 dark:border-cream-100/15">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -212,7 +231,7 @@ export default function Wallet() {
             <PotAdjustmentRequestCard
               poll={pendingPotAdjustmentPoll}
               votes={pollVotes.filter((v) => v.pollId === pendingPotAdjustmentPoll.id)}
-              members={members}
+              members={members.filter((m) => !m.isVirtual)}
               user={user}
               isAdmin={isAdmin}
               castVote={castVote}
@@ -241,7 +260,10 @@ export default function Wallet() {
                         {m.name[0].toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <MarqueeText as="p" className="text-sm font-medium">{m.name}{m.id === user.id ? t('wallet.you') : ''}</MarqueeText>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <MarqueeText as="p" className="text-sm font-medium min-w-0">{m.name}{m.id === user.id ? t('wallet.you') : ''}</MarqueeText>
+                          {m.isVirtual && <VirtualTag className="shrink-0" />}
+                        </div>
                         <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
                           {t('wallet.walletBreakdown', { contributed: w.contributed.toFixed(2), share: w.expenseShare.toFixed(2) })}
                           {w.resetAdjustment !== undefined &&
@@ -296,7 +318,8 @@ export default function Wallet() {
                         key={item.id}
                         contribution={item.c}
                         authorName={memberById[item.c.userId]?.name || t('wallet.someone')}
-                        canManage={!isPotAdjustment(item.c) && item.c.userId === user.id && Number(item.c.amount) < 0 && Date.now() - new Date(item.c.createdAt).getTime() < 24 * 60 * 60 * 1000}
+                        recordedByName={item.c.recordedBy && item.c.recordedBy !== item.c.userId ? memberById[item.c.recordedBy]?.name || t('wallet.someone') : null}
+                        canManage={!isPotAdjustment(item.c) && (item.c.userId === user.id || item.c.recordedBy === user.id) && Number(item.c.amount) < 0 && Date.now() - new Date(item.c.createdAt).getTime() < 24 * 60 * 60 * 1000}
                         onUpdate={updatePotExpense}
                         onDelete={deletePotExpense}
                         t={t}
@@ -547,9 +570,14 @@ function ConfirmPotDialog({ action, onCancel, onConfirm, t }) {
         <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
         <h3 className="font-display text-lg font-bold mb-2">{t('wallet.confirmTitle')}</h3>
         <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mb-5">
-          {isExpense
-            ? t('wallet.confirmExpenseBody', { amount: Number(action.amount).toFixed(2) })
-            : t('wallet.confirmContributeBody', { amount: Number(action.amount).toFixed(2) })}
+          {action.onBehalfName
+            ? t(isExpense ? 'wallet.confirmExpenseBodyBehalf' : 'wallet.confirmContributeBodyBehalf', {
+                amount: Number(action.amount).toFixed(2),
+                name: action.onBehalfName
+              })
+            : isExpense
+              ? t('wallet.confirmExpenseBody', { amount: Number(action.amount).toFixed(2) })
+              : t('wallet.confirmContributeBody', { amount: Number(action.amount).toFixed(2) })}
         </p>
         <div className="flex gap-2">
           <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel} disabled={submitting}>
@@ -702,7 +730,7 @@ function ResetProposalRow({ poll, name, t, dateLocale }) {
   )
 }
 
-function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete, t, dateLocale }) {
+function HistoryRow({ contribution: c, authorName, recordedByName = null, canManage, onUpdate, onDelete, t, dateLocale }) {
   const isExpense = Number(c.amount) < 0
   const [editing, setEditing] = useState(false)
   const [amount, setAmount] = useState(Math.abs(Number(c.amount)))
@@ -799,6 +827,7 @@ function HistoryRow({ contribution: c, authorName, canManage, onUpdate, onDelete
       </div>
       <div className="mt-1 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs text-ink-900/50 dark:text-cream-100/50 min-w-0">
+          {recordedByName && <span className="shrink-0 italic">{t('wallet.recordedBy', { name: recordedByName })}</span>}
           {c.note && <MarqueeText>{c.note}</MarqueeText>}
           {c.receiptUrl && (
             <a href={c.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-violet-500 hover:underline shrink-0">

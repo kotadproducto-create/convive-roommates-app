@@ -1,3 +1,4 @@
+import { VirtualTag } from '../components/VirtualMembers'
 import MarqueeText from '../components/MarqueeText'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -94,12 +95,12 @@ function getPendingItems(memberId, activities, activityCompletions, weekKey) {
 /** Una fila de "Esta semana": título del turno + Marcar hecho +
  * Intercambiar (con un <select> de compañeros que se abre al tocar,
  * mismo patrón que el picker de compañero de habitación en Perfil). */
-function PendingItemRow({ item, members, currentUserId, requestSwap, hasOutgoingSwap, t }) {
+function PendingItemRow({ item, members, currentUserId, hideSwap = false, requestSwap, hasOutgoingSwap, t }) {
   const { showToast } = useToast()
   const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [selected, setSelected] = useState('')
-  const otherMembers = members.filter((m) => m.id !== currentUserId)
+  const otherMembers = members.filter((m) => m.id !== currentUserId && !m.isVirtual)
 
   const isStepped = item.activity?.frequencyType === 'recurring' && item.activity.recurrenceUnit === 'week' && (item.activity.timesPerWeek || 1) > 1
 
@@ -126,7 +127,7 @@ function PendingItemRow({ item, members, currentUserId, requestSwap, hasOutgoing
               ? t('convives.markDoneStepped', { done: item.completion.timesDone || 0, target: item.activity.timesPerWeek })
               : t('convives.markDone')}
           </button>
-          {!hasOutgoingSwap && otherMembers.length > 0 && (
+          {!hideSwap && !hasOutgoingSwap && otherMembers.length > 0 && (
             <button
               type="button"
               onClick={() => setPickerOpen((s) => !s)}
@@ -240,7 +241,7 @@ function ConviveCard({
   // que ya usan las ThemeCard de Inicio (Pointer Events + un ref para
   // el estado del arrastre, para no perder clics reales en los
   // botones de adentro cuando no hubo arrastre de verdad).
-  const [expanded, setExpanded] = useState(isSelf)
+  const [expanded, setExpanded] = useState(isSelf || Boolean(member.isVirtual))
   const [dragX, setDragX] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const drag = useRef({ startX: 0, active: false, moved: false })
@@ -338,6 +339,7 @@ function ConviveCard({
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {member.isVirtual && <VirtualTag />}
           {member.role === 'admin' && (
             <span className="text-[10px] uppercase font-bold text-violet-500 bg-violet-50 dark:bg-violet-700/25 px-1.5 py-0.5 rounded-md">
               {t('convives.admin')}
@@ -382,9 +384,9 @@ function ConviveCard({
         )}
         {/* Un solo botón que alterna: "Estoy fuera" (abre el pop-up de fechas) /
             "Vuelta al piso" (vuelve al instante). El tag de al lado se actualiza solo. */}
-        {isSelf && (
+        {(isSelf || (member.isVirtual && isAdmin)) && (
           <button type="button" onClick={handleStatusClick} className="btn-secondary text-sm ml-auto">
-            {isAway ? t('convives.backToFloor') : t('convives.imAway')}
+            {isAway ? t('convives.backToFloor') : member.isVirtual ? t('convives.virtualAway') : t('convives.imAway')}
           </button>
         )}
       </div>
@@ -404,12 +406,13 @@ function ConviveCard({
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('convives.thisWeek')}</p>
             {pendingItems.length === 0 ? (
               <p className="text-xs text-ink-900/40 dark:text-cream-100/40">{t('convives.noPendingThisWeek')}</p>
-            ) : isSelf ? (
+            ) : isSelf || member.isVirtual ? (
               pendingItems.map((item) => (
                 <PendingItemRow
                   key={`${item.targetType}-${item.targetId}`}
                   item={item}
                   members={members}
+                  hideSwap={Boolean(member.isVirtual)}
                   currentUserId={currentUserId}
                   requestSwap={requestSwap}
                   hasOutgoingSwap={outgoingSwapRequests.some((r) => r.targetId === item.targetId)}
@@ -443,10 +446,12 @@ function ConviveCard({
           )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className="flex items-center gap-1 font-semibold text-sm text-ink-900 dark:text-cream-100">
-            <CoinIcon className="w-4 h-4 text-gold-500" />{member.points || 0}
-          </span>
-          {isAdmin && (
+          {!member.isVirtual && (
+            <span className="flex items-center gap-1 font-semibold text-sm text-ink-900 dark:text-cream-100">
+              <CoinIcon className="w-4 h-4 text-gold-500" />{member.points || 0}
+            </span>
+          )}
+          {isAdmin && !member.isVirtual && (
             <button
               type="button"
               onClick={() => setAdjusting((s) => !s)}

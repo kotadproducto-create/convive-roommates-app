@@ -1,3 +1,4 @@
+import { VirtualTag } from './VirtualMembers'
 import MarqueeText from './MarqueeText'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
@@ -25,6 +26,7 @@ export default function RotationOrderBox() {
                 {idx + 1}
               </span>
               <MarqueeText className="min-w-0">{m.name}</MarqueeText>
+              {m.isVirtual && <VirtualTag className="shrink-0" />}
             </li>
           )
         })}

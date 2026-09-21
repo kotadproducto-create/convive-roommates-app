@@ -399,12 +399,17 @@ function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingI
       if (!activity) continue
       completionsWithMarks.add(m.completionId)
       const isUndo = m.kind === 'undo'
+      // Marca hecha por otra persona en nombre de un perfil virtual.
+      const assigneeId = activityCompletions.find((c) => c.id === m.completionId)?.assignedUserId
+      const onBehalfOf = !isUndo && assigneeId && assigneeId !== m.markedBy && memberById[assigneeId]?.isVirtual ? memberById[assigneeId] : null
       events.push({
         id: `${m.kind}-${m.id}`,
         time: m.createdAt,
         icon: (activity.fixedKey && FIXED_ICONS[activity.fixedKey]) || SparkleIcon,
         tone: isUndo ? 'clay' : 'sage',
-        title: t(isUndo ? 'calendar.undoneMark' : 'calendar.markedDone', { name: memberById[m.markedBy]?.name || t('calendar.someone'), title: activity.title }),
+        title: onBehalfOf
+          ? t('calendar.markedDoneBehalf', { by: memberById[m.markedBy]?.name || t('calendar.someone'), name: onBehalfOf.name, title: activity.title })
+          : t(isUndo ? 'calendar.undoneMark' : 'calendar.markedDone', { name: memberById[m.markedBy]?.name || t('calendar.someone'), title: activity.title }),
         subtitle: m.points ? t('calendar.pointsChange', { points: m.points > 0 ? `+${m.points}` : m.points }) : null
       })
     }

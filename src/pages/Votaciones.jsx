@@ -50,7 +50,7 @@ export default function Votaciones() {
   const [showCreate, setShowCreate] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
-  const activeMemberIds = useMemo(() => members.map((m) => m.id), [members])
+  const activeMemberIds = useMemo(() => members.filter((m) => !m.isVirtual).map((m) => m.id), [members])
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
 
   const pendingPolls = useMemo(() => polls.filter((p) => p.status === 'pending'), [polls])

@@ -208,6 +208,7 @@ export default {
     undo: 'Deshacer'
   },
   convives: {
+    virtualAway: 'Marcar fuera',
     heading: 'Quiénes viven aquí',
     subtitle: 'El registro de todos los que comparten el piso contigo.',
     you: 'tú',
@@ -262,6 +263,8 @@ export default {
     swapTargetActivity: 'una actividad'
   },
   activities: {
+    virtualTurn: 'Le toca a {{name}} (perfil virtual) · marca por esa persona',
+    confirmMarkBodyBehalf: '{{name}} no usa la app: vas a marcar "{{title}}" como hecho en su nombre. Quedará en el historial y no suma puntos.',
     subtitle: 'Todo lo que hay que hacer en el piso, y quién lo hace.',
     cancel: 'Cancelar',
     newActivity: '+ Nueva actividad',
@@ -367,6 +370,9 @@ export default {
     noteEditedBy: 'Editado por {{name}} · {{time}}',
     noteSomeone: 'alguien',
     noteEmpty: 'Sin notas todavía — cualquiera del piso puede dejar un recordatorio acá.'
+  },
+  virtual: {
+    tag: 'Perfil virtual'
   },
   sharedSpaces: {
     title: 'Espacios compartidos',
@@ -524,6 +530,8 @@ export default {
       'En iPhone/iPad: primero añade Convive a tu pantalla de inicio (Compartir → "Añadir a pantalla de inicio") y ábrela desde ahí para poder activarlas.'
   },
   shopping: {
+    paidBy: 'Quién hizo la compra',
+    paidByMe: 'Yo',
     title: 'Compras',
     whatToDo: '¿Qué necesitas hacer?',
     outOfStockBanner: '{{count}} producto{{plural}} agotado{{plural}}: hace falta reponer.',
@@ -595,6 +603,7 @@ export default {
     closePhotoTitle: 'Cerrar'
   },
   calendar: {
+    markedDoneBehalf: '{{by}} marcó como hecho "{{title}}" en nombre de {{name}}',
     title: 'Calendario semanal',
     restockBanner: 'Reponer: {{items}}',
     calendarHeading: 'Calendario',
@@ -658,6 +667,11 @@ export default {
     healthy: '¡Vais bien! 🌿'
   },
   wallet: {
+    actingAs: 'Registrar como',
+    actingAsMe: 'Yo',
+    recordedBy: 'registrado por {{name}}',
+    confirmContributeBodyBehalf: 'Vas a agregar {{amount}}€ al pote en nombre de {{name}}.',
+    confirmExpenseBodyBehalf: 'Vas a retirar {{amount}}€ del pote en nombre de {{name}}.',
     title: 'Pote de dinero',
     contributedToast: '¡Aportaste {{amount}}€ al pote!',
     expenseRecordedToast: 'Registraste un gasto de {{amount}}€',
@@ -804,6 +818,38 @@ export default {
     expiresLabel: 'Expira {{date}}'
   },
   floorSettings: {
+    virtual: {
+      add: 'Agregar perfil virtual',
+      edit: 'Editar',
+      link: 'Vincular',
+      remove: 'Quitar',
+      removeTitle: 'Quitar a {{name}}',
+      removeConfirm: '¿Seguro que quieres quitar a {{name}} del piso? Su historial se conserva y sus actividades pendientes pasan a otras personas.',
+      removeYes: 'Sí, quitar',
+      removing: 'Quitando…',
+      linkSureTitle: '¿Seguro que quieres vincular?',
+      linkSureBody: 'El perfil virtual de {{name}} se unirá con la cuenta de {{real}}: sus turnos, historial, Pote y lugar en la rotación pasarán a esa cuenta y el perfil virtual desaparecerá. No se puede deshacer.',
+      linkSureYes: 'Sí, vincular',
+      removedToast: '{{name}} ya no está en el piso',
+      createdToast: '{{name}} se agregó como perfil virtual',
+      updatedToast: 'Perfil virtual actualizado',
+      linkedToast: 'El perfil virtual de {{name}} se vinculó con su cuenta',
+      createTitle: 'Nuevo perfil virtual',
+      editTitle: 'Editar perfil virtual',
+      createBody: 'Para alguien del piso que no usa la app. Entra en la rotación y recibe actividades; el resto del piso marca y registra por esa persona.',
+      nameLabel: 'Nombre',
+      colorLabel: 'Color',
+      create: 'Agregar',
+      save: 'Guardar',
+      error: 'No se pudo guardar. Inténtalo de nuevo.',
+      linkTitle: 'Vincular a {{name}} con su cuenta',
+      linkNone: 'Todavía no hay otra persona con cuenta en el piso. Cuando {{name}} se una a Convive y la aprueben, podrás vincularla aquí.',
+      linkBody: 'Cuando {{name}} se una con su propia cuenta, sus turnos, historial, Pote y lugar en la rotación pasan a esa cuenta y el perfil virtual desaparece. No se puede deshacer.',
+      linkPick: 'Cuenta de la persona',
+      linkConfirm: 'Vincular',
+      linking: 'Vinculando…',
+      close: 'Cerrar'
+    },
     title: 'Tu piso',
     recovery: {
       button: 'Código de recuperación',

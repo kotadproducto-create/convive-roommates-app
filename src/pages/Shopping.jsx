@@ -84,6 +84,9 @@ export default function Shopping() {
     : null
   const shopper = comprasCompletion ? memberById[comprasCompletion.assignedUserId] : null
   const isShopper = shopper?.id === user.id
+  // Perfiles virtuales (personas sin la app): alguien más registra la compra en su nombre.
+  const virtualMembers = useMemo(() => members.filter((m) => m.isVirtual), [members])
+  const defaultPayerId = shopper?.isVirtual ? shopper.id : ''
 
   // Prioridad de compra: primero lo agotado, luego lo que está por
   // acabarse, y al final lo que tiene stock de sobra.
@@ -147,6 +150,8 @@ export default function Shopping() {
           catalogItems={sortedItems}
           onAddItem={handleAddOnTheFly}
           onConfirm={handleConfirmPurchase}
+          virtualMembers={virtualMembers}
+          defaultPayerId={defaultPayerId}
           onBack={() => setMode('menu')}
           t={t}
         />
@@ -342,7 +347,7 @@ function MenuCard({ tone, icon: Icon, title, subtitle, onClick }) {
  * — o escribiendo un nombre nuevo con "Otro"), un monto total del
  * viaje y una foto de ticket opcional — todo en un solo "Confirmar
  * compra". */
-function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, t }) {
+function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, virtualMembers = [], defaultPayerId = '', t }) {
   const { showToast } = useToast()
   const [quantities, setQuantities] = useState({})
   const [expanded, setExpanded] = useState(() => new Set())
@@ -351,6 +356,8 @@ function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, t }) {
   const [addingNew, setAddingNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [totalAmount, setTotalAmount] = useState('')
+  // Quién hizo la compra: '' = yo, o un perfil virtual (la registro en su nombre).
+  const [paidById, setPaidById] = useState(defaultPayerId)
   const [receiptFile, setReceiptFile] = useState(null)
   const [receiptPreview, setReceiptPreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -415,7 +422,7 @@ function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, t }) {
     }
     setSubmitting(true)
     try {
-      await onConfirm({ itemIds: selectedIds, totalAmount, receiptFile })
+      await onConfirm({ itemIds: selectedIds, totalAmount, receiptFile, paidById: paidById || null })
     } finally {
       setSubmitting(false)
     }
@@ -500,6 +507,21 @@ function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, t }) {
       )}
 
       <div className="card p-4 flex flex-col gap-4 mb-5">
+        {virtualMembers.length > 0 && (
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 block mb-1">
+              {t('shopping.paidBy')}
+            </label>
+            <select className="input" value={paidById} onChange={(e) => setPaidById(e.target.value)}>
+              <option value="">{t('shopping.paidByMe')}</option>
+              {virtualMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({t('virtual.tag')})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50 block mb-1">
             {t('shopping.amountToPay')}

@@ -308,7 +308,7 @@ function DangerZoneCard({ user, membership, floor, members, removeMember, setMem
       await verifyPassword(password)
 
       if (membership?.role === 'admin') {
-        const others = members.filter((m) => m.id !== user.id)
+        const others = members.filter((m) => m.id !== user.id && !m.isVirtual)
         const anotherAdmin = others.find((m) => m.role === 'admin')
         if (others.length > 0 && !anotherAdmin) {
           const rotationOrder = floor?.rotationOrder || []

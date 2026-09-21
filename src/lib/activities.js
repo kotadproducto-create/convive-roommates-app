@@ -294,9 +294,10 @@ export function occurrenceSlots(activity, completion, todayKey = getDateKey(new 
  * si la actividad es de "Todos", sin nadie asignado). Quien no es el
  * responsable usa "+ Extra" (realización voluntaria, sin tocar la rutina).
  */
-export function canUserMark(activity, completion, userId) {
+export function canUserMark(activity, completion, userId, virtualIds = null) {
   const assigned = completion?.assignedUserId || activity?.assignedUserId
-  return !assigned || assigned === userId
+  // Un perfil virtual no usa la app: cualquier miembro puede marcar sus actividades.
+  return !assigned || assigned === userId || Boolean(virtualIds?.has(assigned))
 }
 
 /**
