@@ -45,6 +45,17 @@ export function voteErrorKey(code) {
   return ERROR_KEYS[code] || 'publicPoll.errGeneric'
 }
 
+const PIN_CHANGE_ERROR_KEYS = {
+  wrong_password: 'ajustes.pin.errWrongPassword',
+  locked: 'ajustes.pin.errLocked',
+  invalid_format: 'ajustes.pin.errFormat'
+}
+
+/** Clave i18n del mensaje para un código de error al cambiar el PIN. */
+export function pinChangeErrorKey(code) {
+  return PIN_CHANGE_ERROR_KEYS[code] || 'ajustes.pin.errGeneric'
+}
+
 // El token del móvil recordado vive en localStorage; en navegación privada o con
 // el almacenamiento bloqueado puede fallar: entonces simplemente no se recuerda.
 export function getDeviceToken() {

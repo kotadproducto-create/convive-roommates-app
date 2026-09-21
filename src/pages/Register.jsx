@@ -2,13 +2,17 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
+import { useToast } from '../context/ToastContext'
 import PasswordInput from '../components/PasswordInput'
 import { AuthShell } from './Login'
 import { authErrorMessage } from '../lib/authErrors'
+import { PIN_LENGTH, cleanPinInput, isValidPin } from '../lib/publicPoll'
+import { setPollPin } from '../lib/publicPollApi'
 
 export default function Register() {
   const { registerAndCreateFloor, registerAndRequestJoin } = useAuth()
   const { t } = useLanguage()
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const [mode, setMode] = useState('create') // 'create' | 'join'
   const [name, setName] = useState('')
@@ -16,6 +20,8 @@ export default function Register() {
   const [password, setPassword] = useState('')
   const [floorName, setFloorName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
+  // PIN opcional para votar consultas desde un link, sin iniciar sesión (ver PublicPoll.jsx).
+  const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -33,12 +39,28 @@ export default function Register() {
     setEmail(emailValue)
     setPassword(passwordValue)
     setError('')
+    // Se valida antes de crear nada: un PIN a medias no debe dejar la cuenta creada.
+    if (pin && !isValidPin(pin)) {
+      setError(t('auth.register.pinInvalid'))
+      return
+    }
     setSubmitting(true)
     try {
       if (mode === 'create') {
         await registerAndCreateFloor({ name: nameValue, email: emailValue, password: passwordValue, floorName })
       } else {
         await registerAndRequestJoin({ name: nameValue, email: emailValue, password: passwordValue, inviteCode })
+      }
+      // Con la cuenta ya creada y la sesión abierta se guarda el PIN. Si falla no se
+      // frena el registro: se puede crear luego en Configuración → Seguridad.
+      if (pin) {
+        try {
+          const result = await setPollPin(pin)
+          if (!result?.ok) throw new Error(result?.error || 'set_poll_pin')
+        } catch (pinErr) {
+          console.error('set_poll_pin (registro)', pinErr)
+          showToast(t('auth.register.pinLater'), 'default')
+        }
       }
       navigate('/bienvenida')
     } catch (err) {
@@ -84,6 +106,20 @@ export default function Register() {
           required
           minLength={4}
         />
+        <div>
+          <input
+            className="input"
+            type="password"
+            name="pollPin"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={PIN_LENGTH}
+            placeholder={t('auth.register.pinPlaceholder')}
+            value={pin}
+            onChange={(e) => setPin(cleanPinInput(e.target.value))}
+          />
+          <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mt-1">{t('auth.register.pinHint')}</p>
+        </div>
         {mode === 'create' ? (
           <input
             className="input"

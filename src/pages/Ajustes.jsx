@@ -11,8 +11,8 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { LockIcon, MoonIcon, SunIcon, BellIcon, AlertIcon, MailIcon, InfoIcon, GearIcon } from '../components/icons'
 import PageBanner, { SectionLabel } from '../components/PageBanner'
-import { cleanPinInput, isValidPin } from '../lib/publicPoll'
-import { hasPollPin, setPollPin } from '../lib/publicPollApi'
+import { cleanPinInput, isValidPin, pinChangeErrorKey } from '../lib/publicPoll'
+import { hasPollPin, setPollPin, changePollPin } from '../lib/publicPollApi'
 
 const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/
 const APP_VERSION = '1.0.0 Beta'
@@ -298,6 +298,7 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
  * la sesión de los móviles recordados. */
 function PollPinSection({ showToast, t }) {
   const [hasPin, setHasPin] = useState(null)
+  const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
   const [saving, setSaving] = useState(false)
@@ -326,14 +327,19 @@ function PollPinSection({ showToast, t }) {
     }
     setSaving(true)
     try {
-      const result = await setPollPin(pin)
-      if (!result?.ok) throw new Error(result?.error || 'set_poll_pin')
+      // Crear el PIN (primera vez) no pide nada más; cambiarlo exige la contraseña de Convive.
+      const result = hasPin ? await changePollPin(password, pin) : await setPollPin(pin)
+      if (!result?.ok) {
+        setError(t(hasPin ? pinChangeErrorKey(result?.error) : 'ajustes.pin.errGeneric'))
+        return
+      }
       showToast(t('ajustes.pin.savedToast'), 'success')
       setHasPin(true)
+      setPassword('')
       setPin('')
       setConfirmPin('')
     } catch (err) {
-      console.error('set_poll_pin', err)
+      console.error('poll pin', err)
       setError(t('ajustes.pin.errGeneric'))
     } finally {
       setSaving(false)
@@ -345,6 +351,17 @@ function PollPinSection({ showToast, t }) {
       <p className="text-sm font-medium">{t('ajustes.pin.title')}</p>
       <p className="text-xs text-ink-900/60 dark:text-cream-100/60">{t('ajustes.pin.body')}</p>
       {hasPin && <p className="text-xs font-semibold text-sage-500">{t('ajustes.pin.hasPin')}</p>}
+      {hasPin && (
+        <input
+          type="password"
+          autoComplete="current-password"
+          className="input"
+          placeholder={t('ajustes.pin.passwordPlaceholder')}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+      )}
       <input
         type="password"
         inputMode="numeric"

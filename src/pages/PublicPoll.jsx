@@ -249,6 +249,10 @@ function PinVoter({ pollId, poll, members, onVoted, onNotice, t }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {members.length > 0 && members.every((m) => !m.has_pin) && (
+        <p className="text-xs font-medium text-gold-500">{t('publicPoll.nobodyHasPin')}</p>
+      )}
+
       <label className="text-sm font-medium block">
         {t('publicPoll.whoAreYou')}
         <select
@@ -262,7 +266,7 @@ function PinVoter({ pollId, poll, members, onVoted, onNotice, t }) {
         >
           <option value="">{t('publicPoll.pickName')}</option>
           {members.map((m) => (
-            <option key={m.id} value={m.id} disabled={!m.has_pin}>
+            <option key={m.id} value={m.id}>
               {m.name}
               {m.has_pin ? '' : ` ${t('publicPoll.noPinSuffix')}`}
             </option>

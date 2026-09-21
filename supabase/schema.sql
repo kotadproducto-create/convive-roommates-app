@@ -1074,6 +1074,9 @@ create table if not exists poll_pins (
   updated_at timestamptz not null default now()
 );
 
+alter table poll_pins add column if not exists pw_failed_count int not null default 0;
+alter table poll_pins add column if not exists pw_locked_until timestamptz;
+
 create table if not exists poll_devices (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
@@ -1186,15 +1189,63 @@ begin
     return jsonb_build_object('ok', false, 'error', 'invalid_format');
   end if;
 
+  -- Solo CREA el PIN (la primera vez). Cambiarlo exige la contraseña de Convive:
+  -- ver change_poll_pin.
   insert into poll_pins (user_id, pin_hash)
   values (auth.uid(), crypt(p_pin, gen_salt('bf', 8)))
-  on conflict (user_id) do update
-    set pin_hash = excluded.pin_hash,
-        failed_count = 0,
-        locked_until = null,
-        updated_at = now();
+  on conflict (user_id) do nothing;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'pin_exists');
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
 
-  -- Cambiar el PIN desconecta todos los móviles recordados.
+-- Cambiar un PIN que ya existe: pide la contraseña de acceso a Convive y la
+-- comprueba aquí mismo, en el servidor (5 fallos seguidos bloquean 15 minutos).
+-- Cambiarlo desconecta todos los móviles recordados.
+create or replace function change_poll_pin(p_password text, p_pin text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_pin poll_pins%rowtype;
+  v_hash text;
+begin
+  if auth.uid() is null then
+    return jsonb_build_object('ok', false, 'error', 'not_authenticated');
+  end if;
+  if p_pin is null or p_pin !~ '^[0-9]{6}$' then
+    return jsonb_build_object('ok', false, 'error', 'invalid_format');
+  end if;
+
+  select * into v_pin from poll_pins where user_id = auth.uid() for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'no_pin');
+  end if;
+  if v_pin.pw_locked_until is not null and v_pin.pw_locked_until > now() then
+    return jsonb_build_object('ok', false, 'error', 'locked', 'locked_until', v_pin.pw_locked_until);
+  end if;
+
+  select encrypted_password into v_hash from auth.users where id = auth.uid();
+  if v_hash is null or coalesce(p_password, '') = '' or crypt(p_password, v_hash) <> v_hash then
+    update poll_pins set
+      pw_failed_count = case when pw_failed_count + 1 >= 5 then 0 else pw_failed_count + 1 end,
+      pw_locked_until = case when pw_failed_count + 1 >= 5 then now() + interval '15 minutes' else null end
+    where user_id = auth.uid();
+    return jsonb_build_object('ok', false, 'error', 'wrong_password');
+  end if;
+
+  update poll_pins set
+    pin_hash = crypt(p_pin, gen_salt('bf', 8)),
+    failed_count = 0,
+    locked_until = null,
+    pw_failed_count = 0,
+    pw_locked_until = null,
+    updated_at = now()
+  where user_id = auth.uid();
   delete from poll_devices where user_id = auth.uid();
   return jsonb_build_object('ok', true);
 end;
@@ -1412,6 +1463,8 @@ revoke all on function reset_member_pin(uuid) from public, anon;
 grant execute on function has_poll_pin() to authenticated;
 grant execute on function set_poll_pin(text) to authenticated;
 grant execute on function reset_member_pin(uuid) to authenticated;
+revoke all on function change_poll_pin(text, text) from public, anon;
+grant execute on function change_poll_pin(text, text) to authenticated;
 
 revoke all on function get_public_poll(uuid, text) from public;
 revoke all on function vote_with_pin(uuid, uuid, text, int, boolean) from public;

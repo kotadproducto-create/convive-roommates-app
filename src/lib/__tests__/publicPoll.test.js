@@ -5,6 +5,7 @@ import {
   publicPollLink,
   canSharePoll,
   voteErrorKey,
+  pinChangeErrorKey,
   getDeviceToken,
   saveDeviceToken,
   clearDeviceToken
@@ -67,6 +68,16 @@ describe('errores de voto', () => {
   })
 })
 
+describe('errores al cambiar el PIN', () => {
+  it('cada código tiene su mensaje y lo desconocido cae en el genérico', () => {
+    expect(pinChangeErrorKey('wrong_password')).toBe('ajustes.pin.errWrongPassword')
+    expect(pinChangeErrorKey('locked')).toBe('ajustes.pin.errLocked')
+    expect(pinChangeErrorKey('invalid_format')).toBe('ajustes.pin.errFormat')
+    expect(pinChangeErrorKey('no_pin')).toBe('ajustes.pin.errGeneric')
+    expect(pinChangeErrorKey(undefined)).toBe('ajustes.pin.errGeneric')
+  })
+})
+
 describe('móvil recordado sin almacenamiento', () => {
   it('no falla si localStorage no está disponible', () => {
     expect(() => saveDeviceToken('t')).not.toThrow()
@@ -91,6 +102,7 @@ describe('textos de votar sin sesión', () => {
     'publicPoll.whoAreYou',
     'publicPoll.pickName',
     'publicPoll.noPinSuffix',
+    'publicPoll.nobodyHasPin',
     'publicPoll.noPinHint',
     'publicPoll.pinLabel',
     'publicPoll.chooseOption',
@@ -115,6 +127,12 @@ describe('textos de votar sin sesión', () => {
     'ajustes.pin.errFormat',
     'ajustes.pin.errMismatch',
     'ajustes.pin.errGeneric',
+    'ajustes.pin.passwordPlaceholder',
+    'ajustes.pin.requiredTitle',
+    'ajustes.pin.requiredBody',
+    'ajustes.pin.requiredNote',
+    'ajustes.pin.errWrongPassword',
+    'ajustes.pin.errLocked',
     'votaciones.shareLink',
     'votaciones.shareText',
     'votaciones.linkCopied',

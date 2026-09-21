@@ -49,8 +49,14 @@ export function hasPollPin() {
   return callRpc('has_poll_pin')
 }
 
+/** Crea el PIN (solo la primera vez). */
 export function setPollPin(pin) {
   return callRpc('set_poll_pin', { p_pin: pin })
+}
+
+/** Cambia un PIN que ya existe: exige la contraseña de acceso a Convive (se comprueba en el servidor). */
+export function changePollPin(password, pin) {
+  return callRpc('change_poll_pin', { p_password: password, p_pin: pin })
 }
 
 export function resetMemberPin(userId) {
