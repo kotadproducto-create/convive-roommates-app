@@ -116,10 +116,19 @@ export function currentPeriodKey(activity, weekKey) {
 /** Elige a quién le toca por rotación, dado un índice de período —
  * versión genérica de whoIsAssigned (esa tiene un "offset" específico
  * para escalonar las 3 tareas fijas dentro de la misma semana, que
- * las actividades propias no necesitan). */
-export function rotationPick(rotationOrder, periodIndex) {
+ * las actividades propias no necesitan).
+ *
+ * `turnOffset` (floor.rotationOffset) es un desfase de fase, aparte del
+ * índice de período: lo usa "asignar el turno actual a mano" (ver
+ * setCurrentTurn en DataContext.jsx) para corregir a QUIÉN le toca AHORA
+ * sin reordenar a nadie ni tocar el orden configurado — los turnos
+ * siguientes vuelven a seguir ese orden, solo desplazados en fase. 0 (el
+ * default) no cambia nada de lo que ya había. */
+export function rotationPick(rotationOrder, periodIndex, turnOffset = 0) {
   if (!rotationOrder || rotationOrder.length === 0) return null
-  return rotationOrder[periodIndex % rotationOrder.length]
+  const len = rotationOrder.length
+  const idx = (((periodIndex + turnOffset) % len) + len) % len
+  return rotationOrder[idx]
 }
 
 /**
@@ -159,6 +168,16 @@ function rotationIndexFor(activity, period, weekKey, floor) {
   return activity.recurrenceUnit === 'month' ? monthIndexFromKey(period) : activity.recurrenceUnit === 'day' ? dayIndexFromKey(period) : weekIndexFromKey(period)
 }
 
+/** Índice de turno del piso ANTES de aplicar rotationOffset — lo que
+ * `floorKeeperFor` usaría con el turno "sin corregir a mano". Lo necesita
+ * DataContext.jsx (setCurrentTurn) para calcular qué offset hace falta para
+ * que le toque a una persona en concreto ahora mismo. */
+export function floorKeeperIndex(floor, weekKey) {
+  return floor?.rotationMode === 'period' && floor.rotationPeriodUnit
+    ? globalPeriodIndex(floor, mondayOfWeekKey(weekKey))
+    : weekIndexFromKey(weekKey)
+}
+
 /**
  * Persona encargada del piso esta semana: a quien le toca en el orden de
  * rotación del piso. Usa el mismo índice de turno que una actividad
@@ -168,11 +187,7 @@ function rotationIndexFor(activity, period, weekKey, floor) {
  * no hay nadie en la rotación.
  */
 export function floorKeeperFor(floor, rotationOrder, weekKey) {
-  const index =
-    floor?.rotationMode === 'period' && floor.rotationPeriodUnit
-      ? globalPeriodIndex(floor, mondayOfWeekKey(weekKey))
-      : weekIndexFromKey(weekKey)
-  return rotationPick(rotationOrder, index)
+  return rotationPick(rotationOrder, floorKeeperIndex(floor, weekKey), floor?.rotationOffset)
 }
 
 /** ¿Quién le toca a esta actividad en este período? (manual: la
@@ -187,7 +202,7 @@ export function assigneeFor(activity, rotationOrder, weekKey, floor) {
   }
   const period = currentPeriodKey(activity, weekKey)
   if (!period) return null
-  return rotationPick(rotationOrder, rotationIndexFor(activity, period, weekKey, floor))
+  return rotationPick(rotationOrder, rotationIndexFor(activity, period, weekKey, floor), floor?.rotationOffset)
 }
 
 /**
@@ -246,7 +261,7 @@ export function nextOccurrence(activity, rotationOrder, fromDate = new Date(), s
           : activity.recurrenceUnit === 'day'
             ? dayIndexFromKey(period)
             : weekIndexFromKey(period)
-    const assignedUserId = activity.assignmentMode === 'manual' ? activity.assignedUserId || null : rotationPick(rotationOrder, index)
+    const assignedUserId = activity.assignmentMode === 'manual' ? activity.assignedUserId || null : rotationPick(rotationOrder, index, floor?.rotationOffset)
     return { date, periodKey: period, assignedUserId }
   }
   return null

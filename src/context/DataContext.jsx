@@ -18,7 +18,7 @@ import {
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
 import { SHARED_SPACE_BY_KEY, currentSpaceUse } from '../lib/sharedSpaces'
-import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark } from '../lib/activities'
+import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark, floorKeeperIndex } from '../lib/activities'
 import { resolvePoll, pollDeadlineAt, ROTATION_POLL_HOURS } from '../lib/polls'
 import { realMembers, virtualIdSet } from '../lib/virtualMembers'
 import { useAuth } from './AuthContext'
@@ -330,7 +330,9 @@ export function DataProvider({ children }) {
         const approved = outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar'
         if (isRotationOrder && approved && poll.payload) {
           const { newOrder, mode, periodUnit, periodInterval } = poll.payload
-          const patch = { rotationEpoch: todayISO }
+          // rotationOffset (asignar el turno actual a mano, ver setCurrentTurn) queda
+          // sin sentido en cuanto cambia el orden/modo/período de verdad: se reinicia.
+          const patch = { rotationEpoch: todayISO, rotationOffset: 0 }
           if (newOrder) patch.rotationOrder = newOrder
           if (mode) patch.rotationMode = mode
           if (periodUnit) {
@@ -1569,6 +1571,67 @@ export function DataProvider({ children }) {
     [createPoll, user]
   )
 
+  // Un admin reordena a las PERSONAS directamente, sin votación previa (ver
+  // supabase/rotation_direct.sql): se aplica al instante y el piso recibe una
+  // notificación con una previsualización y "Estoy de acuerdo" como acción
+  // principal — quien prefiera otro orden puede sugerir uno alternativo, y esa
+  // alternativa sí pasa por la votación de siempre (proposeRotationChange). El
+  // modo de rotación y su frecuencia NO entran acá: eso sigue yendo a votación.
+  // `set_rotation_order_direct` comprueba ella misma que quien llama es admin
+  // (la política RLS de "floors" es permisiva a propósito, ver el comentario
+  // en ese archivo) y valida que newOrder sea de verdad una reordenación de
+  // los miembros activos del piso.
+  const updateRotationOrderDirect = useCallback(
+    async (newOrder) => {
+      if (!currentFloor) return
+      await callRpc('set_rotation_order_direct', { p_floor_id: currentFloor.id, p_new_order: newOrder })
+    },
+    [currentFloor]
+  )
+
+  // Un admin corrige A QUIÉN LE TOCA AHORA sin reordenar a nadie ni tocar el
+  // orden configurado (ver supabase/rotation_turn.sql): se guarda como un
+  // desfase de fase (floors.rotation_offset) que rotationPick suma al índice
+  // de período de siempre — los turnos siguientes vuelven a seguir el orden
+  // de toda la vida, solo desplazados. `personId` tiene que estar en el orden
+  // EFECTIVO (sin quienes están "fuera"), igual que floorKeeperFor/
+  // assigneeFor lo calculan en el resto de la app.
+  //
+  // El offset por sí solo NO alcanza para que Actividades/Calendario
+  // coincidan al instante: el turno de ESTE período de cada actividad por
+  // rotación ya quedó guardado en activity_completions (lo crea
+  // ensureActivityPeriods al abrir la app) con el offset ANTERIOR, y ese
+  // valor guardado no se recalcula solo. Se reescribe a mano acá — mismo
+  // patrón que usa removeVirtualMember al reasignar turnos pendientes — para
+  // que no quede la inconsistencia de "Tu piso dice una persona y Actividades
+  // dice otra" para el turno que ya estaba en curso.
+  const setCurrentTurn = useCallback(
+    async (personId) => {
+      if (!currentFloor) return
+      const effectiveOrder = (currentFloor.rotationOrder || []).filter((id) => !awayUserIds.has(id))
+      const targetPos = effectiveOrder.indexOf(personId)
+      if (targetPos < 0) return
+      const len = effectiveOrder.length
+      const rawIndex = floorKeeperIndex(currentFloor, weekKey)
+      const newOffset = (((targetPos - rawIndex) % len) + len) % len
+      await callRpc('set_rotation_turn_direct', { p_floor_id: currentFloor.id, p_offset: newOffset })
+
+      const updatedFloor = { ...currentFloor, rotationOffset: newOffset }
+      for (const activity of activities) {
+        if (activity.frequencyType !== 'recurring' || activity.assignmentMode !== 'rotation') continue
+        const period = currentPeriodKey(activity, weekKey)
+        if (!period) continue
+        const completion = activityCompletions.find((c) => c.activityId === activity.id && c.periodKey === period)
+        if (!completion) continue
+        const newAssignee = assigneeFor(activity, effectiveOrder, weekKey, updatedFloor)
+        if (newAssignee && newAssignee !== completion.assignedUserId) {
+          await update('activity_completions', completion.id, { assignedUserId: newAssignee })
+        }
+      }
+    },
+    [currentFloor, awayUserIds, weekKey, activities, activityCompletions]
+  )
+
   // Consulta pendiente de modificar manualmente el importe del Pote —
   // usada para mostrar su estado en la pantalla del Pote y para no
   // permitir una segunda solicitud mientras haya una en curso.
@@ -1809,6 +1872,8 @@ export function DataProvider({ children }) {
     castVote,
     closePoll,
     proposeRotationChange,
+    updateRotationOrderDirect,
+    setCurrentTurn,
     pendingRotationOrderPoll,
     pendingPotAdjustmentPoll,
     requestPotAdjustment,

@@ -1,7 +1,7 @@
 import { useToast } from '../context/ToastContext'
 import { VirtualTag, VirtualMemberFormDialog, LinkVirtualDialog, ConfirmVirtualDialog } from '../components/VirtualMembers'
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
 import RecoveryCodeDialog from '../components/RecoveryCodeDialog'
@@ -11,6 +11,7 @@ import { useLanguage } from '../context/LanguageContext'
 import { update, getRotationHistory } from '../lib/db'
 import { resetMemberPin } from '../lib/publicPollApi'
 import { inviteLink } from '../lib/invite'
+import { floorKeeperFor } from '../lib/activities'
 import PublicTurnsLinkCard from '../components/PublicTurnsLinkCard'
 import { TASK_LABEL, getMondayOfWeek } from '../lib/rotation'
 import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon } from '../components/icons'
@@ -39,6 +40,8 @@ export default function FloorSettings() {
     pendingAbsenceRequests,
     awayUserIds,
     proposeRotationChange,
+    updateRotationOrderDirect,
+    setCurrentTurn,
     pendingRotationOrderPoll,
     initiateRemoval,
     cancelRemoval,
@@ -54,6 +57,8 @@ export default function FloorSettings() {
     rejectJoinRequest
   } = useData()
   const { t, dateLocale } = useLanguage()
+  const location = useLocation()
+  const navigate = useNavigate()
   const isAdmin = membership?.role === 'admin'
   const [threshold, setThreshold] = useState(floor?.potThreshold ?? 30)
   const [perPerson, setPerPerson] = useState(floor?.potPerPerson ?? 10)
@@ -218,6 +223,8 @@ export default function FloorSettings() {
             floor={floor}
             memberById={memberById}
             proposeRotationChange={proposeRotationChange}
+            updateRotationOrderDirect={updateRotationOrderDirect}
+            setCurrentTurn={setCurrentTurn}
             pendingRotationOrderPoll={pendingRotationOrderPoll}
             weekKey={weekKey}
             awayUserIds={awayUserIds}
@@ -228,6 +235,9 @@ export default function FloorSettings() {
             pendingAbsenceRequests={pendingAbsenceRequests}
             decideAbsenceRequest={decideAbsenceRequest}
             cancelAbsenceRequest={cancelAbsenceRequest}
+            showToast={showToast}
+            autoOpenPropose={Boolean(location.state?.openProposeOrder)}
+            onAutoOpenHandled={() => navigate(location.pathname, { replace: true })}
             t={t}
             dateLocale={dateLocale}
           />
@@ -420,6 +430,8 @@ function RotationSection({
   floor,
   memberById,
   proposeRotationChange,
+  updateRotationOrderDirect,
+  setCurrentTurn,
   pendingRotationOrderPoll,
   weekKey,
   awayUserIds,
@@ -430,23 +442,48 @@ function RotationSection({
   pendingAbsenceRequests,
   decideAbsenceRequest,
   cancelAbsenceRequest,
+  showToast,
+  autoOpenPropose,
+  onAutoOpenHandled,
   t,
   dateLocale
 }) {
   const currentAbsenceRequests = myAbsenceRequests.filter((r) => r.status === 'pending' || r.status === 'approved')
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState(null)
-  const [showEditConfirm, setShowEditConfirm] = useState(false)
+  // 'direct' = lo abre un admin (el orden de personas se aplica al instante;
+  // modo/frecuencia siguen yendo a votación); 'propose' = cualquiera arma una
+  // alternativa que SIEMPRE pasa por votación (proposeRotationChange). null =
+  // no hay pop-up de confirmación pendiente.
+  const [pendingEditKind, setPendingEditKind] = useState(null)
   const [editing, setEditing] = useState(false)
+  const [editKind, setEditKind] = useState('direct')
   const [draft, setDraft] = useState(order)
-  // Modo y frecuencia también son parte del borrador: nada se guarda hasta
-  // que se propone y el piso lo aprueba.
+  // Modo y frecuencia también son parte del borrador de un admin: nada se
+  // guarda hasta que se propone y el piso lo aprueba (el orden de personas,
+  // en cambio, se guarda al instante — ver handleSave).
   const currentMode = floor?.rotationMode || 'random'
   const currentUnit = floor?.rotationPeriodUnit || 'week'
   const currentInterval = floor?.rotationPeriodInterval || 1
   const [draftMode, setDraftMode] = useState(currentMode)
   const [draftUnit, setDraftUnit] = useState(currentUnit)
   const [draftInterval, setDraftInterval] = useState(String(currentInterval))
+  // Persona a la que un admin le quiere asignar el turno actual a mano (para
+  // el pop-up de confirmación); null = ninguno pendiente.
+  const [assignTurnTarget, setAssignTurnTarget] = useState(null)
+
+  // A quién le toca AHORA (mismo cálculo que Actividades/Calendario/el link
+  // público de turnos: floorKeeperFor, con el orden EFECTIVO — sin quienes
+  // están fuera, que tampoco se les puede asignar el turno a mano).
+  const effectiveOrder = useMemo(() => order.filter((id) => !awayUserIds.has(id)), [order, awayUserIds])
+  const currentTurnId = useMemo(() => floorKeeperFor(floor, effectiveOrder, weekKey), [floor, effectiveOrder, weekKey])
+
+  async function handleAssignTurn() {
+    if (!assignTurnTarget) return
+    const name = assignTurnTarget.name
+    await setCurrentTurn(assignTurnTarget.id)
+    showToast?.(t('floorSettings.assignTurnToast', { name }), 'success')
+  }
 
   const monday = getMondayOfWeek(weekKey)
   const sunday = addDays(monday, 6)
@@ -457,14 +494,25 @@ function RotationSection({
   // se necesitan las 3 fijas para el historial de más abajo.
   const fixedActivities = useMemo(() => activities.filter((a) => a.fixedKey), [activities])
 
-  function startEditing() {
+  function startEditing(kind) {
     setDraft(order)
     setDraftMode(currentMode)
     setDraftUnit(currentUnit)
     setDraftInterval(String(currentInterval))
+    setEditKind(kind)
     setEditing(true)
-    setShowEditConfirm(false)
+    setPendingEditKind(null)
   }
+
+  // Se llega aquí desde el aviso "cambió el orden de rotación" (enlace
+  // secundario "¿Quieres sugerir un nuevo orden?"): abre directo el
+  // formulario de propuesta, sin repetir el pop-up de confirmación.
+  useEffect(() => {
+    if (!autoOpenPropose) return
+    startEditing('propose')
+    onAutoOpenHandled?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenPropose])
 
   function moveDraft(idx, dir) {
     const next = [...draft]
@@ -490,11 +538,27 @@ function RotationSection({
   const orderChanged = JSON.stringify(draft) !== JSON.stringify(order)
   const modeChanged = draftMode !== currentMode
   const periodChanged = draftMode === 'period' && (draftUnit !== currentUnit || intervalNumber !== currentInterval)
-  // Cualquier modificación válida (orden, modo o frecuencia) se puede proponer.
+  // Cualquier modificación válida (orden, modo o frecuencia) se puede guardar.
   const canPropose = periodValid && (orderChanged || modeChanged || periodChanged)
+  // Solo reordenar personas (nada de modo/frecuencia), abierto por un admin,
+  // se aplica al instante. Cualquier otro caso — incluida la propuesta de
+  // cualquier miembro (editKind 'propose') — sigue yendo a votación, como
+  // hasta ahora.
+  const willVote = editKind === 'propose' || modeChanged || periodChanged
 
-  async function handlePropose() {
+  async function handleSave() {
     if (!canPropose) return
+    if (!willVote) {
+      try {
+        await updateRotationOrderDirect(draft)
+        showToast?.(t('floorSettings.orderUpdatedToast'), 'success')
+        setEditing(false)
+      } catch (err) {
+        console.error('updateRotationOrderDirect', err)
+        showToast?.(t('floorSettings.orderUpdateError'), 'error')
+      }
+      return
+    }
     const changes = {}
     if (orderChanged) changes.newOrder = draft
     if (modeChanged) changes.mode = draftMode
@@ -519,7 +583,7 @@ function RotationSection({
         {isAdmin && !editing && (
           <button
             type="button"
-            onClick={() => setShowEditConfirm(true)}
+            onClick={() => setPendingEditKind('direct')}
             disabled={!!pendingRotationOrderPoll}
             title={t('floorSettings.editRotation')}
             className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700 disabled:opacity-30 disabled:hover:bg-transparent shrink-0"
@@ -528,10 +592,20 @@ function RotationSection({
           </button>
         )}
       </div>
-      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-3">
+      <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-1">
         {t('floorSettings.rotationDesc')}
-        {!isAdmin && t('floorSettings.adminOnlyReorder')}
+        {!isAdmin && ` ${t('floorSettings.adminOnlyReorder')}`}
       </p>
+      {!editing && (
+        <button
+          type="button"
+          onClick={() => setPendingEditKind('propose')}
+          disabled={!!pendingRotationOrderPoll}
+          className="text-xs font-semibold text-violet-500 hover:underline mb-3 disabled:opacity-40 disabled:hover:no-underline"
+        >
+          {t('floorSettings.suggestOrderLink')}
+        </button>
+      )}
 
       {pendingRotationOrderPoll && (
         <div className="flex items-center justify-between gap-2 text-sm bg-gold-100 dark:bg-gold-400/15 rounded-xl px-3 py-2.5 mb-4">
@@ -555,16 +629,22 @@ function RotationSection({
 
       {editing ? (
         <div className="flex flex-col gap-3 mb-4 border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-xl p-3">
-          <RotationModePicker
-            mode={draftMode}
-            unit={draftUnit}
-            interval={draftInterval}
-            onModeChange={setDraftMode}
-            onUnitChange={setDraftUnit}
-            onIntervalChange={setDraftInterval}
-            intervalInvalid={!periodValid}
-            t={t}
-          />
+          {editKind === 'propose' && (
+            <p className="text-xs text-ink-900/60 dark:text-cream-100/60">{t('floorSettings.proposeOrderHint')}</p>
+          )}
+
+          {editKind === 'direct' && (
+            <RotationModePicker
+              mode={draftMode}
+              unit={draftUnit}
+              interval={draftInterval}
+              onModeChange={setDraftMode}
+              onUnitChange={setDraftUnit}
+              onIntervalChange={setDraftInterval}
+              intervalInvalid={!periodValid}
+              t={t}
+            />
+          )}
 
           {draftMode === 'random' && (
             <button type="button" onClick={shuffleDraft} className="btn-secondary text-sm self-start">
@@ -601,8 +681,8 @@ function RotationSection({
             <button type="button" className="btn-secondary text-sm flex-1" onClick={() => setEditing(false)}>
               {t('floorSettings.cancel')}
             </button>
-            <button type="button" className="btn-primary text-sm flex-1" onClick={handlePropose} disabled={!canPropose}>
-              {t('floorSettings.proposeChangeButton')}
+            <button type="button" className="btn-primary text-sm flex-1" onClick={handleSave} disabled={!canPropose}>
+              {willVote ? t('floorSettings.proposeChangeButton') : t('floorSettings.saveOrderButton')}
             </button>
           </div>
         </div>
@@ -612,25 +692,63 @@ function RotationSection({
             const m = memberById[id]
             if (!m) return null
             const away = awayUserIds.has(id)
+            const isCurrentTurn = id === currentTurnId
             return (
-              <li key={id} className="flex items-center justify-between bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
-                <span className="text-sm font-medium flex items-center gap-1.5">
-                  <span className="text-ink-900/40 dark:text-cream-100/40">{idx + 1}.</span>
-                  {m.name} {m.isVirtual && <VirtualTag />} {m.role === 'admin' && <span className="text-[10px] uppercase font-bold text-violet-500">{t('floorSettings.admin')}</span>}
+              <li
+                key={id}
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2"
+              >
+                <span className="text-sm font-medium flex flex-wrap items-center gap-1.5 min-w-0">
+                  <span className="text-ink-900/40 dark:text-cream-100/40 shrink-0">{idx + 1}.</span>
+                  <span className="min-w-0">{m.name}</span>
+                  {m.isVirtual && <VirtualTag className="shrink-0" />}
+                  {m.role === 'admin' && (
+                    <span className="shrink-0 text-[10px] uppercase font-bold text-violet-500">{t('floorSettings.admin')}</span>
+                  )}
                   {away && (
-                    <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md">
+                    <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md shrink-0">
                       <SunIcon className="w-3 h-3" />{t('floorSettings.awayTag')}
                     </span>
                   )}
+                  {isCurrentTurn && (
+                    <span className="text-[10px] uppercase font-bold text-sage-500 bg-sage-100 dark:bg-sage-500/20 px-1.5 py-0.5 rounded-md shrink-0">
+                      {t('floorSettings.currentTurnTag')}
+                    </span>
+                  )}
                 </span>
+                {isAdmin && !isCurrentTurn && !away && (
+                  <button
+                    type="button"
+                    onClick={() => setAssignTurnTarget(m)}
+                    className="text-xs font-semibold text-violet-500 hover:underline shrink-0"
+                  >
+                    {t('floorSettings.assignTurnButton')}
+                  </button>
+                )}
               </li>
             )
           })}
         </ol>
       )}
 
-      {showEditConfirm && (
-        <RotationEditConfirmPopup onCancel={() => setShowEditConfirm(false)} onConfirm={startEditing} t={t} />
+      {assignTurnTarget && (
+        <ConfirmVirtualDialog
+          title={t('floorSettings.assignTurnTitle', { name: assignTurnTarget.name })}
+          body={t('floorSettings.assignTurnBody', { name: assignTurnTarget.name })}
+          confirmLabel={t('floorSettings.assignTurnYes')}
+          workingLabel={t('floorSettings.assignTurnWorking')}
+          onClose={() => setAssignTurnTarget(null)}
+          onConfirm={handleAssignTurn}
+        />
+      )}
+
+      {pendingEditKind && (
+        <RotationEditConfirmPopup
+          kind={pendingEditKind}
+          onCancel={() => setPendingEditKind(null)}
+          onConfirm={() => startEditing(pendingEditKind)}
+          t={t}
+        />
       )}
 
       {/* Ya no se pide estar fuera desde aquí: eso se hace con "Estoy fuera" en
@@ -706,11 +824,13 @@ function RotationSection({
   )
 }
 
-/** Pop-up antes de entrar en modo edición del orden de rotación — deja
- * claro de entrada que reordenar a las personas no aplica al instante,
- * necesita que el piso lo apruebe (mismo patrón fixed-modal que
- * AwayPopup/ConfirmPotDialog en otras pantallas). */
-function RotationEditConfirmPopup({ onCancel, onConfirm, t }) {
+/** Pop-up antes de entrar en modo edición del orden de rotación (mismo
+ * patrón fixed-modal que AwayPopup/ConfirmPotDialog). `kind` distingue la
+ * edición de un admin ('direct': el orden de personas se aplica al
+ * instante) de la propuesta de cualquier miembro ('propose': siempre pasa
+ * por votación). */
+function RotationEditConfirmPopup({ kind, onCancel, onConfirm, t }) {
+  const isPropose = kind === 'propose'
   return (
     <div className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={onCancel}>
       <div
@@ -725,8 +845,12 @@ function RotationEditConfirmPopup({ onCancel, onConfirm, t }) {
         >
           <CloseIcon className="w-4 h-4" />
         </button>
-        <h3 className="font-display text-lg font-bold mb-2 pr-8">{t('floorSettings.editRotationConfirmTitle')}</h3>
-        <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mb-5">{t('floorSettings.editRotationConfirmBody')}</p>
+        <h3 className="font-display text-lg font-bold mb-2 pr-8">
+          {t(isPropose ? 'floorSettings.proposeOrderConfirmTitle' : 'floorSettings.editRotationConfirmTitle')}
+        </h3>
+        <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mb-5">
+          {t(isPropose ? 'floorSettings.proposeOrderConfirmBody' : 'floorSettings.editRotationConfirmBody')}
+        </p>
         <div className="flex gap-2">
           <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel}>
             {t('floorSettings.cancel')}

@@ -89,3 +89,31 @@ export function buildPublicTurns(data, now = new Date()) {
     away: members.filter((m) => m.away).map((m) => m.name)
   }
 }
+
+/**
+ * Mismo cálculo que buildPublicTurns, pero a partir de los datos ya cargados
+ * en DataContext (con sesión) en vez de la respuesta cruda de get_public_turns
+ * — para la previsualización "cambió el orden de rotación" (ver
+ * RotationOrderNotice.jsx) que se muestra sin pasar por el link público.
+ * `members` son los de useData() (id, name, isVirtual); `awayUserIds` es el
+ * Set que ya arma DataContext.jsx.
+ */
+export function buildFloorTurnsPreview(floor, members, awayUserIds, activities, completions, now = new Date()) {
+  return buildPublicTurns(
+    {
+      floor: {
+        name: floor?.name,
+        rotationOrder: floor?.rotationOrder || [],
+        rotationMode: floor?.rotationMode,
+        rotationPeriodUnit: floor?.rotationPeriodUnit,
+        rotationPeriodInterval: floor?.rotationPeriodInterval,
+        rotationEpoch: floor?.rotationEpoch,
+        rotationOffset: floor?.rotationOffset
+      },
+      members: (members || []).map((m) => ({ id: m.id, name: m.name, isVirtual: Boolean(m.isVirtual), away: awayUserIds?.has(m.id) || false })),
+      activities: activities || [],
+      completions: completions || []
+    },
+    now
+  )
+}

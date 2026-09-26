@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPublicTurns, publicTurnsLink, isPublicTurnsToken } from '../publicTurns'
+import { buildPublicTurns, buildFloorTurnsPreview, publicTurnsLink, isPublicTurnsToken } from '../publicTurns'
 import { getWeekKeyOf, assigneeFor, floorKeeperFor } from '../activities'
 import es from '../i18n/es'
 import en from '../i18n/en'
@@ -169,5 +169,42 @@ describe('textos del link de turnos', () => {
     const keysOf = (obj, prefix = '') => Object.entries(obj).flatMap(([k, v]) => (v && typeof v === 'object' ? keysOf(v, `${prefix}${k}.`) : [`${prefix}${k}`]))
     expect(keysOf(en.publicTurns).sort()).toEqual(keysOf(es.publicTurns).sort())
     expect(keysOf(en.floorSettings.turnsLink).sort()).toEqual(keysOf(es.floorSettings.turnsLink).sort())
+  })
+})
+
+describe('buildFloorTurnsPreview — misma lógica, a partir de los datos ya cargados en la app (con sesión)', () => {
+  // Miembros "con sesión" (DataContext.jsx), sin el campo `away`: eso lo
+  // decide aparte awayUserIds, igual que el resto de la app.
+  const liveMembers = [
+    { id: 'a', name: 'Ana', isVirtual: false, points: 12 },
+    { id: 'b', name: 'Beto', isVirtual: false, points: 0 },
+    { id: 'c', name: 'Carla', isVirtual: true, points: 0 }
+  ]
+  const liveFloor = { name: 'Piso 3B', rotationOrder: ['a', 'b', 'c'], rotationMode: 'random', rotationPeriodUnit: null, rotationPeriodInterval: 1, rotationEpoch: null }
+
+  it('da el mismo resultado que buildPublicTurns con los datos equivalentes', () => {
+    const awayUserIds = new Set()
+    const viaAdapter = buildFloorTurnsPreview(liveFloor, liveMembers, awayUserIds, [weekly()], [], NOW)
+    const viaRaw = buildPublicTurns(baseData(), NOW)
+    expect(viaAdapter).toEqual(viaRaw)
+  })
+
+  it('awayUserIds (un Set, como en DataContext) decide quién está fuera', () => {
+    const view = buildFloorTurnsPreview(liveFloor, liveMembers, new Set(['b']), [weekly()], [], NOW)
+    expect(view.away).toEqual(['Beto'])
+    expect(view.keeper.now.id).not.toBe('b')
+  })
+
+  it('sin awayUserIds no revienta (nadie está fuera)', () => {
+    const view = buildFloorTurnsPreview(liveFloor, liveMembers, undefined, [weekly()], [], NOW)
+    expect(view.away).toEqual([])
+  })
+
+  it('rotationOffset (asignar el turno a mano) se refleja en el encargado del piso y en los turnos', () => {
+    const withoutOffset = buildFloorTurnsPreview(liveFloor, liveMembers, new Set(), [weekly()], [], NOW)
+    const withOffset = buildFloorTurnsPreview({ ...liveFloor, rotationOffset: 1 }, liveMembers, new Set(), [weekly()], [], NOW)
+    const order = ['a', 'b', 'c']
+    expect(withOffset.keeper.now.id).toBe(order[(order.indexOf(withoutOffset.keeper.now.id) + 1) % 3])
+    expect(withOffset.activities[0].now.person.id).toBe(withOffset.keeper.now.id)
   })
 })

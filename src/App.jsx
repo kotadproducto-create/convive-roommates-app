@@ -25,6 +25,7 @@ import Ajustes from './pages/Ajustes'
 import Terminos from './pages/Terminos'
 import Privacidad from './pages/Privacidad'
 import FloorSettings from './pages/FloorSettings'
+import RotationOrderNotice from './pages/RotationOrderNotice'
 import Votaciones from './pages/Votaciones'
 import PublicPoll from './pages/PublicPoll'
 import PublicTurns from './pages/PublicTurns'
@@ -171,6 +172,16 @@ export default function App() {
                 <ProtectedRoute>
                   <AuthedData>
                     <FloorSettings />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/orden-actualizado"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <RotationOrderNotice />
                   </AuthedData>
                 </ProtectedRoute>
               }

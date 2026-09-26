@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { globalPeriodIndex, floorKeeperFor, assigneeFor } from '../activities.js'
+import { globalPeriodIndex, floorKeeperFor, floorKeeperIndex, assigneeFor, nextOccurrence, rotationPick } from '../activities.js'
 
 describe('globalPeriodIndex — reloj de turno global del piso (modo Determinado)', () => {
   it('semanal (unidad por defecto), intervalo 1: misma semana del epoch → índice 0', () => {
@@ -69,5 +69,82 @@ describe('floorKeeperFor — persona encargada del piso esta semana', () => {
 
   it('sin nadie en la rotación no hay persona encargada', () => {
     expect(floorKeeperFor({}, [], '2026-W37')).toBeNull()
+  })
+})
+
+describe('rotationOffset — asignar el turno actual a mano (setCurrentTurn)', () => {
+  const order = ['A', 'B', 'C']
+
+  it('rotationPick sin offset se comporta exactamente igual que antes', () => {
+    expect(rotationPick(order, 0)).toBe('A')
+    expect(rotationPick(order, 1)).toBe('B')
+    expect(rotationPick(order, 4)).toBe('B')
+  })
+
+  it('un offset corre el turno esa cantidad de posiciones, sin tocar el orden', () => {
+    expect(rotationPick(order, 0, 1)).toBe('B')
+    expect(rotationPick(order, 0, 2)).toBe('C')
+    expect(rotationPick(order, 1, 1)).toBe('C')
+  })
+
+  it('el offset da la vuelta igual de bien con números negativos o mayores que el largo', () => {
+    expect(rotationPick(order, 0, -1)).toBe('C')
+    expect(rotationPick(order, 0, 3)).toBe('A')
+    expect(rotationPick(order, 0, 30)).toBe('A')
+  })
+
+  it('floorKeeperIndex es el índice CRUDO (sin offset) que usa floorKeeperFor', () => {
+    const floor = { rotationMode: 'random' }
+    const raw = floorKeeperIndex(floor, '2026-W38')
+    expect(floorKeeperFor(floor, order, '2026-W38')).toBe(rotationPick(order, raw))
+    expect(floorKeeperFor({ ...floor, rotationOffset: 1 }, order, '2026-W38')).toBe(rotationPick(order, raw, 1))
+  })
+
+  it('el mismo offset se aplica por igual al encargado del piso y a una actividad semanal por rotación (coherencia)', () => {
+    const weekly = { frequencyType: 'recurring', recurrenceUnit: 'week', assignmentMode: 'rotation', weekdays: [0], startDate: '2026-09-14' }
+    const floor = { rotationMode: 'random', rotationOffset: 2 }
+    for (const weekKey of ['2026-W37', '2026-W38', '2026-W39']) {
+      expect(floorKeeperFor(floor, order, weekKey)).toBe(assigneeFor(weekly, order, weekKey, floor))
+    }
+  })
+
+  it('el offset también corre el PRÓXIMO turno (nextOccurrence), no solo el actual', () => {
+    const weekly = { frequencyType: 'recurring', recurrenceUnit: 'week', assignmentMode: 'rotation', weekdays: [0], startDate: '2026-09-14' }
+    const withoutOffset = nextOccurrence(weekly, order, new Date('2026-09-14T12:00:00'), null, { rotationMode: 'random' })
+    const withOffset = nextOccurrence(weekly, order, new Date('2026-09-14T12:00:00'), null, { rotationMode: 'random', rotationOffset: 1 })
+    expect(withOffset.assignedUserId).toBe(order[(order.indexOf(withoutOffset.assignedUserId) + 1) % 3])
+  })
+
+  it('en modo Determinado, el offset se suma sobre el reloj global (no lo reemplaza)', () => {
+    const floor = { rotationMode: 'period', rotationPeriodUnit: 'week', rotationPeriodInterval: 2, rotationEpoch: '2026-09-14', rotationOffset: 1 }
+    const first = floorKeeperFor(floor, order, '2026-W38')
+    expect(floorKeeperFor(floor, order, '2026-W39')).toBe(first) // sigue las mismas 2 semanas de siempre
+    expect(floorKeeperFor({ ...floor, rotationOffset: 0 }, order, '2026-W38')).toBe(order[(order.indexOf(first) + 2) % 3]) // -1 de offset = +2 mod 3
+  })
+
+  // Misma cuenta que hace setCurrentTurn en DataContext.jsx: a partir del
+  // índice CRUDO (sin offset) y de la posición de la persona elegida, calcula
+  // qué offset hace que le toque a ella ahora mismo.
+  function offsetToAssign(floor, rotationOrder, weekKey, personId) {
+    const raw = floorKeeperIndex(floor, weekKey)
+    const pos = rotationOrder.indexOf(personId)
+    const len = rotationOrder.length
+    return (((pos - raw) % len) + len) % len
+  }
+
+  it('setCurrentTurn: el offset calculado hace que le toque exactamente a la persona elegida', () => {
+    const floor = { rotationMode: 'random' }
+    for (const weekKey of ['2026-W37', '2026-W38', '2026-W39', '2026-W40']) {
+      for (const person of order) {
+        const offset = offsetToAssign(floor, order, weekKey, person)
+        expect(floorKeeperFor({ ...floor, rotationOffset: offset }, order, weekKey)).toBe(person)
+      }
+    }
+  })
+
+  it('setCurrentTurn: también funciona en modo Determinado', () => {
+    const floor = { rotationMode: 'period', rotationPeriodUnit: 'month', rotationPeriodInterval: 1, rotationEpoch: '2026-01-01' }
+    const offset = offsetToAssign(floor, order, '2026-W38', 'C')
+    expect(floorKeeperFor({ ...floor, rotationOffset: offset }, order, '2026-W38')).toBe('C')
   })
 })

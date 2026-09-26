@@ -117,7 +117,8 @@ begin
       'rotationMode', f.rotation_mode,
       'rotationPeriodUnit', f.rotation_period_unit,
       'rotationPeriodInterval', f.rotation_period_interval,
-      'rotationEpoch', f.rotation_epoch
+      'rotationEpoch', f.rotation_epoch,
+      'rotationOffset', f.rotation_offset
     ),
     'members', coalesce((
       select jsonb_agg(
