@@ -677,7 +677,7 @@ function RotationSection({
                     )}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <TurnChip isCurrentTurn={isCurrentTurn} canAssign={isAdmin && !away} onAssign={() => setAssignTurnTarget(m)} t={t} />
+                    <TurnChip isCurrentTurn={isCurrentTurn} canAssign={isAdmin && !away} onAssign={() => setAssignTurnTarget(m)} compact t={t} />
                     <div className="flex gap-1">
                       <button onClick={() => moveDraft(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
                       <button onClick={() => moveDraft(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
@@ -722,7 +722,7 @@ function RotationSection({
                     </span>
                   )}
                 </span>
-                <TurnChip isCurrentTurn={isCurrentTurn} canAssign={isAdmin && !away} onAssign={() => setAssignTurnTarget(m)} t={t} />
+                <TurnChip isCurrentTurn={isCurrentTurn} canAssign={false} t={t} />
               </li>
             )
           })}
@@ -862,13 +862,24 @@ function RotationEditConfirmPopup({ kind, onCancel, onConfirm, t }) {
   )
 }
 
-/** Casilla de "a quién le toca": la misma forma para todos, para que se lea
- * como una sola fila de opciones — la del turno actual se resalta en color,
- * el resto quedan en un borde neutro. Para un admin, tocar cualquiera de las
- * neutras abre el pop-up para asignarle el turno; sin permiso para asignar
- * (no admin, o la persona está "fuera") no se muestra nada. */
-function TurnChip({ isCurrentTurn, canAssign, onAssign, t }) {
+/** Casilla de "a quién le toca". En la vista normal (`compact` sin poner) es
+ * solo informativa: una etiqueta con texto para quien tiene el turno, nada
+ * para el resto — asignarlo a mano solo se puede DENTRO del editor. Ahí
+ * (`compact`) son círculos del mismo tamaño que los botones de mover
+ * arriba/abajo — relleno el del turno actual, vacío y clicable (solo admin,
+ * abre el pop-up de confirmación) el resto — para no repetir el mismo texto
+ * en cada fila. */
+function TurnChip({ isCurrentTurn, canAssign, onAssign, compact = false, t }) {
   if (isCurrentTurn) {
+    if (compact) {
+      return (
+        <span
+          title={t('floorSettings.currentTurnTag')}
+          aria-label={t('floorSettings.currentTurnTag')}
+          className="shrink-0 w-7 h-7 rounded-full bg-sage-500 border-2 border-sage-500"
+        />
+      )
+    }
     return (
       <span className="shrink-0 text-[10px] uppercase font-bold px-2 py-1 rounded-lg border-2 border-sage-500 bg-sage-100 dark:bg-sage-500/20 text-sage-500">
         {t('floorSettings.currentTurnTag')}
@@ -880,10 +891,10 @@ function TurnChip({ isCurrentTurn, canAssign, onAssign, t }) {
     <button
       type="button"
       onClick={onAssign}
-      className="shrink-0 text-[10px] uppercase font-bold px-2 py-1 rounded-lg border-2 border-ink-900/15 dark:border-cream-100/20 text-ink-900/50 dark:text-cream-100/50 hover:border-violet-500 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-700/10 transition-colors"
-    >
-      {t('floorSettings.assignTurnButton')}
-    </button>
+      title={t('floorSettings.assignTurnButton')}
+      aria-label={t('floorSettings.assignTurnButton')}
+      className="shrink-0 w-7 h-7 rounded-full border-2 border-ink-900/15 dark:border-cream-100/20 hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-700/10 transition-colors"
+    />
   )
 }
 
