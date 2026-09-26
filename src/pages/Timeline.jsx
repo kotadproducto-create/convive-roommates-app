@@ -6,7 +6,7 @@ import { useData } from '../context/DataContext'
 import { getMondayOfWeek, computeWeekStreak } from '../lib/rotation'
 import { currentPeriodKey, dueActivitiesOnDate } from '../lib/activities'
 import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon, BellIcon } from '../components/icons'
-import { potAmountColorClass } from '../lib/pot'
+import { potAmountColorClass, formatMoney, formatEuros } from '../lib/pot'
 import { isPendingToBuy } from '../lib/shopping'
 import { getTimeGreeting } from '../lib/greeting'
 import { useLanguage } from '../context/LanguageContext'
@@ -24,7 +24,7 @@ const FIXED_ORDER = ['compras', 'basura', 'lavadora']
 export default function Timeline() {
   const { user } = useAuth()
   const { floor, members, activities, activityCompletions, notifications, shoppingItems, weekKey, markAllNotificationsRead } = useData()
-  const { t, dateLocale } = useLanguage()
+  const { t, dateLocale, language } = useLanguage()
   const navigate = useNavigate()
   const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
   const displayedPoints = useDisplayedPoints()
@@ -112,7 +112,7 @@ export default function Timeline() {
             to="/pote"
             tone="gold"
             icon={JarIcon}
-            value={`${floor?.potAmount ?? 0}€`}
+            value={formatEuros(floor?.potAmount ?? 0, language)}
             label={t('timeline.chips.pot')}
             valueClassName={potAmountColorClass(floor?.potAmount ?? 0)}
           />
@@ -239,7 +239,7 @@ export default function Timeline() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('timeline.potCardLabel')}</p>
-                <p className={`text-xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{t('timeline.potAvailable', { amount: floor?.potAmount ?? 0 })}</p>
+                <p className={`text-xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{t('timeline.potAvailable', { amount: formatMoney(floor?.potAmount ?? 0, language) })}</p>
               </div>
             </div>
             <Link to="/pote" className="btn-secondary text-sm w-full">
@@ -315,7 +315,7 @@ export default function Timeline() {
             />
           </Reveal>
           <Reveal delay={120}>
-            <ThemeCard to="/pote" icon={JarIcon} tone="gold" label={t('timeline.themePot')} stat={t('timeline.themePotStat', { amount: floor?.potAmount ?? 0 })} />
+            <ThemeCard to="/pote" icon={JarIcon} tone="gold" label={t('timeline.themePot')} stat={t('timeline.themePotStat', { amount: formatMoney(floor?.potAmount ?? 0, language) })} />
           </Reveal>
           <Reveal delay={180}>
             <ThemeCard

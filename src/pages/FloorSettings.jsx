@@ -3,6 +3,7 @@ import { VirtualTag, VirtualMemberFormDialog, LinkVirtualDialog, ConfirmVirtualD
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
+import Avatar from '../components/Avatar'
 import Reveal from '../components/Reveal'
 import RecoveryCodeDialog from '../components/RecoveryCodeDialog'
 import { useAuth } from '../context/AuthContext'
@@ -345,15 +346,27 @@ export default function FloorSettings() {
             {members.map((m) => (
               <li key={m.id} className="flex flex-col gap-1 px-1 py-1.5 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-medium">{m.name}</span>
-                    {m.isVirtual ? (
-                      <VirtualTag />
-                    ) : (
-                      <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40">
-                        · <CoinIcon className="w-3.5 h-3.5" />{m.points || 0}
-                      </span>
-                    )}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Avatar url={m.avatarUrl} name={m.name} size="w-8 h-8" textSize="text-xs" />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                        <span className="font-medium min-w-0">{m.name}</span>
+                        {m.isVirtual ? (
+                          <VirtualTag />
+                        ) : (
+                          <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40 shrink-0">
+                            · <CoinIcon className="w-3.5 h-3.5" />{m.points || 0}
+                          </span>
+                        )}
+                      </div>
+                      {/* Para poder distinguir cuentas duplicadas de la misma persona:
+                          la que se unió hace menos tiempo suele ser la que sobra. */}
+                      {m.joinedAt && (
+                        <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
+                          {t('floorSettings.memberSince', { date: format(new Date(m.joinedAt), 'd MMM yyyy', { locale: dateLocale }) })}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   {isAdmin && m.isVirtual && (
                     <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">

@@ -21,6 +21,7 @@ import { SHARED_SPACE_BY_KEY, currentSpaceUse } from '../lib/sharedSpaces'
 import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark, floorKeeperIndex } from '../lib/activities'
 import { resolvePoll, pollDeadlineAt, ROTATION_POLL_HOURS } from '../lib/polls'
 import { realMembers, virtualIdSet } from '../lib/virtualMembers'
+import { formatMoney } from '../lib/pot'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
 
@@ -366,7 +367,7 @@ export function DataProvider({ children }) {
                   userId: user.id,
                   amount: delta,
                   kind: 'adjustment',
-                  note: `Pote establecido en ${newAmount.toFixed(2)}€ · solicitado por ${requester}`
+                  note: `Pote establecido en ${formatMoney(newAmount)}€ · solicitado por ${requester}`
                 }
               ],
               ['id']
@@ -392,7 +393,7 @@ export function DataProvider({ children }) {
             ? 'La consulta de reinicio de saldo terminó. Solo cambió el saldo de quienes la aprobaron.'
           : isPotAdjustment
             ? approved
-              ? `Todos aprobaron la modificación del Pote: ahora es de ${Number(poll.payload?.newAmount).toFixed(2)}€.`
+              ? `Todos aprobaron la modificación del Pote: ahora es de ${formatMoney(poll.payload?.newAmount)}€.`
               : outcome.status === 'resolved'
                 ? 'Se rechazó la solicitud de modificación del Pote. El importe no cambió.'
                 : outcome.status === 'closed'
@@ -1654,7 +1655,7 @@ export function DataProvider({ children }) {
       const amount = Math.round(Number(newAmount) * 100) / 100
       if (!Number.isFinite(amount) || amount < 0) return null
       const poll = await createPoll({
-        question: `¿Apruebas establecer el Pote en ${amount.toFixed(2)}€?`,
+        question: `¿Apruebas establecer el Pote en ${formatMoney(amount)}€?`,
         options: ['Aprobar', 'Rechazar'],
         resolutionMode: 'unanimity',
         kind: 'pot_adjustment',
@@ -1726,7 +1727,7 @@ export function DataProvider({ children }) {
       const amount = Math.round(Number(newBalance) * 100) / 100
       if (!Number.isFinite(amount)) return null
       const poll = await createPoll({
-        question: `¿Apruebas reiniciar tu saldo del Pote a ${amount.toFixed(2)}€? Lo propone ${user.name}. Solo cambia el saldo de quien apruebe.`,
+        question: `¿Apruebas reiniciar tu saldo del Pote a ${formatMoney(amount)}€? Lo propone ${user.name}. Solo cambia el saldo de quien apruebe.`,
         options: ['Aprobar', 'Rechazar'],
         resolutionMode: 'majority',
         kind: 'balance_reset',

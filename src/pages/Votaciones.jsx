@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { tallyVotes, pollDeadlineAt, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS } from '../lib/polls'
 import { canSharePoll, publicPollLink } from '../lib/publicPoll'
+import { formatMoney } from '../lib/pot'
 import { CloseIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, ShareIcon } from '../components/icons'
 
 /**
@@ -45,7 +46,7 @@ export default function Votaciones() {
     rejectMyRemoval,
     cancelRemoval
   } = useData()
-  const { t, dateLocale } = useLanguage()
+  const { t, dateLocale, language } = useLanguage()
   const { showToast } = useToast()
   const isAdmin = membership?.role === 'admin'
   const [showCreate, setShowCreate] = useState(false)
@@ -81,6 +82,7 @@ export default function Votaciones() {
             closePoll={closePoll}
             t={t}
             dateLocale={dateLocale}
+            language={language}
           />
         )
       })
@@ -159,7 +161,8 @@ export default function Votaciones() {
     rejectMyRemoval,
     cancelRemoval,
     t,
-    dateLocale
+    dateLocale,
+    language
   ])
 
   return (
@@ -214,6 +217,7 @@ export default function Votaciones() {
                   closePoll={closePoll}
                   t={t}
                   dateLocale={dateLocale}
+                  language={language}
                 />
               ))}
             </div>
@@ -228,7 +232,7 @@ export default function Votaciones() {
 const STATUS_EMOJI = { pending: '🟠', resolved: '🟢', closed: '⚪', expired: '🔴' }
 const STATUS_KEY = { pending: 'statusPending', resolved: 'statusResolved', closed: 'statusClosed', expired: 'statusExpired' }
 
-function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVote, closePoll, t, dateLocale }) {
+function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVote, closePoll, t, dateLocale, language }) {
   const tally = tallyVotes(votes)
   const myVote = votes.find((v) => v.userId === user?.id)?.option
   const votedIds = new Set(votes.map((v) => v.userId))
@@ -305,7 +309,7 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
 
       {isBalanceReset && (
         <p className="text-xs font-semibold text-violet-500 mb-2">
-          {t('votaciones.resetNote', { amount: Number(poll.payload?.newBalance ?? 0).toFixed(2) })}
+          {t('votaciones.resetNote', { amount: formatMoney(poll.payload?.newBalance ?? 0, language) })}
         </p>
       )}
 

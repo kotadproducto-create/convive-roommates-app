@@ -9,7 +9,7 @@ import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { JarIcon, EditIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, CloseIcon } from '../components/icons'
-import { potAmountColorClass, potAmountBubbleMessage, isPotAdjustment } from '../lib/pot'
+import { potAmountColorClass, potAmountBubbleMessage, isPotAdjustment, formatMoney, formatEuros } from '../lib/pot'
 import { computeWallets } from '../lib/wallets'
 import { format } from 'date-fns'
 
@@ -35,7 +35,7 @@ export default function Wallet() {
     closePoll
   } = useData()
   const { showToast } = useToast()
-  const { t, dateLocale } = useLanguage()
+  const { t, dateLocale, language } = useLanguage()
   const isAdmin = membership?.role === 'admin'
   const [amount, setAmount] = useState(floor?.potPerPerson || 10)
 
@@ -94,14 +94,14 @@ export default function Wallet() {
     if (!pendingAction) return
     if (pendingAction.type === 'contribute') {
       await addPotContribution(pendingAction.amount, pendingAction.onBehalfOfId)
-      showToast(t('wallet.contributedToast', { amount: pendingAction.amount }), 'success')
+      showToast(t('wallet.contributedToast', { amount: formatMoney(pendingAction.amount, language) }), 'success')
       setPendingAction(null)
       return
     }
     setSubmittingExpense(true)
     try {
       await addPotExpense(pendingAction.amount, { note: pendingAction.note.trim() || null, receiptFile: pendingAction.receiptFile, onBehalfOfId: pendingAction.onBehalfOfId })
-      showToast(t('wallet.expenseRecordedToast', { amount: pendingAction.amount }), 'default')
+      showToast(t('wallet.expenseRecordedToast', { amount: formatMoney(pendingAction.amount, language) }), 'default')
       setExpenseAmount('')
       setExpenseNote('')
       setReceiptFile(null)
@@ -147,7 +147,7 @@ export default function Wallet() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('wallet.totalLabel')}</p>
-                <p className={`text-2xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{floor?.potAmount ?? 0}€</p>
+                <p className={`text-2xl font-display font-bold ${potAmountColorClass(floor?.potAmount ?? 0)}`}>{formatEuros(floor?.potAmount ?? 0, language)}</p>
                 {!pendingPotAdjustmentPoll && (
                   <button
                     type="button"
@@ -238,6 +238,7 @@ export default function Wallet() {
               closePoll={closePoll}
               t={t}
               dateLocale={dateLocale}
+              language={language}
             />
           </div>
         </Reveal>
@@ -265,14 +266,14 @@ export default function Wallet() {
                           {m.isVirtual && <VirtualTag className="shrink-0" />}
                         </div>
                         <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
-                          {t('wallet.walletBreakdown', { contributed: w.contributed.toFixed(2), share: w.expenseShare.toFixed(2) })}
+                          {t('wallet.walletBreakdown', { contributed: formatMoney(w.contributed, language), share: formatMoney(w.expenseShare, language) })}
                           {w.resetAdjustment !== undefined &&
-                            ` · ${t('wallet.walletResetAdjustment', { amount: `${w.resetAdjustment > 0 ? '+' : ''}${w.resetAdjustment.toFixed(2)}` })}`}
+                            ` · ${t('wallet.walletResetAdjustment', { amount: `${w.resetAdjustment > 0 ? '+' : ''}${formatMoney(w.resetAdjustment, language)}` })}`}
                         </p>
                       </div>
                     </div>
                     <span className={`text-sm font-bold shrink-0 ${positive ? 'text-sage-500' : negative ? 'text-clay-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
-                      {w.balance > 0 ? '+' : ''}{w.balance.toFixed(2)}€
+                      {w.balance > 0 ? '+' : ''}{formatEuros(w.balance, language)}
                     </span>
                   </li>
                 )
@@ -310,9 +311,9 @@ export default function Wallet() {
                 <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto mt-3">
                   {history.map((item) =>
                     item.type === 'reset' ? (
-                      <ResetHistoryRow key={item.id} reset={item.r} name={memberById[item.r.userId]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} />
+                      <ResetHistoryRow key={item.id} reset={item.r} name={memberById[item.r.userId]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} language={language} />
                     ) : item.type === 'proposal' ? (
-                      <ResetProposalRow key={item.id} poll={item.p} name={memberById[item.p.createdBy]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} />
+                      <ResetProposalRow key={item.id} poll={item.p} name={memberById[item.p.createdBy]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} language={language} />
                     ) : (
                       <HistoryRow
                         key={item.id}
@@ -324,6 +325,7 @@ export default function Wallet() {
                         onDelete={deletePotExpense}
                         t={t}
                         dateLocale={dateLocale}
+                        language={language}
                       />
                     )
                   )}
@@ -334,7 +336,7 @@ export default function Wallet() {
       </div>
 
       {pendingAction && (
-        <ConfirmPotDialog action={pendingAction} onCancel={() => setPendingAction(null)} onConfirm={confirmPending} t={t} />
+        <ConfirmPotDialog action={pendingAction} onCancel={() => setPendingAction(null)} onConfirm={confirmPending} t={t} language={language} />
       )}
 
       {showResetDialog && (
@@ -344,7 +346,7 @@ export default function Wallet() {
           onConfirm={async (scope, newBalance) => {
             if (scope === 'self') {
               await resetMyWallet(newBalance)
-              showToast(t('wallet.resetSelfToast', { amount: newBalance.toFixed(2) }), 'success')
+              showToast(t('wallet.resetSelfToast', { amount: formatMoney(newBalance, language) }), 'success')
             } else {
               await proposeWalletResetForAll(newBalance)
               showToast(t('wallet.resetAllToast'), 'success')
@@ -365,6 +367,7 @@ export default function Wallet() {
             showToast(t('wallet.adjustSentToast'), 'success')
           }}
           t={t}
+          language={language}
         />
       )}
     </AppLayout>
@@ -375,7 +378,7 @@ export default function Wallet() {
  * la cantidad (0 para ponerlo a cero), (2) leer qué va a pasar y
  * confirmar el envío. Aquí NO se cambia el Pote — solo se envía una
  * solicitud que debe aprobar todo el piso (ver requestPotAdjustment). */
-function PotAdjustDialog({ currentAmount, onCancel, onSend, t }) {
+function PotAdjustDialog({ currentAmount, onCancel, onSend, t, language }) {
   const [step, setStep] = useState('input')
   const [value, setValue] = useState('')
   const [sending, setSending] = useState(false)
@@ -418,7 +421,7 @@ function PotAdjustDialog({ currentAmount, onCancel, onSend, t }) {
             <h3 className="font-display text-lg font-bold mb-1 pr-8">{t('wallet.adjustTitle')}</h3>
             <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-1">{t('wallet.adjustBody')}</p>
             <p className="text-xs font-semibold text-ink-900/50 dark:text-cream-100/50 mb-4">
-              {t('wallet.adjustCurrent', { amount: currentAmount.toFixed(2) })}
+              {t('wallet.adjustCurrent', { amount: formatMoney(currentAmount, language) })}
             </p>
             <label className="text-sm block mb-1">
               {t('wallet.adjustInputLabel')}
@@ -449,7 +452,7 @@ function PotAdjustDialog({ currentAmount, onCancel, onSend, t }) {
             <h3 className="font-display text-lg font-bold mb-2 pr-8">{t('wallet.adjustConfirmTitle')}</h3>
             <div className="text-sm text-ink-900/70 dark:text-cream-100/70 flex flex-col gap-2 mb-5">
               <p className="font-semibold text-ink-900 dark:text-cream-100">
-                {t('wallet.adjustConfirmLine1', { amount: parsed.toFixed(2) })}
+                {t('wallet.adjustConfirmLine1', { amount: formatMoney(parsed, language) })}
               </p>
               <p>{t('wallet.adjustConfirmLine2')}</p>
               <p>{t('wallet.adjustConfirmLine3')}</p>
@@ -474,7 +477,7 @@ function PotAdjustDialog({ currentAmount, onCancel, onSend, t }) {
  * conviviente aprueba o rechaza desde acá (también aparece en
  * Votaciones); un solo rechazo la tumba, se aplica solo cuando aprueban
  * todos. */
-function PotAdjustmentRequestCard({ poll, votes, members, user, isAdmin, castVote, closePoll, t, dateLocale }) {
+function PotAdjustmentRequestCard({ poll, votes, members, user, isAdmin, castVote, closePoll, t, dateLocale, language }) {
   const requester = members.find((m) => m.id === poll.createdBy)
   const voteByUser = Object.fromEntries(votes.map((v) => [v.userId, v.option]))
   const approvedNames = members.filter((m) => voteByUser[m.id] === 'Aprobar').map((m) => m.name)
@@ -499,7 +502,7 @@ function PotAdjustmentRequestCard({ poll, votes, members, user, isAdmin, castVot
       <p className="text-sm text-ink-900/70 dark:text-cream-100/70">
         {t('wallet.adjustRequestedBy', { name: requester?.name || t('wallet.someone') })}
       </p>
-      <p className="font-display text-lg font-bold my-1">{t('wallet.adjustProposes', { amount: newAmount.toFixed(2) })}</p>
+      <p className="font-display text-lg font-bold my-1">{t('wallet.adjustProposes', { amount: formatMoney(newAmount, language) })}</p>
       {poll.deadlineAt && (
         <p className="text-xs text-ink-900/50 dark:text-cream-100/50 mb-3">
           {t('wallet.adjustDeadline', { date: format(new Date(poll.deadlineAt), 'd MMM, HH:mm', { locale: dateLocale }) })}
@@ -548,7 +551,7 @@ function PotAdjustmentRequestCard({ poll, votes, members, user, isAdmin, castVot
 
 /** Pop-up de confirmación antes de tocar el pote de verdad — ni aportar
  * ni registrar un gasto ejecutan hasta que la persona confirma acá. */
-function ConfirmPotDialog({ action, onCancel, onConfirm, t }) {
+function ConfirmPotDialog({ action, onCancel, onConfirm, t, language }) {
   const [submitting, setSubmitting] = useState(false)
   const isExpense = action.type === 'expense'
 
@@ -572,12 +575,12 @@ function ConfirmPotDialog({ action, onCancel, onConfirm, t }) {
         <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mb-5">
           {action.onBehalfName
             ? t(isExpense ? 'wallet.confirmExpenseBodyBehalf' : 'wallet.confirmContributeBodyBehalf', {
-                amount: Number(action.amount).toFixed(2),
+                amount: formatMoney(action.amount, language),
                 name: action.onBehalfName
               })
             : isExpense
-              ? t('wallet.confirmExpenseBody', { amount: Number(action.amount).toFixed(2) })
-              : t('wallet.confirmContributeBody', { amount: Number(action.amount).toFixed(2) })}
+              ? t('wallet.confirmExpenseBody', { amount: formatMoney(action.amount, language) })
+              : t('wallet.confirmContributeBody', { amount: formatMoney(action.amount, language) })}
         </p>
         <div className="flex gap-2">
           <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel} disabled={submitting}>
@@ -695,12 +698,12 @@ function WalletResetDialog({ hasPendingProposal, onCancel, onConfirm, t }) {
 
 /** Fila del historial: alguien reinició su propio saldo — individualmente
  * ("Solo para mí") o al aprobar una propuesta "para todos". */
-function ResetHistoryRow({ reset: r, name, t, dateLocale }) {
+function ResetHistoryRow({ reset: r, name, t, dateLocale, language }) {
   return (
     <li className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
       <div className="flex justify-between text-sm gap-2">
         <span className="min-w-0">
-          {t(r.scope === 'poll' ? 'wallet.historyResetPoll' : 'wallet.historyResetSelf', { name, amount: Number(r.newBalance).toFixed(2) })}
+          {t(r.scope === 'poll' ? 'wallet.historyResetPoll' : 'wallet.historyResetSelf', { name, amount: formatMoney(r.newBalance, language) })}
         </span>
         <span className="text-ink-900/40 dark:text-cream-100/40 text-xs shrink-0">
           {format(new Date(r.createdAt), 'd MMM, HH:mm', { locale: dateLocale })}
@@ -712,14 +715,14 @@ function ResetHistoryRow({ reset: r, name, t, dateLocale }) {
 
 /** Fila del historial: alguien propuso reiniciar el saldo de todos (la
  * consulta vive en Votaciones; acá queda constancia del importe y su estado). */
-function ResetProposalRow({ poll, name, t, dateLocale }) {
+function ResetProposalRow({ poll, name, t, dateLocale, language }) {
   const status =
     poll.status === 'pending' ? t('wallet.resetProposalPending') : poll.status === 'expired' ? t('wallet.resetProposalExpired') : t('wallet.resetProposalDone')
   return (
     <li className="py-2 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
       <div className="flex justify-between text-sm gap-2">
         <span className="min-w-0">
-          <strong>{t('wallet.historyResetProposal', { name, amount: Number(poll.payload?.newBalance ?? 0).toFixed(2) })}</strong>
+          <strong>{t('wallet.historyResetProposal', { name, amount: formatMoney(poll.payload?.newBalance ?? 0, language) })}</strong>
         </span>
         <span className="text-ink-900/40 dark:text-cream-100/40 text-xs shrink-0">
           {format(new Date(poll.createdAt), 'd MMM, HH:mm', { locale: dateLocale })}
@@ -730,7 +733,7 @@ function ResetProposalRow({ poll, name, t, dateLocale }) {
   )
 }
 
-function HistoryRow({ contribution: c, authorName, recordedByName = null, canManage, onUpdate, onDelete, t, dateLocale }) {
+function HistoryRow({ contribution: c, authorName, recordedByName = null, canManage, onUpdate, onDelete, t, dateLocale, language }) {
   const isExpense = Number(c.amount) < 0
   const [editing, setEditing] = useState(false)
   const [amount, setAmount] = useState(Math.abs(Number(c.amount)))
@@ -768,7 +771,7 @@ function HistoryRow({ contribution: c, authorName, recordedByName = null, canMan
             </span>
             <span className="font-semibold text-violet-500">
               {Number(c.amount) > 0 ? '+' : '-'}
-              {Math.abs(Number(c.amount)).toFixed(2)}€
+              {formatEuros(Math.abs(Number(c.amount)), language)}
             </span>
           </span>
         </div>
@@ -821,7 +824,7 @@ function HistoryRow({ contribution: c, authorName, recordedByName = null, canMan
           </span>
           <span className={`font-semibold ${isExpense ? 'text-clay-500' : 'text-sage-500'}`}>
             {isExpense ? '-' : '+'}
-            {Math.abs(Number(c.amount)).toFixed(2)}€
+            {formatEuros(Math.abs(Number(c.amount)), language)}
           </span>
         </span>
       </div>

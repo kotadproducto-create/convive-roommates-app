@@ -10,6 +10,7 @@ import { useLanguage } from '../context/LanguageContext'
 import { getFloorHistory } from '../lib/db'
 import { getMemberColor } from '../lib/roomieColors'
 import { computeWallets } from '../lib/wallets'
+import { formatMoney } from '../lib/pot'
 import { CameraIcon, AlertIcon, MailIcon, PersonIcon } from '../components/icons'
 import PageBanner, { SectionLabel } from '../components/PageBanner'
 import { format, formatDistanceToNowStrict } from 'date-fns'
@@ -37,7 +38,7 @@ export default function Perfil() {
     cancelRoomPartner
   } = useData()
   const { showToast } = useToast()
-  const { t, dateLocale } = useLanguage()
+  const { t, dateLocale, language } = useLanguage()
 
   if (!user) return null
 
@@ -57,6 +58,7 @@ export default function Perfil() {
               rejectMyRemoval={rejectMyRemoval}
               showToast={showToast}
               t={t}
+              language={language}
             />
           </Reveal>
         )}
@@ -113,7 +115,7 @@ export default function Perfil() {
   )
 }
 
-function RemovalPendingCard({ floorName, membership, userId, members, potContributions, walletResets, removeMember, rejectMyRemoval, showToast, t }) {
+function RemovalPendingCard({ floorName, membership, userId, members, potContributions, walletResets, removeMember, rejectMyRemoval, showToast, t, language }) {
   const [confirming, setConfirming] = useState(false)
   const [rejecting, setRejecting] = useState(false)
 
@@ -164,9 +166,9 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
             </p>
             <p>
               {t('perfil.potBalanceLine', {
-                contributed: myContributed.toFixed(2),
-                fairShare: fairShare.toFixed(2),
-                balance: `${balance > 0 ? '+' : ''}${balance.toFixed(2)}`
+                contributed: formatMoney(myContributed, language),
+                fairShare: formatMoney(fairShare, language),
+                balance: `${balance > 0 ? '+' : ''}${formatMoney(balance, language)}`
               })}
             </p>
             <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-1">{t('perfil.potBalanceDisclaimer')}</p>

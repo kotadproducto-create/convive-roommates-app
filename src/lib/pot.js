@@ -28,3 +28,26 @@ export function potAmountBubbleMessage(amount, t) {
   if (n < 5) return tt('pot.runningLow')
   return tt('pot.healthy')
 }
+
+/**
+ * Un importe del Pote listo para MOSTRAR: siempre con exactamente 2
+ * decimales, nunca más — esto no toca la precisión interna del número, que
+ * sigue circulando completa por computeWallets/expense-splitting-core; es
+ * solo el texto final. En español usa coma decimal (12,50), como el resto
+ * de la app; en inglés, punto (12.50) — `language` es el código que ya
+ * expone useLanguage() ('es' | 'en'), español por defecto. Un número muy
+ * cercano a cero (p.ej. -0.001, que redondea a "-0,00") se muestra como
+ * "0,00", nunca con un signo negativo vacío de contenido.
+ */
+export function formatMoney(amount, language = 'es') {
+  const n = Number.isFinite(Number(amount)) ? Number(amount) : 0
+  const rounded = Math.round(n * 100) / 100
+  const fixed = (rounded === 0 ? 0 : rounded).toFixed(2)
+  return language === 'en' ? fixed : fixed.replace('.', ',')
+}
+
+/** `formatMoney` con el símbolo de euro, en el formato que se espera en
+ * toda la app: "12,50 €" (con espacio antes del símbolo). */
+export function formatEuros(amount, language = 'es') {
+  return `${formatMoney(amount, language)} €`
+}

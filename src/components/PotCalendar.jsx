@@ -12,7 +12,7 @@ import {
   isToday
 } from 'date-fns'
 import { useLanguage } from '../context/LanguageContext'
-import { potAmountColorClass, isPotAdjustment } from '../lib/pot'
+import { potAmountColorClass, isPotAdjustment, formatEuros } from '../lib/pot'
 
 /**
  * Calendario gráfico de movimientos del pote: un punto verde el día que
@@ -24,7 +24,7 @@ import { potAmountColorClass, isPotAdjustment } from '../lib/pot'
 export default function PotCalendar({ contributions, memberById = {} }) {
   const [cursor, setCursor] = useState(() => new Date())
   const [selected, setSelected] = useState(null)
-  const { t, dateLocale } = useLanguage()
+  const { t, dateLocale, language } = useLanguage()
   // Iniciales de día de la semana localizadas — mismo enfoque que
   // CalendarView.jsx (una semana cualquiera con el `dateLocale` activo).
   const weekdayLabels = useMemo(() => {
@@ -159,7 +159,7 @@ export default function PotCalendar({ contributions, memberById = {} }) {
             <div className="text-right shrink-0">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">{t('wallet.balanceThatDay')}</p>
               <p className={`font-display font-bold ${potAmountColorClass(balanceAsOf(selected))}`}>
-                {balanceAsOf(selected).toFixed(2)}€
+                {formatEuros(balanceAsOf(selected), language)}
               </p>
             </div>
           </div>
@@ -183,7 +183,7 @@ export default function PotCalendar({ contributions, memberById = {} }) {
                       {c.note && <span className="text-ink-900/50 dark:text-cream-100/50"> · {c.note}</span>}
                     </span>
                     <span className={`font-semibold shrink-0 ml-2 ${isAdjustment ? 'text-violet-500' : isExpense ? 'text-clay-500' : 'text-sage-500'}`}>
-                      {isExpense ? '-' : '+'}{Math.abs(Number(c.amount)).toFixed(2)}€
+                      {isExpense ? '-' : '+'}{formatEuros(Math.abs(Number(c.amount)), language)}
                     </span>
                   </li>
                 )

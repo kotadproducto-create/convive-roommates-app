@@ -16,7 +16,7 @@ import {
   isToday
 } from 'date-fns'
 import { currentPeriodKey, isDueOnDate, assigneeFor, getWeekKeyOf } from '../lib/activities'
-import { isPotAdjustment } from '../lib/pot'
+import { isPotAdjustment, formatMoney } from '../lib/pot'
 import { JarIcon, CartIcon, StoreIcon, WasherIcon, SparkleIcon } from './icons'
 import { useLanguage } from '../context/LanguageContext'
 import { TASK_TONE_CLASSES } from './TaskCard'
@@ -62,7 +62,7 @@ export default function CalendarView({
   // un día concreto (p. ej. desde "Racha de la semana" en Inicio).
   const [view, setView] = useState(initialDate ? 'day' : initialView)
   const [cursor, setCursor] = useState(() => initialDate || new Date())
-  const { t, dateLocale } = useLanguage()
+  const { t, dateLocale, language } = useLanguage()
 
   // Mes/otros días → vista del día, conservando la fecha elegida.
   function selectDay(date) {
@@ -185,6 +185,7 @@ export default function CalendarView({
           onSelectDay={selectDay}
           t={t}
           dateLocale={dateLocale}
+          language={language}
         />
       )}
     </div>
@@ -328,7 +329,7 @@ const EVENT_TONE_CLASSES = {
  * aportes/gastos del pote, compras realizadas, productos agregados a la
  * lista, y avisos de lavadora — ordenado cronológicamente, como un
  * historial resumen del día. */
-function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t) {
+function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t, language) {
   return useMemo(() => {
     const events = []
 
@@ -351,7 +352,7 @@ function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingI
         time: c.createdAt,
         icon: JarIcon,
         tone: isExpense ? 'clay' : 'sage',
-        title: t(isExpense ? 'calendar.spentFromPot' : 'calendar.contributedToPot', { name, amount: Math.abs(Number(c.amount)).toFixed(2) }),
+        title: t(isExpense ? 'calendar.spentFromPot' : 'calendar.contributedToPot', { name, amount: formatMoney(Math.abs(Number(c.amount)), language) }),
         subtitle: c.note || null
       })
     }
@@ -450,7 +451,7 @@ function useAllEvents(memberById, potContributions, shoppingPurchases, shoppingI
 
     return events.sort((a, b) => new Date(a.time) - new Date(b.time))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t])
+  }, [memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t, language])
 }
 
 function EventRow({ e }) {
@@ -553,11 +554,12 @@ function DayDetail({
   activityMarks,
   onSelectDay,
   t,
-  dateLocale
+  dateLocale,
+  language
 }) {
   const items = dayInfo(cursor)
   const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
-  const allEvents = useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t)
+  const allEvents = useAllEvents(memberById, potContributions, shoppingPurchases, shoppingItems, notifications, activities, activityCompletions, activityMarks, t, language)
   const events = useMemo(() => allEvents.filter((e) => isSameDay(new Date(e.time), cursor)), [allEvents, cursor])
 
   function handleToggle(item) {

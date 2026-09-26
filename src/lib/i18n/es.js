@@ -1012,6 +1012,7 @@ export default {
     reject: 'Rechazar',
     accept: 'Aceptar',
     roommatesTitle: 'Roommates',
+    memberSince: 'Miembro desde el {{date}}',
     makeAdmin: 'Hacer admin',
     remove: 'Quitar',
     exitPendingSelf: 'la confirmes',
