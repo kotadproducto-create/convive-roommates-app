@@ -675,22 +675,9 @@ function RotationSection({
                         <SunIcon className="w-3 h-3" />{t('floorSettings.awayTag')}
                       </span>
                     )}
-                    {isCurrentTurn && (
-                      <span className="text-[10px] uppercase font-bold text-sage-500 bg-sage-100 dark:bg-sage-500/20 px-1.5 py-0.5 rounded-md shrink-0">
-                        {t('floorSettings.currentTurnTag')}
-                      </span>
-                    )}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {isAdmin && !isCurrentTurn && !away && (
-                      <button
-                        type="button"
-                        onClick={() => setAssignTurnTarget(m)}
-                        className="text-xs font-semibold text-violet-500 hover:underline"
-                      >
-                        {t('floorSettings.assignTurnButton')}
-                      </button>
-                    )}
+                    <TurnChip isCurrentTurn={isCurrentTurn} canAssign={isAdmin && !away} onAssign={() => setAssignTurnTarget(m)} t={t} />
                     <div className="flex gap-1">
                       <button onClick={() => moveDraft(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
                       <button onClick={() => moveDraft(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
@@ -734,21 +721,8 @@ function RotationSection({
                       <SunIcon className="w-3 h-3" />{t('floorSettings.awayTag')}
                     </span>
                   )}
-                  {isCurrentTurn && (
-                    <span className="text-[10px] uppercase font-bold text-sage-500 bg-sage-100 dark:bg-sage-500/20 px-1.5 py-0.5 rounded-md shrink-0">
-                      {t('floorSettings.currentTurnTag')}
-                    </span>
-                  )}
                 </span>
-                {isAdmin && !isCurrentTurn && !away && (
-                  <button
-                    type="button"
-                    onClick={() => setAssignTurnTarget(m)}
-                    className="text-xs font-semibold text-violet-500 hover:underline shrink-0"
-                  >
-                    {t('floorSettings.assignTurnButton')}
-                  </button>
-                )}
+                <TurnChip isCurrentTurn={isCurrentTurn} canAssign={isAdmin && !away} onAssign={() => setAssignTurnTarget(m)} t={t} />
               </li>
             )
           })}
@@ -885,6 +859,31 @@ function RotationEditConfirmPopup({ kind, onCancel, onConfirm, t }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/** Casilla de "a quién le toca": la misma forma para todos, para que se lea
+ * como una sola fila de opciones — la del turno actual se resalta en color,
+ * el resto quedan en un borde neutro. Para un admin, tocar cualquiera de las
+ * neutras abre el pop-up para asignarle el turno; sin permiso para asignar
+ * (no admin, o la persona está "fuera") no se muestra nada. */
+function TurnChip({ isCurrentTurn, canAssign, onAssign, t }) {
+  if (isCurrentTurn) {
+    return (
+      <span className="shrink-0 text-[10px] uppercase font-bold px-2 py-1 rounded-lg border-2 border-sage-500 bg-sage-100 dark:bg-sage-500/20 text-sage-500">
+        {t('floorSettings.currentTurnTag')}
+      </span>
+    )
+  }
+  if (!canAssign) return null
+  return (
+    <button
+      type="button"
+      onClick={onAssign}
+      className="shrink-0 text-[10px] uppercase font-bold px-2 py-1 rounded-lg border-2 border-ink-900/15 dark:border-cream-100/20 text-ink-900/50 dark:text-cream-100/50 hover:border-violet-500 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-700/10 transition-colors"
+    >
+      {t('floorSettings.assignTurnButton')}
+    </button>
   )
 }
 
