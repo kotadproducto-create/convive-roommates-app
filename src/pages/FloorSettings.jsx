@@ -657,20 +657,44 @@ function RotationSection({
               const m = memberById[id]
               if (!m) return null
               const away = awayUserIds.has(id)
+              const isCurrentTurn = id === currentTurnId
               return (
-                <li key={id} className="flex items-center justify-between bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
-                  <span className="text-sm font-medium flex items-center gap-1.5">
-                    <span className="text-ink-900/40 dark:text-cream-100/40">{idx + 1}.</span>
-                    {m.name} {m.isVirtual && <VirtualTag />} {m.role === 'admin' && <span className="text-[10px] uppercase font-bold text-violet-500">{t('floorSettings.admin')}</span>}
+                <li
+                  key={id}
+                  className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2"
+                >
+                  <span className="text-sm font-medium flex flex-wrap items-center gap-1.5 min-w-0">
+                    <span className="text-ink-900/40 dark:text-cream-100/40 shrink-0">{idx + 1}.</span>
+                    <span className="min-w-0">{m.name}</span>
+                    {m.isVirtual && <VirtualTag className="shrink-0" />}
+                    {m.role === 'admin' && (
+                      <span className="shrink-0 text-[10px] uppercase font-bold text-violet-500">{t('floorSettings.admin')}</span>
+                    )}
                     {away && (
-                      <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md">
+                      <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md shrink-0">
                         <SunIcon className="w-3 h-3" />{t('floorSettings.awayTag')}
                       </span>
                     )}
+                    {isCurrentTurn && (
+                      <span className="text-[10px] uppercase font-bold text-sage-500 bg-sage-100 dark:bg-sage-500/20 px-1.5 py-0.5 rounded-md shrink-0">
+                        {t('floorSettings.currentTurnTag')}
+                      </span>
+                    )}
                   </span>
-                  <div className="flex gap-1">
-                    <button onClick={() => moveDraft(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
-                    <button onClick={() => moveDraft(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isAdmin && !isCurrentTurn && !away && (
+                      <button
+                        type="button"
+                        onClick={() => setAssignTurnTarget(m)}
+                        className="text-xs font-semibold text-violet-500 hover:underline"
+                      >
+                        {t('floorSettings.assignTurnButton')}
+                      </button>
+                    )}
+                    <div className="flex gap-1">
+                      <button onClick={() => moveDraft(idx, -1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronUpIcon className="w-4 h-4" /></button>
+                      <button onClick={() => moveDraft(idx, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-800"><ChevronDownIcon className="w-4 h-4" /></button>
+                    </div>
                   </div>
                 </li>
               )
