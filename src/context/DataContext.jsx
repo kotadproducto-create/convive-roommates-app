@@ -22,7 +22,7 @@ import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, 
 import { resolvePoll, pollDeadlineAt, ROTATION_POLL_HOURS } from '../lib/polls'
 import { removalDeadlineAt, isRemovalExpired } from '../lib/removal'
 import { realMembers, virtualIdSet } from '../lib/virtualMembers'
-import { formatMoney } from '../lib/pot'
+import { formatMoney, potOnBehalfMessage, potDisputeMessage } from '../lib/pot'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
 
@@ -622,11 +622,11 @@ export function DataProvider({ children }) {
   const virtualMemberIds = useMemo(() => virtualIdSet(members), [members])
 
   const notifyUser = useCallback(
-    async (targetFloorId, userId, type, message, weekKeyArg = null, dedupeKey = null) => {
+    async (targetFloorId, userId, type, message, weekKeyArg = null, dedupeKey = null, refId = null) => {
       // Un perfil virtual no usa la app: nunca se le crea una notificación.
       if (userId && virtualMemberIds.has(userId)) return
       async function insertOne(forUserId) {
-        const row = { floorId: targetFloorId, userId: forUserId, type, weekKey: weekKeyArg, read: false, message }
+        const row = { floorId: targetFloorId, userId: forUserId, type, weekKey: weekKeyArg, read: false, message, refId }
         if (dedupeKey) {
           const id = await deterministicUuid(`notif:${dedupeKey}:${forUserId ?? 'floor'}`)
           await upsertIgnoreDuplicates('notifications', [{ id, ...row }], ['id'])
@@ -648,6 +648,28 @@ export function DataProvider({ children }) {
       }
     },
     [roomPartners, virtualMemberIds]
+  )
+
+  // Aviso de "X registró un aporte/gasto a tu nombre" — un solo punto para
+  // addPotContribution/addPotExpense, sin distinguir si `onBehalfOfId` es
+  // un perfil virtual o un compañero real: notifyUser ya ignora sola a los
+  // virtuales (no usan la app), así que da igual acá. `refId` (el propio
+  // pot_contribution) es lo que le permite al aviso mostrar el botón
+  // discreto "Reportar incidencia" (ver NotificationItem.jsx).
+  const notifyPotOnBehalf = useCallback(
+    async (contribution, kind) => {
+      if (!currentFloor || !user) return
+      await notifyUser(
+        currentFloor.id,
+        contribution.userId,
+        'pot_on_behalf',
+        potOnBehalfMessage({ actorName: user.name, kind, amount: contribution.amount, dateISO: contribution.createdAt, note: contribution.note }),
+        null,
+        null,
+        contribution.id
+      )
+    },
+    [currentFloor, user, notifyUser]
   )
 
   const requestRoomPartner = useCallback(
@@ -1000,17 +1022,24 @@ export function DataProvider({ children }) {
   const addPotContribution = useCallback(
     async (amount, onBehalfOfId = null) => {
       if (!currentFloor || !user) return
-      // En nombre de un perfil virtual: el aporte es suyo, queda anotado quién lo registró.
-      const onBehalf = onBehalfOfId && virtualMemberIds.has(onBehalfOfId) ? onBehalfOfId : null
-      await create('pot_contributions', {
+      // En nombre de OTRO miembro del piso (real o perfil virtual): el
+      // aporte queda a SU nombre, con quién lo registró anotado aparte
+      // (recorded_by) — la operación queda aprobada de entrada, sin que
+      // la otra persona tenga que confirmar nada; solo se le avisa
+      // (notifyPotOnBehalf) y puede reportar una incidencia si algo está
+      // mal (ver disputePotContribution).
+      const onBehalf = onBehalfOfId && onBehalfOfId !== user.id && members.some((m) => m.id === onBehalfOfId) ? onBehalfOfId : null
+      const created = await create('pot_contributions', {
         floorId: currentFloor.id,
         userId: onBehalf || user.id,
         amount: Number(amount),
         recordedBy: onBehalf ? user.id : null
       })
       await update('floors', currentFloor.id, { potAmount: (currentFloor.potAmount || 0) + Number(amount) })
+      if (onBehalf) await notifyPotOnBehalf(created, 'contribution')
+      return created
     },
-    [currentFloor, user, virtualMemberIds]
+    [currentFloor, user, members, notifyPotOnBehalf]
   )
 
   const setMemberPotActive = useCallback(
@@ -1142,7 +1171,9 @@ export function DataProvider({ children }) {
   const addPotExpense = useCallback(
     async (amount, { note, receiptFile, onBehalfOfId = null } = {}) => {
       if (!currentFloor || !user) return
-      const onBehalf = onBehalfOfId && virtualMemberIds.has(onBehalfOfId) ? onBehalfOfId : null
+      // Mismo criterio que addPotContribution: cualquier miembro (real o
+      // virtual) del piso, nunca uno mismo.
+      const onBehalf = onBehalfOfId && onBehalfOfId !== user.id && members.some((m) => m.id === onBehalfOfId) ? onBehalfOfId : null
       let receiptUrl = null
       if (receiptFile) {
         receiptUrl = await uploadPotReceipt(receiptFile, currentFloor.id)
@@ -1161,9 +1192,34 @@ export function DataProvider({ children }) {
         splitAmong: members.filter((m) => m.potActive !== false).map((m) => m.id)
       })
       await update('floors', currentFloor.id, { potAmount: Math.max(0, (currentFloor.potAmount || 0) - Number(amount)) })
+      if (onBehalf) await notifyPotOnBehalf(created, 'expense')
       return created
     },
-    [currentFloor, user, members, virtualMemberIds]
+    [currentFloor, user, members, notifyPotOnBehalf]
+  )
+
+  // La persona afectada reporta un problema con un aporte/gasto que
+  // registró OTRO compañero a su nombre — la operación ya quedó aprobada
+  // de entrada (ver addPotContribution/addPotExpense); esto es solo la vía
+  // de reclamo si algo está mal, nunca obligatoria. dispute_pot_contribution
+  // (RPC, ver supabase/schema.sql) valida ahí mismo que quien llama sea de
+  // verdad el afectado y que el registro sea ajeno (recorded_by no nulo);
+  // no borra ni modifica el movimiento en sí, solo lo marca.
+  const disputePotContribution = useCallback(
+    async (contributionId, reason) => {
+      if (!currentFloor || !user) return
+      await callRpc('dispute_pot_contribution', { p_contribution_id: contributionId, p_reason: reason })
+      const contribution = potContributions.find((c) => c.id === contributionId)
+      if (contribution?.recordedBy) {
+        await notifyUser(
+          currentFloor.id,
+          contribution.recordedBy,
+          'pot_dispute',
+          potDisputeMessage({ actorName: user.name, reason })
+        )
+      }
+    },
+    [currentFloor, user, potContributions, notifyUser]
   )
 
   // Solo el autor de un gasto puede editarlo/borrarlo, y solo durante las
@@ -1951,6 +2007,7 @@ export function DataProvider({ children }) {
     addPotExpense,
     updatePotExpense,
     deletePotExpense,
+    disputePotContribution,
     redeemReward
   }
 

@@ -125,17 +125,44 @@ export default function PublicTurns() {
         <>
           <h2 className="font-display font-semibold mb-2">{t('publicTurns.rotationTitle')}</h2>
           <ol className="flex flex-col gap-1.5 mb-5">
-            {view.rotation.map((m, index) => (
-              <li key={m.id} className="flex items-center gap-2 text-sm min-w-0">
-                <span className="w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 text-[10px] font-bold flex items-center justify-center shrink-0">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 break-words">{m.name}</span>
-                {m.away && (
-                  <span className="text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md shrink-0">{t('publicTurns.awayTag')}</span>
-                )}
-              </li>
-            ))}
+            {view.rotation.map((m, index) => {
+              const isKeeperNow = view.keeper.now?.id === m.id
+              const isKeeperNext = !isKeeperNow && view.keeper.next?.id === m.id
+              return (
+                <li
+                  key={m.id}
+                  className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-sm min-w-0 rounded-lg px-2 py-1.5 ${
+                    isKeeperNow
+                      ? 'bg-violet-50 dark:bg-violet-700/25 border-2 border-violet-500/40'
+                      : isKeeperNext
+                        ? 'bg-violet-50/60 dark:bg-violet-700/10'
+                        : ''
+                  }`}
+                >
+                  <span
+                    className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                      isKeeperNow ? 'bg-violet-500 text-white' : 'bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200'
+                    }`}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className={`min-w-0 break-words ${isKeeperNow ? 'font-bold' : ''}`}>{m.name}</span>
+                  {isKeeperNow && (
+                    <span className="text-[10px] uppercase font-bold text-violet-600 dark:text-violet-200 bg-violet-100 dark:bg-violet-700/30 px-1.5 py-0.5 rounded-md shrink-0">
+                      {t('publicTurns.keeperNowTag')}
+                    </span>
+                  )}
+                  {isKeeperNext && (
+                    <span className="text-[10px] uppercase font-semibold text-violet-500/70 dark:text-violet-300/70 shrink-0">
+                      {t('publicTurns.keeperNextTag')}
+                    </span>
+                  )}
+                  {m.away && (
+                    <span className="text-[10px] uppercase font-bold text-gold-500 bg-gold-400/15 px-1.5 py-0.5 rounded-md shrink-0">{t('publicTurns.awayTag')}</span>
+                  )}
+                </li>
+              )
+            })}
           </ol>
         </>
       )}
@@ -153,6 +180,15 @@ export default function PublicTurns() {
           {t('publicTurns.openApp')}
         </Link>
       </div>
+
+      {view.inviteCode && (
+        <div className="mt-5 pt-5 border-t border-ink-900/10 dark:border-cream-100/15 flex flex-col items-stretch gap-1.5">
+          <Link to={`/unirse/${view.inviteCode}`} className="btn-primary text-sm text-center">
+            {t('publicTurns.joinButton')}
+          </Link>
+          <p className="text-xs text-center text-ink-900/50 dark:text-cream-100/50">{t('publicTurns.joinNote')}</p>
+        </div>
+      )}
     </AuthShell>
   )
 }

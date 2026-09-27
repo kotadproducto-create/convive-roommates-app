@@ -51,3 +51,24 @@ export function formatMoney(amount, language = 'es') {
 export function formatEuros(amount, language = 'es') {
   return `${formatMoney(amount, language)} €`
 }
+
+/**
+ * Mensaje de "X registró un aporte/gasto a tu nombre en el Pote" (ver
+ * addPotContribution/addPotExpense en DataContext.jsx) — pura y testeable
+ * sin mockear Date.now() (recibe `dateISO`). Igual que el resto de
+ * mensajes de notificación que genera esa pantalla, siempre en español,
+ * sin importar el idioma de quien la recibe.
+ */
+export function potOnBehalfMessage({ actorName, kind, amount, dateISO, note }) {
+  const verb = kind === 'expense' ? 'gasto' : 'aporte'
+  const amountStr = formatMoney(Math.abs(Number(amount)))
+  const dateStr = new Date(dateISO).toLocaleDateString('es-ES')
+  const noteStr = note ? ` — Concepto: ${note}` : ''
+  return `${actorName} ha registrado un ${verb} de ${amountStr} € a tu nombre en el Pote (${dateStr})${noteStr}.`
+}
+
+/** Mensaje al autor de un aporte/gasto cuando la persona afectada reporta
+ * una incidencia sobre ese registro (ver disputePotContribution). */
+export function potDisputeMessage({ actorName, reason }) {
+  return `${actorName} reportó una incidencia sobre un movimiento del Pote que registraste a su nombre: "${reason}"`
+}

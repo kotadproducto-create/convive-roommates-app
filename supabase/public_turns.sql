@@ -113,6 +113,11 @@ begin
     'ok', true,
     'floor', jsonb_build_object(
       'name', f.name,
+      -- Para el botón "Unirme a este piso" del enlace de solo lectura (ver
+      -- PublicTurns.jsx) — el código de invitación ya es público de por sí
+      -- (se busca sin sesión al unirse a un piso a mano), no es un dato
+      -- sensible.
+      'inviteCode', f.invite_code,
       'rotationOrder', to_jsonb(f.rotation_order),
       'rotationMode', f.rotation_mode,
       'rotationPeriodUnit', f.rotation_period_unit,

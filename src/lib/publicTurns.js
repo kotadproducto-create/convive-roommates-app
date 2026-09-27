@@ -81,6 +81,10 @@ export function buildPublicTurns(data, now = new Date()) {
 
   return {
     floorName: floor.name || '',
+    // Código de invitación del piso (get_public_turns lo incluye) — para el
+    // botón "Unirme a este piso" (ver PublicTurns.jsx); null si por lo que
+    // sea no vino (enlaces viejos antes de este campo, o datos de prueba).
+    inviteCode: floor.inviteCode || null,
     keeper: { now: person(byId, keeperNowId), next: person(byId, keeperNextId) },
     activities,
     rotation: (floor.rotationOrder || [])

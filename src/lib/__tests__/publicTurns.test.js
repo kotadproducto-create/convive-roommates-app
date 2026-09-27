@@ -80,6 +80,18 @@ describe('buildPublicTurns — encargado/a del piso', () => {
   })
 })
 
+describe('buildPublicTurns — código de invitación (botón "Unirme a este piso")', () => {
+  it('lo pasa tal cual si get_public_turns lo trae', () => {
+    const view = buildPublicTurns(baseData({ floor: { name: 'Piso 3B', rotationOrder: ['a', 'b', 'c'], inviteCode: 'ABC123' } }), NOW)
+    expect(view.inviteCode).toBe('ABC123')
+  })
+
+  it('null si no vino (enlaces de antes de este campo)', () => {
+    const view = buildPublicTurns(baseData(), NOW)
+    expect(view.inviteCode).toBeNull()
+  })
+})
+
 describe('buildPublicTurns — actividades', () => {
   it('el turno actual usa lo guardado en la base si ya existe', () => {
     const data = baseData({ completions: [{ activityId: 'act1', periodKey: WEEK, assignedUserId: 'c', timesDone: 0, completed: true }] })
@@ -133,9 +145,9 @@ describe('buildPublicTurns — actividades', () => {
     expect(row.next).not.toBeNull()
   })
 
-  it('no filtra datos que no hacen falta (solo nombres y turnos)', () => {
+  it('no filtra datos que no hacen falta (solo nombres, turnos y el código de invitación)', () => {
     const view = buildPublicTurns(baseData(), NOW)
-    expect(Object.keys(view).sort()).toEqual(['activities', 'away', 'floorName', 'keeper', 'rotation'])
+    expect(Object.keys(view).sort()).toEqual(['activities', 'away', 'floorName', 'inviteCode', 'keeper', 'rotation'])
     expect(Object.keys(view.rotation[0]).sort()).toEqual(['away', 'id', 'isVirtual', 'name'])
   })
 })

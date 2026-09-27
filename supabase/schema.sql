@@ -1590,6 +1590,11 @@ begin
     'ok', true,
     'floor', jsonb_build_object(
       'name', f.name,
+      -- Para el botón "Unirme a este piso" del enlace de solo lectura (ver
+      -- PublicTurns.jsx) — el código de invitación ya es público de por sí
+      -- (se busca sin sesión al unirse a un piso a mano), no es un dato
+      -- sensible.
+      'inviteCode', f.invite_code,
       'rotationOrder', to_jsonb(f.rotation_order),
       'rotationMode', f.rotation_mode,
       'rotationPeriodUnit', f.rotation_period_unit,
@@ -1803,3 +1808,82 @@ $$;
 
 revoke all on function set_rotation_turn_direct(uuid, int) from public, anon;
 grant execute on function set_rotation_turn_direct(uuid, int) to authenticated;
+
+-- =========================================================
+-- Pote: registrar un aporte/gasto "a nombre de" cualquier compañero
+-- del piso (no solo perfiles virtuales), con incidencia opcional
+--
+-- Hasta ahora, "a nombre de" (recorded_by) solo se permitía sobre un
+-- perfil virtual (alguien sin cuenta). Se amplía a cualquier miembro
+-- activo del piso: la operación queda aprobada de entrada (nadie tiene
+-- que confirmar nada), a la otra persona se le avisa (ver notifyUser +
+-- pot_on_behalf en DataContext.jsx) y, si algo está mal, puede reportar
+-- una incidencia sobre ESE movimiento concreto (dispute_pot_contribution).
+-- Es idempotente: se puede correr varias veces.
+-- =========================================================
+
+create or replace function is_member_in_floor(p_user_id uuid, p_floor_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from floor_memberships
+    where user_id = p_user_id and floor_id = p_floor_id and status = 'active'
+  );
+$$;
+
+drop policy if exists "insert own pot contributions" on pot_contributions;
+create policy "insert own pot contributions" on pot_contributions
+  for insert with check (
+    is_active_member(floor_id)
+    and (user_id = auth.uid() or (recorded_by = auth.uid() and is_member_in_floor(user_id, floor_id)))
+  );
+
+-- Reportar una incidencia: solo la persona afectada (user_id) y solo
+-- sobre un movimiento que de verdad registró alguien más (recorded_by no
+-- nulo) — nunca sobre los propios. No se expone como policy de UPDATE
+-- directa (dejaría editable toda la fila, importe incluido): la valida y
+-- aplica esta función, que solo toca las 3 columnas de la incidencia.
+alter table pot_contributions add column if not exists disputed boolean not null default false;
+alter table pot_contributions add column if not exists dispute_reason text;
+alter table pot_contributions add column if not exists disputed_at timestamptz;
+
+create or replace function dispute_pot_contribution(p_contribution_id uuid, p_reason text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row pot_contributions%rowtype;
+begin
+  select * into v_row from pot_contributions where id = p_contribution_id;
+  if v_row.id is null then
+    raise exception 'Movimiento no encontrado';
+  end if;
+  if v_row.user_id <> auth.uid() then
+    raise exception 'Solo la persona afectada puede reportar esta incidencia';
+  end if;
+  if v_row.recorded_by is null then
+    raise exception 'Este movimiento no fue registrado por otra persona';
+  end if;
+  if coalesce(trim(p_reason), '') = '' then
+    raise exception 'Escribe qué problema detectaste';
+  end if;
+
+  update pot_contributions
+    set disputed = true, dispute_reason = p_reason, disputed_at = now()
+    where id = p_contribution_id;
+end;
+$$;
+
+revoke all on function dispute_pot_contribution(uuid, text) from public, anon;
+grant execute on function dispute_pot_contribution(uuid, text) to authenticated;
+
+-- Enlace opcional de una notificación con el registro concreto del Pote
+-- al que se refiere (para el botón "Reportar incidencia" dentro del
+-- propio aviso, ver NotificationItem.jsx).
+alter table notifications add column if not exists ref_id uuid;

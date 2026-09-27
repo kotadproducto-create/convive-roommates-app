@@ -1,5 +1,6 @@
 import MarqueeText from '../components/MarqueeText'
 import { VirtualTag } from '../components/VirtualMembers'
+import DisputeContributionDialog from '../components/DisputeContributionDialog'
 import { useMemo, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
@@ -23,6 +24,7 @@ export default function Wallet() {
     addPotExpense,
     updatePotExpense,
     deletePotExpense,
+    disputePotContribution,
     polls,
     pollVotes,
     walletResets,
@@ -58,10 +60,15 @@ export default function Wallet() {
   const [showAdjustDialog, setShowAdjustDialog] = useState(false)
   // "Reiniciar saldo": solo para mí (al instante) o para todos (consulta en Votaciones).
   const [showResetDialog, setShowResetDialog] = useState(false)
-  // Registrar aportes/gastos en nombre de un perfil virtual (no usa la app): '' = yo.
+  // Registrar aportes/gastos a nombre de otro compañero del piso (real o
+  // perfil virtual): '' = yo. Cualquiera puede hacerlo, no solo un admin.
   const [actingAs, setActingAs] = useState('')
-  const virtualMembers = useMemo(() => members.filter((m) => m.isVirtual), [members])
-  const behalfName = virtualMembers.find((m) => m.id === actingAs)?.name || null
+  const otherMembers = useMemo(() => members.filter((m) => m.id !== user.id), [members, user.id])
+  const behalfName = otherMembers.find((m) => m.id === actingAs)?.name || null
+  // Reportar una incidencia sobre un movimiento que registró otro
+  // compañero a mi nombre (ver disputePotContribution) — abre el mismo
+  // pop-up que la notificación (DisputeContributionDialog).
+  const [disputeTarget, setDisputeTarget] = useState(null)
 
   // Wallet de cada persona: suma lo que aporta y resta su parte de cada
   // gasto (Pote o Compras), repartido en partes iguales — ver lib/wallets.js.
@@ -178,14 +185,14 @@ export default function Wallet() {
             </div>
           </div>
 
-          {virtualMembers.length > 0 && (
+          {otherMembers.length > 0 && (
             <label className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-900/60 dark:text-cream-100/60">
               {t('wallet.actingAs')}
               <select className="input !w-auto min-w-0 max-w-full text-xs py-1.5" value={actingAs} onChange={(e) => setActingAs(e.target.value)}>
                 <option value="">{t('wallet.actingAsMe')}</option>
-                {virtualMembers.map((m) => (
+                {otherMembers.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name} ({t('virtual.tag')})
+                    {m.isVirtual ? `${m.name} (${t('virtual.tag')})` : m.name}
                   </option>
                 ))}
               </select>
@@ -321,8 +328,10 @@ export default function Wallet() {
                         authorName={memberById[item.c.userId]?.name || t('wallet.someone')}
                         recordedByName={item.c.recordedBy && item.c.recordedBy !== item.c.userId ? memberById[item.c.recordedBy]?.name || t('wallet.someone') : null}
                         canManage={!isPotAdjustment(item.c) && (item.c.userId === user.id || item.c.recordedBy === user.id) && Number(item.c.amount) < 0 && Date.now() - new Date(item.c.createdAt).getTime() < 24 * 60 * 60 * 1000}
+                        canDispute={item.c.userId === user.id && !!item.c.recordedBy && item.c.recordedBy !== item.c.userId}
                         onUpdate={updatePotExpense}
                         onDelete={deletePotExpense}
+                        onDispute={() => setDisputeTarget(item.c)}
                         t={t}
                         dateLocale={dateLocale}
                         language={language}
@@ -337,6 +346,18 @@ export default function Wallet() {
 
       {pendingAction && (
         <ConfirmPotDialog action={pendingAction} onCancel={() => setPendingAction(null)} onConfirm={confirmPending} t={t} language={language} />
+      )}
+
+      {disputeTarget && (
+        <DisputeContributionDialog
+          contribution={disputeTarget}
+          onCancel={() => setDisputeTarget(null)}
+          onConfirm={async (reason) => {
+            await disputePotContribution(disputeTarget.id, reason)
+            showToast(t('wallet.disputeSuccessToast'), 'success')
+            setDisputeTarget(null)
+          }}
+        />
       )}
 
       {showResetDialog && (
@@ -733,7 +754,7 @@ function ResetProposalRow({ poll, name, t, dateLocale, language }) {
   )
 }
 
-function HistoryRow({ contribution: c, authorName, recordedByName = null, canManage, onUpdate, onDelete, t, dateLocale, language }) {
+function HistoryRow({ contribution: c, authorName, recordedByName = null, canManage, canDispute = false, onUpdate, onDelete, onDispute, t, dateLocale, language }) {
   const isExpense = Number(c.amount) < 0
   const [editing, setEditing] = useState(false)
   const [amount, setAmount] = useState(Math.abs(Number(c.amount)))
@@ -859,6 +880,14 @@ function HistoryRow({ contribution: c, authorName, recordedByName = null, canMan
           </div>
         )}
       </div>
+      {canDispute &&
+        (c.disputed ? (
+          <p className="mt-1 text-[11px] text-ink-900/35 dark:text-cream-100/35">{t('wallet.disputeReportedNote')}</p>
+        ) : (
+          <button type="button" onClick={onDispute} className="mt-1 text-[11px] text-ink-900/35 dark:text-cream-100/35 hover:text-clay-500 hover:underline">
+            {t('wallet.reportDisputeButton')}
+          </button>
+        ))}
     </li>
   )
 }

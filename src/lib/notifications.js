@@ -13,6 +13,10 @@ const ROUTE_BY_TYPE = {
   // Dinero y compras
   pote: '/pote',
   stock_out: '/compras',
+  // Un compañero registró un aporte/gasto a tu nombre, o reportó una
+  // incidencia sobre uno que registraste tú (ver DataContext.jsx)
+  pot_on_behalf: '/pote',
+  pot_dispute: '/pote',
   // Personas del piso
   swap: '/convives',
   marked_away: '/convives',
