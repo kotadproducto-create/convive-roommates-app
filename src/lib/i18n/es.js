@@ -500,7 +500,8 @@ export default {
     groupFloor: 'Convivencia',
     removalPendingTitle: 'Salida pendiente de confirmación',
     removalPendingBody:
-      'Un administrador ha iniciado tu salida de {{floorName}}, pero no se hará efectiva sin tu confirmación. Puedes aceptarla o rechazarla — si la rechazas, sigues en el piso sin ningún cambio.',
+      'Un administrador ha iniciado tu salida de {{floorName}}. Puedes aceptarla o rechazarla — si la rechazas, sigues en el piso sin ningún cambio. Si no respondes a tiempo, se hará efectiva automáticamente.',
+    removalPendingDeadline: 'Tienes hasta el {{date}} para responder',
     potBalanceTitle: 'Tu saldo en el pote de dinero',
     potBalanceLine: 'Aportaste {{contributed}}€, tu parte de los gastos fue {{fairShare}}€ — saldo final: {{balance}}€',
     potBalanceDisclaimer: 'La app no transfiere dinero real: si corresponde, liquídalo con el piso por fuera (efectivo, Bizum, etc.).',
@@ -989,7 +990,7 @@ export default {
     },
     leaveFloorSelfAlert: 'Para salir tú mismo del piso, usa "Dejar el piso" en tu Perfil.',
     removeConfirm:
-      'Se iniciará el proceso de salida de {{name}}: deberá aceptarla o rechazarla desde su propia cuenta antes de que se haga efectiva. No se le eliminará sin su confirmación. ¿Continuar?',
+      'Se iniciará el proceso de salida de {{name}}: podrá aceptarla o rechazarla desde su propia cuenta. Si no responde dentro de 48 horas, la salida se hará efectiva automáticamente. ¿Continuar?',
     whatsappLinkInvalid: 'El enlace debe ser una URL válida (empezando por http:// o https://).',
     shareInviteTitle: 'Invitación a Convive',
     shareInviteText: 'Únete a {{floor}} en Convive. Si el enlace no abre, usa el código {{code}}.',
@@ -1018,6 +1019,7 @@ export default {
     exitPendingSelf: 'la confirmes',
     exitPendingOther: 'la confirme',
     exitPendingLabel: 'Salida pendiente de que {{who}}',
+    exitPendingDeadline: 'vence el {{date}}',
     cancel: 'Cancelar',
     potSettingsTitle: 'Ajustes del pote',
     thresholdLabel: 'Aviso cuando el pote baje de',

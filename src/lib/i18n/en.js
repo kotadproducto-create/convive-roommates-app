@@ -499,7 +499,8 @@ export default {
     groupFloor: 'Living together',
     removalPendingTitle: 'Exit pending confirmation',
     removalPendingBody:
-      "An admin has started your exit from {{floorName}}, but it won't take effect without your confirmation. You can accept or reject it — if you reject it, you stay in the flat with no changes.",
+      'An admin has started your exit from {{floorName}}. You can accept or reject it — if you reject it, you stay in the flat with no changes. If you don\'t respond in time, it will take effect automatically.',
+    removalPendingDeadline: 'You have until {{date}} to respond',
     potBalanceTitle: 'Your balance in the money pot',
     potBalanceLine: 'You contributed €{{contributed}}, your share of expenses was €{{fairShare}} — final balance: €{{balance}}',
     potBalanceDisclaimer: "The app doesn't transfer real money: settle up with the flat outside the app if it applies (cash, bank transfer, etc.).",
@@ -988,7 +989,7 @@ export default {
     },
     leaveFloorSelfAlert: 'To leave the flat yourself, use "Leave the flat" in your Profile.',
     removeConfirm:
-      "This starts {{name}}'s exit process: they'll need to accept or reject it from their own account before it takes effect. They won't be removed without their confirmation. Continue?",
+      "This starts {{name}}'s exit process: they can accept or reject it from their own account. If they don't respond within 48 hours, the exit takes effect automatically. Continue?",
     whatsappLinkInvalid: 'The link must be a valid URL (starting with http:// or https://).',
     shareInviteTitle: 'Invitation to Convive',
     shareInviteText: 'Join {{floor}} on Convive. If the link does not open, use the code {{code}}.',
@@ -1016,6 +1017,7 @@ export default {
     exitPendingSelf: 'you confirm it',
     exitPendingOther: 'they confirm it',
     exitPendingLabel: 'Exit pending until {{who}}',
+    exitPendingDeadline: 'due {{date}}',
     cancel: 'Cancel',
     potSettingsTitle: 'Pot settings',
     thresholdLabel: 'Warn when the pot drops below',

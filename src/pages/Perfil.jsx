@@ -11,6 +11,7 @@ import { getFloorHistory } from '../lib/db'
 import { getMemberColor } from '../lib/roomieColors'
 import { computeWallets } from '../lib/wallets'
 import { formatMoney } from '../lib/pot'
+import { removalDeadlineAt } from '../lib/removal'
 import { CameraIcon, AlertIcon, MailIcon, PersonIcon } from '../components/icons'
 import PageBanner, { SectionLabel } from '../components/PageBanner'
 import { format, formatDistanceToNowStrict } from 'date-fns'
@@ -58,6 +59,7 @@ export default function Perfil() {
               rejectMyRemoval={rejectMyRemoval}
               showToast={showToast}
               t={t}
+              dateLocale={dateLocale}
               language={language}
             />
           </Reveal>
@@ -115,7 +117,7 @@ export default function Perfil() {
   )
 }
 
-function RemovalPendingCard({ floorName, membership, userId, members, potContributions, walletResets, removeMember, rejectMyRemoval, showToast, t, language }) {
+function RemovalPendingCard({ floorName, membership, userId, members, potContributions, walletResets, removeMember, rejectMyRemoval, showToast, t, dateLocale, language }) {
   const [confirming, setConfirming] = useState(false)
   const [rejecting, setRejecting] = useState(false)
 
@@ -125,6 +127,7 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
   const myContributed = myWallet.contributed
   const fairShare = myWallet.expenseShare
   const balance = myWallet.balance
+  const deadline = membership.removalRequestedAt ? new Date(removalDeadlineAt(membership.removalRequestedAt)) : null
 
   async function handleConfirm() {
     if (!confirm(t('perfil.confirmExitDialog', { floorName }))) {
@@ -160,6 +163,11 @@ function RemovalPendingCard({ floorName, membership, userId, members, potContrib
           <p className="text-sm text-ink-900/70 dark:text-cream-100/70 mt-1">
             {t('perfil.removalPendingBody', { floorName })}
           </p>
+          {deadline && (
+            <p className="text-xs font-semibold text-clay-500 mt-1">
+              {t('perfil.removalPendingDeadline', { date: format(deadline, 'd MMM yyyy, HH:mm', { locale: dateLocale }) })}
+            </p>
+          )}
           <div className="text-sm bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2.5 mt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/40 dark:text-cream-100/40 mb-1">
               {t('perfil.potBalanceTitle')}

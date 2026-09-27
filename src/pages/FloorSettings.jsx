@@ -13,6 +13,7 @@ import { update, getRotationHistory } from '../lib/db'
 import { resetMemberPin } from '../lib/publicPollApi'
 import { inviteLink } from '../lib/invite'
 import { floorKeeperFor } from '../lib/activities'
+import { removalDeadlineAt } from '../lib/removal'
 import PublicTurnsLinkCard from '../components/PublicTurnsLinkCard'
 import { TASK_LABEL, getMondayOfWeek } from '../lib/rotation'
 import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon } from '../components/icons'
@@ -401,16 +402,24 @@ export default function FloorSettings() {
                   )}
                 </div>
                 {m.removalRequestedBy && (
-                  <div className="flex items-center justify-between bg-clay-500/10 text-clay-500 text-xs font-medium px-2 py-1.5 rounded-lg">
-                    <span>
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 bg-clay-500/10 text-clay-500 text-xs font-medium px-2 py-1.5 rounded-lg">
+                    <span className="min-w-0">
                       {t('floorSettings.exitPendingLabel', {
                         who: m.id === user.id ? t('floorSettings.exitPendingSelf') : t('floorSettings.exitPendingOther')
                       })}
+                      {m.removalRequestedAt && (
+                        <>
+                          {' · '}
+                          {t('floorSettings.exitPendingDeadline', {
+                            date: format(new Date(removalDeadlineAt(m.removalRequestedAt)), 'd MMM, HH:mm', { locale: dateLocale })
+                          })}
+                        </>
+                      )}
                     </span>
                     {isAdmin && (
                       <button
                         onClick={() => cancelRemoval(m.membershipId, m.id, m.name)}
-                        className="font-semibold hover:underline shrink-0 ml-2"
+                        className="font-semibold hover:underline shrink-0"
                       >
                         {t('floorSettings.cancel')}
                       </button>

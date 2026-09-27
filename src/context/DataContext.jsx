@@ -20,6 +20,7 @@ import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdj
 import { SHARED_SPACE_BY_KEY, currentSpaceUse } from '../lib/sharedSpaces'
 import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark, floorKeeperIndex } from '../lib/activities'
 import { resolvePoll, pollDeadlineAt, ROTATION_POLL_HOURS } from '../lib/polls'
+import { removalDeadlineAt, isRemovalExpired } from '../lib/removal'
 import { realMembers, virtualIdSet } from '../lib/virtualMembers'
 import { formatMoney } from '../lib/pot'
 import { useAuth } from './AuthContext'
@@ -765,7 +766,13 @@ export function DataProvider({ children }) {
   )
 
   const removeMember = useCallback(
-    async (membershipId, profileId) => {
+    // `opts.message` reemplaza el aviso por defecto ("X ha dejado el
+    // piso") — lo usa el vencimiento automático de initiateRemoval para
+    // distinguir "no respondió a tiempo" de una salida normal. `opts.dedupeKey`
+    // es solo para ese mismo caso: al ser un efecto oportunista que puede
+    // dispararse desde más de una sesión abierta a la vez, evita duplicar
+    // el aviso (mismo patrón que notifyUser).
+    async (membershipId, profileId, opts) => {
       if (!currentFloor) return
       const leavingName = members.find((m) => m.id === profileId)?.name || 'Alguien'
       const newOrder = (currentFloor.rotationOrder || []).filter((id) => id !== profileId)
@@ -775,12 +782,17 @@ export function DataProvider({ children }) {
       // RLS de "notifications" exige is_active_member(floor_id), que mira
       // la membresía de quien llama (auth.uid()) — si se cerrara primero,
       // este insert quedaría bloqueado justo para quien se está yendo.
-      await create('notifications', {
-        floorId: currentFloor.id,
-        userId: null,
-        type: 'member_left',
-        message: `${leavingName} ha dejado el piso`
-      })
+      const message = opts?.message || `${leavingName} ha dejado el piso`
+      if (opts?.dedupeKey) {
+        const id = await deterministicUuid(opts.dedupeKey)
+        await upsertIgnoreDuplicates(
+          'notifications',
+          [{ id, floorId: currentFloor.id, userId: null, type: 'member_left', message }],
+          ['id']
+        )
+      } else {
+        await create('notifications', { floorId: currentFloor.id, userId: null, type: 'member_left', message })
+      }
       // Cerrar la membresía, no borrar el perfil: el usuario queda en
       // historial y podrá reactivarla más adelante con aprobación de un
       // admin de ese piso.
@@ -823,8 +835,9 @@ export function DataProvider({ children }) {
 
   // Un admin inicia la salida de OTRO miembro: no lo elimina al instante,
   // solo lo marca "pendiente de confirmación" y le avisa. El propio
-  // afectado tiene que confirmar (confirmMyRemoval / removeMember) para
-  // que la salida se haga efectiva de verdad.
+  // afectado tiene que confirmar o rechazar (removeMember / rejectMyRemoval)
+  // dentro de las próximas 48h (ver lib/removal.js); si no responde a
+  // tiempo, el efecto de más abajo la hace efectiva sola.
   const initiateRemoval = useCallback(
     async (membershipId, targetUserId, targetName) => {
       if (!currentFloor || !user) return
@@ -836,7 +849,7 @@ export function DataProvider({ children }) {
         currentFloor.id,
         targetUserId,
         'removal_requested',
-        `Un administrador ha iniciado tu salida de ${currentFloor.name}. Debes confirmarla en tu Perfil.`
+        `Un administrador ha iniciado tu salida de ${currentFloor.name}. Debes confirmarla o rechazarla en tu Perfil dentro de las próximas 48 horas, o se hará efectiva automáticamente.`
       )
     },
     [currentFloor, user, notifyUser]
@@ -878,6 +891,41 @@ export function DataProvider({ children }) {
     },
     [currentFloor, user, members, notifyUser]
   )
+
+  // Las solicitudes de salida (initiateRemoval) vencen a las 48h exactas
+  // si el afectado no responde: se agenda un aviso para el primer
+  // vencimiento pendiente y se re-evalúa entonces, sin esperar a que
+  // cambie otro dato ni a recargar la app — mismo patrón que pollClock,
+  // más arriba.
+  const [removalClock, setRemovalClock] = useState(0)
+  useEffect(() => {
+    const now = Date.now()
+    const upcoming = removalPending
+      .map((m) => new Date(removalDeadlineAt(m.removalRequestedAt)).getTime())
+      .filter((ms) => ms > now)
+    if (!upcoming.length) return undefined
+    const wait = Math.min(Math.min(...upcoming) - now + 1000, 2147483647)
+    const id = setTimeout(() => setRemovalClock((c) => c + 1), wait)
+    return () => clearTimeout(id)
+  }, [removalPending, removalClock])
+
+  // Resolución oportunista: igual que las expiraciones de arriba (no hay
+  // cron), se revisa cada vez que alguien del piso tiene la app abierta.
+  // Si nadie respondió dentro de las 48h, la salida se hace efectiva sola
+  // — mismo resultado que si el propio afectado la hubiera confirmado,
+  // pero con un aviso que deja claro que fue por falta de respuesta.
+  useEffect(() => {
+    if (!currentFloor) return
+    const expired = removalPending.filter((m) => isRemovalExpired(m.removalRequestedAt, Date.now()))
+    if (!expired.length) return
+    for (const m of expired) {
+      removeMember(m.membershipId, m.id, {
+        message: `${m.name} no respondió a tiempo y su salida de ${currentFloor.name} se hizo efectiva automáticamente.`,
+        dedupeKey: `member-left-auto:${m.membershipId}`
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [removalPending, currentFloor?.id, removalClock])
 
   const setMemberRole = useCallback((membershipId, role) => update('floor_memberships', membershipId, { role }), [])
 
