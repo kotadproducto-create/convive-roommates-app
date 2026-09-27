@@ -154,14 +154,22 @@ export default function Timeline() {
       </section>
 
       {/* Encargado/a del piso esta semana y quién sigue — mismo estilo que
-          la tarjeta del link público de turnos (ver PublicTurns.jsx). */}
-      <section className="rounded-xl bg-violet-50 dark:bg-violet-700/25 border-2 border-violet-500/30 px-4 py-3 mb-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-200 mb-1">{t('publicTurns.keeperTitle')}</p>
-        <p className="font-display text-2xl font-bold break-words">{floorKeeper.now ? floorKeeper.now.name : t('publicTurns.nobody')}</p>
-        {floorKeeper.next && (
-          <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 break-words">{t('publicTurns.keeperNext', { name: floorKeeper.next.name })}</p>
-        )}
-      </section>
+          la tarjeta del link público de turnos (ver PublicTurns.jsx). Lleva
+          al orden de rotación de Actividades (ver RotationOrderBox.jsx). */}
+      <button
+        type="button"
+        onClick={() => navigate('/actividades')}
+        className="w-full text-left flex items-center justify-between gap-2 rounded-xl bg-violet-50 dark:bg-violet-700/25 border-2 border-violet-500/30 px-4 py-3 mb-5 hover:bg-violet-100 dark:hover:bg-violet-700/35"
+      >
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-200 mb-1">{t('publicTurns.keeperTitle')}</p>
+          <p className="font-display text-2xl font-bold break-words">{floorKeeper.now ? floorKeeper.now.name : t('publicTurns.nobody')}</p>
+          {floorKeeper.next && (
+            <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 break-words">{t('publicTurns.keeperNext', { name: floorKeeper.next.name })}</p>
+          )}
+        </div>
+        <span aria-hidden="true" className="shrink-0 text-2xl leading-none text-violet-500/50">›</span>
+      </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start mb-8">
         {/* Calendario de racha */}
