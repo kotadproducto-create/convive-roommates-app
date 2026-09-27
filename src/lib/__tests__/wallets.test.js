@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeWallets } from '../wallets.js'
+import { computeWallets, averageMonthlyExpense } from '../wallets.js'
 
 const A = { id: 'A', joinedAt: '2026-01-01T00:00:00Z' }
 const B = { id: 'B', joinedAt: '2026-01-01T00:00:00Z' }
@@ -143,6 +143,29 @@ describe('computeWallets — reiniciar saldo', () => {
   it('sin reinicios el resultado es idéntico al de siempre (no aparece resetAdjustment)', () => {
     const w = computeWallets([A, B], [mov('A', 10)])
     expect(w.A).toEqual({ contributed: 10, expenseShare: 0, balance: 10 })
+  })
+})
+
+describe('averageMonthlyExpense — pop-up de detalle de "Saldo por persona"', () => {
+  it('reparte el expenseShare entre los meses completos desde que se unió', () => {
+    const joined = '2026-01-01T00:00:00Z'
+    const now = new Date('2026-04-01T00:00:00Z') // 3 meses de calendario después
+    expect(averageMonthlyExpense(60, joined, now)).toBe(20)
+  })
+
+  it('nunca divide entre menos de 1 mes (recién unido, o mismo mes)', () => {
+    const joined = '2026-01-20T00:00:00Z'
+    const now = new Date('2026-01-25T00:00:00Z')
+    expect(averageMonthlyExpense(30, joined, now)).toBe(30)
+  })
+
+  it('sin fecha de alta (dato viejo), devuelve el total tal cual', () => {
+    expect(averageMonthlyExpense(45, null)).toBe(45)
+    expect(averageMonthlyExpense(45, undefined)).toBe(45)
+  })
+
+  it('expenseShare 0 da promedio 0', () => {
+    expect(averageMonthlyExpense(0, '2026-01-01T00:00:00Z', new Date('2026-06-01T00:00:00Z'))).toBe(0)
   })
 })
 

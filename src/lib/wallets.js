@@ -1,3 +1,4 @@
+import { differenceInCalendarMonths } from 'date-fns'
 import { ExpenseSplitter, toCents, fromCents } from './expense-splitting-core/index.js'
 import { isPotAdjustment } from './pot.js'
 
@@ -88,4 +89,18 @@ export function computeWallets(members, potContributions, walletResets = []) {
       }
     ])
   )
+}
+
+/**
+ * Gasto promedio por mes de una persona (pop-up de detalle de "Saldo por
+ * persona", ver Wallet.jsx): su expenseShare de siempre (lo que le tocó
+ * pagar de gastos compartidos, ver computeWallets de arriba) repartido
+ * entre los meses de calendario que lleva en el piso desde que se unió
+ * — nunca menos de 1 mes, para no dividir por cero ni inflar el
+ * promedio el mismo mes que alguien se une.
+ */
+export function averageMonthlyExpense(expenseShare, joinedAtISO, now = new Date()) {
+  if (!joinedAtISO) return expenseShare
+  const months = Math.max(1, differenceInCalendarMonths(now, new Date(joinedAtISO)))
+  return expenseShare / months
 }

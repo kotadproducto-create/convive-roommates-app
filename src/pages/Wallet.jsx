@@ -11,7 +11,8 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { JarIcon, EditIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, CloseIcon } from '../components/icons'
 import { potAmountColorClass, potAmountBubbleMessage, isPotAdjustment, formatMoney, formatEuros } from '../lib/pot'
-import { computeWallets } from '../lib/wallets'
+import { computeWallets, averageMonthlyExpense } from '../lib/wallets'
+import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
 
 export default function Wallet() {
@@ -69,6 +70,10 @@ export default function Wallet() {
   // compañero a mi nombre (ver disputePotContribution) — abre el mismo
   // pop-up que la notificación (DisputeContributionDialog).
   const [disputeTarget, setDisputeTarget] = useState(null)
+  // Detalle económico de una persona ("Saldo por persona" → tocar su
+  // fila): histórico aportado, saldo y gasto promedio mensual, ver
+  // MemberWalletDialog más abajo.
+  const [detailMember, setDetailMember] = useState(null)
 
   // Wallet de cada persona: suma lo que aporta y resta su parte de cada
   // gasto (Pote o Compras), repartido en partes iguales — ver lib/wallets.js.
@@ -262,26 +267,25 @@ export default function Wallet() {
                 const positive = w.balance >= 0.01
                 const negative = w.balance <= -0.01
                 return (
-                  <li key={m.id} className="flex items-center justify-between gap-2 px-2 py-2 rounded-xl bg-cream-100 dark:bg-ink-700">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center text-xs font-bold shrink-0">
-                        {m.name[0].toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => setDetailMember(m)}
+                      className="w-full flex items-center justify-between gap-2 px-2 py-2 rounded-xl bg-cream-100 dark:bg-ink-700 hover:bg-cream-200 dark:hover:bg-ink-700/70 text-left"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center text-xs font-bold shrink-0">
+                          {m.name[0].toUpperCase()}
+                        </div>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MarqueeText as="p" className="text-sm font-medium min-w-0">{m.name}{m.id === user.id ? t('wallet.you') : ''}</MarqueeText>
                           {m.isVirtual && <VirtualTag className="shrink-0" />}
                         </div>
-                        <p className="text-xs text-ink-900/40 dark:text-cream-100/40">
-                          {t('wallet.walletBreakdown', { contributed: formatMoney(w.contributed, language), share: formatMoney(w.expenseShare, language) })}
-                          {w.resetAdjustment !== undefined &&
-                            ` · ${t('wallet.walletResetAdjustment', { amount: `${w.resetAdjustment > 0 ? '+' : ''}${formatMoney(w.resetAdjustment, language)}` })}`}
-                        </p>
                       </div>
-                    </div>
-                    <span className={`text-sm font-bold shrink-0 ${positive ? 'text-sage-500' : negative ? 'text-clay-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
-                      {w.balance > 0 ? '+' : ''}{formatEuros(w.balance, language)}
-                    </span>
+                      <span className={`text-sm font-bold shrink-0 ${positive ? 'text-sage-500' : negative ? 'text-clay-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
+                        {w.balance > 0 ? '+' : ''}{formatEuros(w.balance, language)}
+                      </span>
+                    </button>
                   </li>
                 )
               })}
@@ -357,6 +361,16 @@ export default function Wallet() {
             showToast(t('wallet.disputeSuccessToast'), 'success')
             setDisputeTarget(null)
           }}
+        />
+      )}
+
+      {detailMember && (
+        <MemberWalletDialog
+          member={detailMember}
+          wallet={wallets[detailMember.id] || { contributed: 0, expenseShare: 0, balance: 0 }}
+          onClose={() => setDetailMember(null)}
+          t={t}
+          language={language}
         />
       )}
 
@@ -618,6 +632,64 @@ function ConfirmPotDialog({ action, onCancel, onConfirm, t, language }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/** Detalle económico de una persona ("Saldo por persona" → tocar su
+ * fila): histórico aportado, saldo actual y gasto promedio por mes (ver
+ * averageMonthlyExpense en lib/wallets.js). Se dibuja en document.body
+ * (createPortal) porque se abre desde dentro de un <Reveal>, que deja un
+ * transform aplicado incluso en reposo y encerraría un `fixed` normal. */
+function MemberWalletDialog({ member, wallet, onClose, t, language }) {
+  const positive = wallet.balance >= 0.01
+  const negative = wallet.balance <= -0.01
+  const avgMonthly = averageMonthlyExpense(wallet.expenseShare, member.joinedAt)
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center"
+      onClick={onClose}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative max-h-[90vh] overflow-y-auto"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+
+        <div className="flex items-center gap-3 mb-4 pr-8 min-w-0">
+          <div className="w-10 h-10 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center text-sm font-bold shrink-0">
+            {member.name[0].toUpperCase()}
+          </div>
+          <MarqueeText as="h3" className="font-display text-lg font-bold min-w-0">{member.name}</MarqueeText>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2 bg-white dark:bg-ink-700 rounded-xl px-3 py-2.5">
+            <span className="text-sm text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailContributed')}</span>
+            <span className="text-sm font-bold shrink-0">{formatEuros(wallet.contributed, language)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 bg-white dark:bg-ink-700 rounded-xl px-3 py-2.5">
+            <span className="text-sm text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailBalance')}</span>
+            <span className={`text-sm font-bold shrink-0 ${positive ? 'text-sage-500' : negative ? 'text-clay-500' : ''}`}>
+              {wallet.balance > 0 ? '+' : ''}{formatEuros(wallet.balance, language)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2 bg-white dark:bg-ink-700 rounded-xl px-3 py-2.5">
+            <span className="text-sm text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailAvgMonthly')}</span>
+            <span className="text-sm font-bold shrink-0">{formatEuros(avgMonthly, language)}</span>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
 
