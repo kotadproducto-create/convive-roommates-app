@@ -17,6 +17,7 @@ import {
 } from 'date-fns'
 import { currentPeriodKey, isDueOnDate, assigneeFor, getWeekKeyOf } from '../lib/activities'
 import { isPotAdjustment, formatMoney } from '../lib/pot'
+import { getMemberColor } from '../lib/roomieColors'
 import { JarIcon, CartIcon, StoreIcon, WasherIcon, SparkleIcon } from './icons'
 import { useLanguage } from '../context/LanguageContext'
 import { TASK_TONE_CLASSES } from './TaskCard'
@@ -575,8 +576,10 @@ function DayDetail({
       ) : (
         items.map((item, i) => {
           const Icon = item.icon
-          const toneClass = item.pending ? 'bg-coral-500 text-white' : item.toneClass
-          const badgeBorderClass = item.pending ? 'border-coral-600' : 'border-ink-900/70 dark:border-cream-100/30'
+          const memberColor = item.pending ? getMemberColor(item.assignee) : null
+          const toneClass = item.pending ? 'text-white' : item.toneClass
+          const badgeBorderClass = item.pending ? '' : 'border-ink-900/70 dark:border-cream-100/30'
+          const badgeStyle = memberColor ? { backgroundColor: memberColor, borderColor: memberColor } : undefined
           const isShopping = item.activity?.fixedKey === 'compras'
           return (
             <div
@@ -586,13 +589,14 @@ function DayDetail({
               {isShopping ? (
                 <Link
                   to="/compras"
+                  style={badgeStyle}
                   className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0 hover:opacity-80`}
                   title={t('calendar.goToShoppingList')}
                 >
                   {Icon && <Icon className="w-7 h-7" />}
                 </Link>
               ) : (
-                <div className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0`}>
+                <div style={badgeStyle} className={`w-14 h-14 rounded-2xl border-2 ${badgeBorderClass} ${toneClass} flex items-center justify-center shrink-0`}>
                   {Icon && <Icon className="w-7 h-7" />}
                 </div>
               )}
@@ -606,7 +610,7 @@ function DayDetail({
                 )}
                 <p className="text-sm text-ink-900/60 dark:text-cream-100/60">
                   {item.pending ? (
-                    <span className="font-bold text-coral-600 dark:text-coral-400">{t('calendar.yourTurnBold')}</span>
+                    <span className="font-bold" style={{ color: memberColor }}>{t('calendar.yourTurnBold')}</span>
                   ) : (
                     item.assignee?.name || t('calendar.unassigned')
                   )}
@@ -631,6 +635,7 @@ function DayDetail({
                 <button
                   type="button"
                   onClick={() => handleToggle(item)}
+                  style={!item.completion.completed && item.assignee ? { backgroundColor: getMemberColor(item.assignee) } : undefined}
                   className={item.completion.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}
                 >
                   {item.completion.completed ? t('calendar.undo') : t('calendar.markDone')}

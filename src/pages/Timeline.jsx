@@ -4,7 +4,8 @@ import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { getMondayOfWeek, computeWeekStreak } from '../lib/rotation'
-import { currentPeriodKey, dueActivitiesOnDate } from '../lib/activities'
+import { currentPeriodKey, dueActivitiesOnDate, floorKeeperFor, getWeekKeyOf } from '../lib/activities'
+import { getMemberColor, hexToRgba } from '../lib/roomieColors'
 import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon, BellIcon } from '../components/icons'
 import { potAmountColorClass, formatMoney, formatEuros } from '../lib/pot'
 import { isPendingToBuy } from '../lib/shopping'
@@ -23,7 +24,7 @@ const FIXED_ORDER = ['compras', 'basura', 'lavadora']
 
 export default function Timeline() {
   const { user } = useAuth()
-  const { floor, members, activities, activityCompletions, notifications, shoppingItems, weekKey, markAllNotificationsRead } = useData()
+  const { floor, members, activities, activityCompletions, notifications, shoppingItems, weekKey, awayUserIds, markAllNotificationsRead } = useData()
   const { t, dateLocale, language } = useLanguage()
   const navigate = useNavigate()
   const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
@@ -71,6 +72,21 @@ export default function Timeline() {
   }
 
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
+
+  // Encargado/a del piso esta semana y quién sigue — misma lógica que ya
+  // usa Dashboard.jsx y el link público de turnos (floorKeeperFor), para
+  // no duplicar el cálculo.
+  const floorKeeper = useMemo(() => {
+    const order = (floor?.rotationOrder || []).filter((id) => !awayUserIds.has(id))
+    const nowId = floorKeeperFor(floor, order, weekKey)
+    const nextWeekDate = new Date()
+    nextWeekDate.setDate(nextWeekDate.getDate() + 7)
+    const nextId = floorKeeperFor(floor, order, getWeekKeyOf(nextWeekDate))
+    return {
+      now: members.find((m) => m.id === nowId) || null,
+      next: members.find((m) => m.id === nextId) || null
+    }
+  }, [floor, members, awayUserIds, weekKey])
 
   const days = useMemo(() => {
     return Array.from({ length: 7 }).map((_, i) => {
@@ -145,6 +161,16 @@ export default function Timeline() {
         <RoomieOrb members={members} tasks={fixedProgress} />
       </section>
 
+      {/* Encargado/a del piso esta semana y quién sigue — mismo estilo que
+          la tarjeta del link público de turnos (ver PublicTurns.jsx). */}
+      <section className="rounded-xl bg-violet-50 dark:bg-violet-700/25 border-2 border-violet-500/30 px-4 py-3 mb-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-200 mb-1">{t('publicTurns.keeperTitle')}</p>
+        <p className="font-display text-2xl font-bold break-words">{floorKeeper.now ? floorKeeper.now.name : t('publicTurns.nobody')}</p>
+        {floorKeeper.next && (
+          <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 break-words">{t('publicTurns.keeperNext', { name: floorKeeper.next.name })}</p>
+        )}
+      </section>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start mb-8">
         {/* Calendario de racha */}
         <section className="lg:col-span-2">
@@ -197,11 +223,16 @@ export default function Timeline() {
                         className="stamp-btn relative mt-1 disabled:pointer-events-none"
                       >
                         <div
+                          style={
+                            isMinePending && !item.completion?.completed
+                              ? { backgroundColor: getMemberColor(assignee), boxShadow: `0 3px 0 0 #17131C, 0 0 0 2px ${hexToRgba(getMemberColor(assignee), 0.4)}` }
+                              : undefined
+                          }
                           className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold border-2 transition-colors ${
                             item.completion?.completed
                               ? 'bg-gold-400 border-ink-900 text-ink-900 shadow-[0_3px_0_0_theme(colors.ink.900)]'
                               : isMinePending
-                                ? 'bg-coral-500 border-ink-900 text-white shadow-[0_3px_0_0_theme(colors.ink.900)] ring-2 ring-coral-500/40'
+                                ? 'border-ink-900 text-white shadow-[0_3px_0_0_theme(colors.ink.900)]'
                                 : `bg-cream-100 dark:bg-ink-700 border-dashed text-ink-900/40 dark:text-cream-100/40 ${
                                     isFuture
                                       ? 'border-ink-900/10 dark:border-cream-100/10 opacity-50'

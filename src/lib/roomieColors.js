@@ -27,6 +27,25 @@ export function getMemberColor(member) {
   return FALLBACK_PALETTE[seed % FALLBACK_PALETTE.length]
 }
 
+/**
+ * El color de un miembro, con transparencia — para anillos/resplandores
+ * sobre botones y chips "esto es tuyo" (ver ActivityCard/TaskCard/
+ * Timeline/CalendarView), donde antes se usaba un coral fijo para todo
+ * el mundo. Solo acepta el formato que guarda el selector de Perfil
+ * (`<input type="color">`, siempre "#rrggbb"); si el color no viene en
+ * ese formato (dato viejo o corrupto), cae a negro con esa opacidad en
+ * vez de romper el render.
+ */
+export function hexToRgba(hex, alpha = 1) {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex || '')
+  if (!match) return `rgba(0, 0, 0, ${alpha})`
+  const n = parseInt(match[1], 16)
+  const r = (n >> 16) & 255
+  const g = (n >> 8) & 255
+  const b = n & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 // PRNG chiquito (mulberry32) para derivar varios números "al azar" a
 // partir de una sola semilla entera — así el recorrido de cada punto
 // es distinto por persona pero siempre igual entre cargas.
@@ -47,24 +66,49 @@ function mulberry32(seed) {
  * inicial y 3 desplazamientos de un recorrido en bucle, más duración y
  * delay — todo derivado del id, así que "es de esa persona" sin pedirle
  * que configure nada (queda para más adelante).
+ *
+ * `index`/`total` (posición del miembro dentro de `members` y cuántos
+ * hay) reparten a cada persona un sector propio del círculo (360°/total)
+ * para su recorrido: con pocos miembros, un desplazamiento (dx,dy) por
+ * eje totalmente independiente a veces hace que la mayoría "caiga" del
+ * mismo lado por puro azar — se nota más cuanta menos gente hay en el
+ * piso. Repartiendo sectores que no se superponen, cada punto sigue
+ * moviéndose con ángulo y radio aleatorios (dentro de su sector), pero
+ * nunca coincide en dirección general con otro — más variado a la vista
+ * sin dejar de ser aleatorio.
  */
-export function getOrbMotion(memberId) {
+export function getOrbMotion(memberId, index = 0, total = 1) {
   const rand = mulberry32(hashSeed(memberId))
   const size = 34 + rand() * 26 // 34–60px
   const left = 18 + rand() * 64 // % dentro del círculo, con margen
   const top = 18 + rand() * 64
-  const spread = 26 // px máximos de desplazamiento en cada tramo
-  const offset = () => (rand() * 2 - 1) * spread
+  const maxRadius = 26 // px máximos de desplazamiento en cada tramo
+
+  // Sector propio de esta persona, centrado en `index * sector`: cada
+  // ángulo se sortea dentro de un 90% de ese sector (el 10% restante es
+  // colchón contra el sector vecino), así dos personas nunca comparten
+  // dirección general aunque cada tramo de su recorrido sí sea al azar.
+  const sector = (2 * Math.PI) / Math.max(1, total)
+  const center = index * sector
+  const waypoint = () => {
+    const angle = center + (rand() * 2 - 1) * sector * 0.45
+    const radius = maxRadius * (0.5 + rand() * 0.5) // 50%–100% del alcance
+    return { dx: Math.cos(angle) * radius, dy: Math.sin(angle) * radius }
+  }
+  const p1 = waypoint()
+  const p2 = waypoint()
+  const p3 = waypoint()
+
   return {
     size,
     left,
     top,
-    dx1: offset(),
-    dy1: offset(),
-    dx2: offset(),
-    dy2: offset(),
-    dx3: offset(),
-    dy3: offset(),
+    dx1: p1.dx,
+    dy1: p1.dy,
+    dx2: p2.dx,
+    dy2: p2.dy,
+    dx3: p3.dx,
+    dy3: p3.dy,
     duration: 9 + rand() * 7, // 9–16s
     delay: rand() * 4 // 0–4s
   }

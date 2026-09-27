@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import Avatar from './Avatar'
 import { SparkleIcon, EditIcon, TrashIcon, CartIcon, WasherIcon } from './icons'
 import { nextOccurrence, occurrenceSlots, canUserMark } from '../lib/activities'
+import { getMemberColor } from '../lib/roomieColors'
 import { useAuth } from '../context/AuthContext'
 import { useProgressConfirm } from './ProgressConfirm'
 import { format, startOfWeek, addDays } from 'date-fns'
@@ -195,6 +196,7 @@ export default function ActivityCard({
                   <button
                     type="button"
                     className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={assignee && !isEveryone ? { backgroundColor: getMemberColor(assignee) } : undefined}
                     disabled={isDone || !isMyTurn || !occ.canMark}
                     onClick={() => askProgress(completion, 1)}
                   >

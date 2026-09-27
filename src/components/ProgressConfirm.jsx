@@ -6,9 +6,13 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { usePointsFx } from '../context/PointsFxContext'
 import { activeRoutineMarks, occurrencePoints, canUserMark } from '../lib/activities'
+import { getMemberColor } from '../lib/roomieColors'
 
-/** Pop-up de confirmación (mismo patrón fijo que ConfirmPotDialog). */
-export function ConfirmDialog({ title, body, confirmLabel, onCancel, onConfirm, t }) {
+/** Pop-up de confirmación (mismo patrón fijo que ConfirmPotDialog).
+ * `accentColor` (opcional): color de quien confirma la acción — para que
+ * el botón de "Confirmar" use su propio color en vez del violeta genérico
+ * (ver useProgressConfirm, que es quien lo pasa). */
+export function ConfirmDialog({ title, body, confirmLabel, onCancel, onConfirm, t, accentColor }) {
   const [submitting, setSubmitting] = useState(false)
 
   async function handleConfirmClick(e) {
@@ -43,7 +47,13 @@ export function ConfirmDialog({ title, body, confirmLabel, onCancel, onConfirm, 
           <button type="button" className="btn-secondary text-sm flex-1" onClick={onCancel} disabled={submitting}>
             {t('activities.confirmCancel')}
           </button>
-          <button type="button" className="btn-primary text-sm flex-1" onClick={handleConfirmClick} disabled={submitting}>
+          <button
+            type="button"
+            className="btn-primary text-sm flex-1"
+            style={accentColor ? { backgroundColor: accentColor } : undefined}
+            onClick={handleConfirmClick}
+            disabled={submitting}
+          >
             {submitting ? t('activities.confirmSaving') : confirmLabel}
           </button>
         </div>
@@ -118,6 +128,7 @@ export function useProgressConfirm() {
         body={body}
         confirmLabel={confirmLabel}
         t={t}
+        accentColor={getMemberColor(members.find((m) => m.id === user?.id))}
         onCancel={() => setPending(null)}
         onConfirm={async (origin) => {
           const result = await setActivityProgress(completion, delta)

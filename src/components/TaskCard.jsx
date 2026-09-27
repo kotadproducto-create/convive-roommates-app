@@ -113,7 +113,11 @@ export default function TaskCard({ task, typeInfo, overrideLabel, overridePoints
           })}
         </p>
       ) : (
-        <button className="btn-primary text-sm w-full" onClick={handleComplete}>
+        <button
+          className="btn-primary text-sm w-full"
+          style={assignee ? { backgroundColor: getMemberColor(assignee) } : undefined}
+          onClick={handleComplete}
+        >
           {t('taskCard.markDone')}
         </button>
       )}

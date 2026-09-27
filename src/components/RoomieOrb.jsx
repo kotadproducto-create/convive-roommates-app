@@ -31,9 +31,9 @@ export default function RoomieOrb({ members, tasks = [] }) {
   return (
     <div className="flex flex-col items-center">
       <div className="relative w-52 h-52 sm:w-64 sm:h-64 rounded-full overflow-hidden border-2 border-ink-900/70 dark:border-cream-100/30 bg-gradient-to-br from-cream-200 to-cream-100 dark:from-ink-800 dark:to-ink-700">
-        {members.map((member) => {
+        {members.map((member, index) => {
           const color = getMemberColor(member)
-          const motion = getOrbMotion(member.id)
+          const motion = getOrbMotion(member.id, index, members.length)
           const isPending = tasks.some((task) => task.assignedUserId === member.id && !task.completed)
           return (
             <button
