@@ -12,7 +12,6 @@ import { isPendingToBuy } from '../lib/shopping'
 import { getTimeGreeting } from '../lib/greeting'
 import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
-import { useProgressConfirm } from '../components/ProgressConfirm'
 import { useDisplayedPoints } from '../context/PointsFxContext'
 import PendingPopups from '../components/PendingPopups'
 import RoomieOrb from '../components/RoomieOrb'
@@ -27,7 +26,6 @@ export default function Timeline() {
   const { floor, members, activities, activityCompletions, notifications, shoppingItems, weekKey, awayUserIds, markAllNotificationsRead } = useData()
   const { t, dateLocale, language } = useLanguage()
   const navigate = useNavigate()
-  const { ask: askProgress, dialog: progressDialog } = useProgressConfirm()
   const displayedPoints = useDisplayedPoints()
   const [showAllNotifications, setShowAllNotifications] = useState(false)
 
@@ -65,11 +63,6 @@ export default function Timeline() {
         }),
     [fixedActivities, activityCompletions, weekKey]
   )
-
-  function handleStamp(item) {
-    if (!item?.completion) return
-    askProgress(item.completion, item.completion.completed ? -1 : 1)
-  }
 
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
 
@@ -109,7 +102,6 @@ export default function Timeline() {
 
   return (
     <>
-      {progressDialog}
       <PendingPopups user={user} floor={floor} activities={activities} activityCompletions={activityCompletions} weekKey={weekKey} shoppingItems={shoppingItems} />
       <AppLayout
         title={t('nav.inicio')}
@@ -213,31 +205,34 @@ export default function Timeline() {
                     {item ? (
                       <button
                         type="button"
-                        disabled={isFuture || !item.completion}
                         onClick={(e) => {
-                          // Marcar hecho sigue siendo cosa del sello — no debe abrir el día.
+                          // El sello lleva a Actividades — no debe abrir el día (eso lo hace el recuadro).
                           e.stopPropagation()
-                          handleStamp({ completion: item.completion, title: item.activity.title })
+                          navigate('/actividades')
                         }}
                         title={`${item.activity.title} · ${assignee?.name || t('calendar.unassigned')}${isMinePending ? t('calendar.yourTurnDash') : ''}`}
-                        className="stamp-btn relative mt-1 disabled:pointer-events-none"
+                        className="stamp-btn relative mt-1"
                       >
                         <div
                           style={
-                            isMinePending && !item.completion?.completed
-                              ? { backgroundColor: getMemberColor(assignee), boxShadow: `0 3px 0 0 #17131C, 0 0 0 2px ${hexToRgba(getMemberColor(assignee), 0.4)}` }
+                            assignee
+                              ? {
+                                  backgroundColor: getMemberColor(assignee),
+                                  boxShadow:
+                                    isMinePending && !item.completion?.completed
+                                      ? `0 3px 0 0 #17131C, 0 0 0 2px ${hexToRgba(getMemberColor(assignee), 0.4)}`
+                                      : '0 3px 0 0 #17131C'
+                                }
                               : undefined
                           }
                           className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold border-2 transition-colors ${
-                            item.completion?.completed
-                              ? 'bg-gold-400 border-ink-900 text-ink-900 shadow-[0_3px_0_0_theme(colors.ink.900)]'
-                              : isMinePending
-                                ? 'border-ink-900 text-white shadow-[0_3px_0_0_theme(colors.ink.900)]'
-                                : `bg-cream-100 dark:bg-ink-700 border-dashed text-ink-900/40 dark:text-cream-100/40 ${
-                                    isFuture
-                                      ? 'border-ink-900/10 dark:border-cream-100/10 opacity-50'
-                                      : 'border-ink-900/30 dark:border-cream-100/30 shadow-[0_3px_0_0_theme(colors.ink.900/20%)]'
-                                  }`
+                            assignee
+                              ? `border-ink-900 text-white ${isFuture && !item.completion?.completed ? 'opacity-50' : ''}`
+                              : `bg-cream-100 dark:bg-ink-700 border-dashed text-ink-900/40 dark:text-cream-100/40 ${
+                                  isFuture
+                                    ? 'border-ink-900/10 dark:border-cream-100/10 opacity-50'
+                                    : 'border-ink-900/30 dark:border-cream-100/30 shadow-[0_3px_0_0_theme(colors.ink.900/20%)]'
+                                }`
                           }`}
                         >
                           {assignee?.name?.[0]?.toUpperCase() || '?'}
