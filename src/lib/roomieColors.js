@@ -1,8 +1,10 @@
 /**
  * Identidad visual de cada roomie: color elegido en Perfil (columna
- * `profiles.color`) + un movimiento propio y estable para su punto en
- * el círculo de Inicio (ver components/RoomieOrb.jsx). Todo puro y
- * sin estado, para poder usarse tanto en Perfil como en el círculo.
+ * `profiles.color`) + un paseo propio y estable para su punto en el
+ * círculo de Inicio (ver components/RoomieOrb.jsx). Sin estado propio del
+ * módulo (nada de globals ni mutación oculta) — el único estado es el que
+ * cada quien va guardando en su propio objeto "walker" y le pasa de vuelta
+ * a `stepOrbWalker` en cada cuadro.
  */
 
 // Solo para quien todavía no eligió color — nunca se muestra como
@@ -61,55 +63,85 @@ function mulberry32(seed) {
 }
 
 /**
- * Parámetros de movimiento del punto de un miembro dentro del círculo
- * (ver .orb-dot / @keyframes orb-float en index.css): tamaño, posición
- * inicial y 3 desplazamientos de un recorrido en bucle, más duración y
- * delay — todo derivado del id, así que "es de esa persona" sin pedirle
- * que configure nada (queda para más adelante).
+ * Paseo continuo del punto de un miembro dentro del círculo de Inicio
+ * (ver components/RoomieOrb.jsx): en vez de un recorrido de 3 puntos fijos
+ * en bucle (se sentía a saltos, siempre el mismo camino), cada punto
+ * deambula libre con `stepOrbWalker` — gira un poco al azar en cada
+ * cuadro, nunca de golpe, y solo cuando ya se alejó bastante de su "casa"
+ * se le suma un empujoncito suave de vuelta, para que no termine
+ * perdiéndose siempre del mismo lado. Todo derivado del id (misma
+ * persona → mismo "carácter" de paseo) vía un generador propio que se
+ * seguirá llamando cuadro a cuadro mientras dure la animación, así el
+ * camino real nunca se repite en bucle como antes.
  *
  * `index`/`total` (posición del miembro dentro de `members` y cuántos
  * hay) reparten a cada persona un sector propio del círculo (360°/total)
- * para su recorrido: con pocos miembros, un desplazamiento (dx,dy) por
- * eje totalmente independiente a veces hace que la mayoría "caiga" del
- * mismo lado por puro azar — se nota más cuanta menos gente hay en el
- * piso. Repartiendo sectores que no se superponen, cada punto sigue
- * moviéndose con ángulo y radio aleatorios (dentro de su sector), pero
- * nunca coincide en dirección general con otro — más variado a la vista
- * sin dejar de ser aleatorio.
+ * para su "casa": con pocos miembros, una posición inicial totalmente
+ * independiente por persona a veces hacía que la mayoría cayera del mismo
+ * lado (ej. la esquina inferior derecha) por puro azar. Repartiendo
+ * sectores que no se superponen, y variando además la distancia al
+ * centro, entre todos cubren el círculo entero — pero el radio de paseo
+ * (`wanderRadius`) es chico frente al tamaño del círculo, así que un
+ * punto sí puede acercarse al de un vecino de vez en cuando sin quedar
+ * encerrado en su propio gajo para siempre.
  */
-export function getOrbMotion(memberId, index = 0, total = 1) {
+export function createOrbWalker(memberId, index = 0, total = 1) {
   const rand = mulberry32(hashSeed(memberId))
   const size = 34 + rand() * 26 // 34–60px
-  const left = 18 + rand() * 64 // % dentro del círculo, con margen
-  const top = 18 + rand() * 64
-  const maxRadius = 26 // px máximos de desplazamiento en cada tramo
-
-  // Sector propio de esta persona, centrado en `index * sector`: cada
-  // ángulo se sortea dentro de un 90% de ese sector (el 10% restante es
-  // colchón contra el sector vecino), así dos personas nunca comparten
-  // dirección general aunque cada tramo de su recorrido sí sea al azar.
   const sector = (2 * Math.PI) / Math.max(1, total)
-  const center = index * sector
-  const waypoint = () => {
-    const angle = center + (rand() * 2 - 1) * sector * 0.45
-    const radius = maxRadius * (0.5 + rand() * 0.5) // 50%–100% del alcance
-    return { dx: Math.cos(angle) * radius, dy: Math.sin(angle) * radius }
-  }
-  const p1 = waypoint()
-  const p2 = waypoint()
-  const p3 = waypoint()
-
+  const homeAngle = index * sector + (rand() * 2 - 1) * sector * 0.4
+  const homeRadiusPct = 12 + rand() * 26 // 12%–38% del centro hacia el borde
+  const left = 50 + Math.cos(homeAngle) * homeRadiusPct
+  const top = 50 + Math.sin(homeAngle) * homeRadiusPct
   return {
+    rand,
     size,
     left,
     top,
-    dx1: p1.dx,
-    dy1: p1.dy,
-    dx2: p2.dx,
-    dy2: p2.dy,
-    dx3: p3.dx,
-    dy3: p3.dy,
-    duration: 9 + rand() * 7, // 9–16s
-    delay: rand() * 4 // 0–4s
+    speed: 5 + rand() * 4, // px/s — lento
+    turnRate: 0.6 + rand() * 0.6, // rad/s máximo de giro al azar
+    wanderRadius: 22 + rand() * 14, // px máximos de distancia a "casa"
+    angle: rand() * Math.PI * 2,
+    x: 0,
+    y: 0
+  }
+}
+
+/** Ángulo intermedio entre `a` y `b`, siempre por el camino corto (nunca
+ * da la vuelta larga) — `t` en [0,1] es cuánto se acerca a `b`. */
+function lerpAngle(a, b, t) {
+  const clamped = Math.min(1, Math.max(0, t))
+  const diff = (((b - a) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI
+  return a + diff * clamped
+}
+
+/**
+ * Un paso del paseo continuo (llamar en cada cuadro de animación, con
+ * `dtSeconds` = tiempo real transcurrido desde el paso anterior): gira un
+ * poquito al azar — acotado por `turnRate`, así el cambio de dirección
+ * siempre es progresivo, nunca un salto — y avanza a velocidad constante
+ * y lenta (`speed`). Si ya se alejó de "casa" (x=0,y=0) más de un 60% de
+ * `wanderRadius`, mezcla progresivamente el rumbo hacia "casa" (más fuerte
+ * cuanto más lejos), para que el paseo al azar no lo aleje para siempre —
+ * nunca es un tirón: es la misma interpolación de ángulo que el giro
+ * al azar, así ambos efectos conviven sin producir un cambio brusco.
+ */
+export function stepOrbWalker(walker, dtSeconds) {
+  const { x, y, angle, rand, speed, turnRate, wanderRadius } = walker
+  let nextAngle = angle + (rand() * 2 - 1) * turnRate * dtSeconds
+
+  const distFromHome = Math.hypot(x, y)
+  const pullThreshold = wanderRadius * 0.6
+  if (distFromHome > pullThreshold) {
+    const angleToHome = Math.atan2(-y, -x)
+    const pull = Math.min(1, (distFromHome - pullThreshold) / (wanderRadius - pullThreshold))
+    nextAngle = lerpAngle(nextAngle, angleToHome, pull)
+  }
+
+  return {
+    ...walker,
+    angle: nextAngle,
+    x: x + Math.cos(nextAngle) * speed * dtSeconds,
+    y: y + Math.sin(nextAngle) * speed * dtSeconds
   }
 }

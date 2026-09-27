@@ -18,9 +18,15 @@ const VETO_OPTION_BY_KIND = { pot_adjustment: 'Rechazar' }
  * padrón de electores actual (miembros activos del piso) y los votos
  * emitidos hasta ahora. Devuelve `null` si debe seguir tal cual.
  *
+ * Mayoría ('majority'): se resuelve en cuanto una opción supera la mitad
+ * del PADRÓN completo (no de los votos ya emitidos) — con 6 electores
+ * hacen falta 4 votos a favor, no hace falta esperar a que voten los 6.
+ * Unanimidad ('unanimity'): sigue exigiendo que haya votado todo el
+ * padrón y que todos hayan elegido la misma opción.
+ *
  * Regla de empate: nunca se inventa un desempate. Si todos votaron pero
- * ninguna opción tiene mayoría (o no hay unanimidad en modo
- * 'unanimity'), la consulta no se resuelve sola — se queda pendiente
+ * ninguna opción alcanzó lo necesario (mayoría del padrón, o unanimidad
+ * en ese modo), la consulta no se resuelve sola — se queda pendiente
  * hasta que alguien la cierre a mano, o hasta que venza el plazo (si
  * hay), en cuyo caso pasa a 'closed' (ya no puede haber más votos que
  * la destraben). Si el plazo vence y todavía faltaba gente por votar,
@@ -70,16 +76,24 @@ export function resolvePoll(poll, votesForPoll, activeMemberIds, todayISO, nowMs
   const tally = tallyVotes(relevantVotes)
 
   let winner = null
-  if (everyoneVoted) {
-    if (poll.resolutionMode === 'unanimity') {
+  if (poll.resolutionMode === 'unanimity') {
+    // Unanimidad: sigue exigiendo que haya votado todo el padrón (esto no
+    // cambia — el pedido de "no esperar a todos" era solo para mayoría).
+    if (everyoneVoted) {
       const options = Object.keys(tally)
       if (options.length === 1) winner = options[0]
-    } else {
-      for (const [option, count] of Object.entries(tally)) {
-        if (count > relevantVotes.length / 2) {
-          winner = option
-          break
-        }
+    }
+  } else {
+    // Mayoría: no hace falta esperar a que vote todo el mundo — basta con
+    // que una opción ya tenga más de la mitad del PADRÓN completo (no de
+    // los votos emitidos hasta ahora). Con 6 electores hacen falta 4 votos
+    // a favor, con 10 hacen falta 6, etc. Como el padrón es fijo y cada
+    // persona vota una sola vez, nunca puede haber dos opciones con más de
+    // la mitad al mismo tiempo — no hay ambigüedad de cuál "gana primero".
+    for (const [option, count] of Object.entries(tally)) {
+      if (electorate.size > 0 && count > electorate.size / 2) {
+        winner = option
+        break
       }
     }
   }
@@ -126,4 +140,46 @@ export const ROTATION_POLL_HOURS = 72
 export function pollDeadlineAt(hours, nowMs = Date.now()) {
   const h = POLL_DURATION_OPTIONS.includes(Number(hours)) ? Number(hours) : DEFAULT_POLL_HOURS
   return new Date(nowMs + h * 60 * 60 * 1000).toISOString()
+}
+
+/**
+ * Instante (ms desde epoch) en que vence una consulta, para la cuenta
+ * atrás de Votaciones.jsx — o `null` si no tiene plazo. Si trae
+ * `deadlineAt` (hora exacta) se usa tal cual; si solo trae `deadline`
+ * (fecha, sin hora) vence al empezar el día siguiente — mismo criterio
+ * que `deadlineOutcome` de más arriba (`deadline < todayISO`), para que
+ * la cuenta atrás llegue a cero justo cuando la consulta pasa a vencida.
+ */
+export function pollDeadlineMs(poll) {
+  if (poll.deadlineAt) return new Date(poll.deadlineAt).getTime()
+  if (poll.deadline) {
+    const d = new Date(`${poll.deadline}T00:00:00`)
+    d.setDate(d.getDate() + 1)
+    return d.getTime()
+  }
+  return null
+}
+
+/**
+ * Cuenta atrás legible a partir de cuánto falta (en ms): con cuántos
+ * días/horas/minutos/segundos quedan, mostrando la unidad más gruesa que
+ * corresponda (nunca segundos si faltan días, por ejemplo) — la
+ * traducción de cada combinación vive en Votaciones.jsx (votaciones.countdown*).
+ * `null` si ya venció (remainingMs <= 0).
+ * @returns {null|{unit:'days', days:number, hours:number}
+ *              |{unit:'hours', hours:number, minutes:number}
+ *              |{unit:'minutes', minutes:number, seconds:number}
+ *              |{unit:'seconds', seconds:number}}
+ */
+export function formatCountdown(remainingMs) {
+  if (!(remainingMs > 0)) return null
+  const totalSeconds = Math.floor(remainingMs / 1000)
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (days > 0) return { unit: 'days', days, hours }
+  if (hours > 0) return { unit: 'hours', hours, minutes }
+  if (minutes > 0) return { unit: 'minutes', minutes, seconds }
+  return { unit: 'seconds', seconds }
 }

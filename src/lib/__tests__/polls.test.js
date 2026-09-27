@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { resolvePoll, tallyVotes, pollDeadlineAt, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS, ROTATION_POLL_HOURS } from '../polls.js'
+import { resolvePoll, tallyVotes, pollDeadlineAt, pollDeadlineMs, formatCountdown, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS, ROTATION_POLL_HOURS } from '../polls.js'
+import es from '../i18n/es'
+import en from '../i18n/en'
+
+const get = (dict, key) => key.split('.').reduce((o, k) => (o == null ? o : o[k]), dict)
+const vars = (s) => [...s.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort().join(',')
 
 const TODAY = '2026-09-20'
 
@@ -30,6 +35,51 @@ describe('resolvePoll — mayoría simple', () => {
       { userId: 'B', option: 'No' }
     ]
     const result = resolvePoll(poll({}), votes, ['A', 'B'], TODAY)
+    expect(result).toBeNull()
+  })
+
+  it('se resuelve en cuanto se alcanza la mitad + 1 del PADRÓN, sin esperar a que voten todos (6 electores, 4 a favor)', () => {
+    const votes = [
+      { userId: 'A', option: 'Sí' },
+      { userId: 'B', option: 'Sí' },
+      { userId: 'C', option: 'Sí' },
+      { userId: 'D', option: 'Sí' }
+      // E y F todavía no votaron
+    ]
+    const result = resolvePoll(poll({}), votes, ['A', 'B', 'C', 'D', 'E', 'F'], TODAY)
+    expect(result).toEqual({ status: 'resolved', resolvedOption: 'Sí' })
+  })
+
+  it('con 10 electores hacen falta 6 a favor, no menos', () => {
+    const fiveVotes = Array.from({ length: 5 }, (_, i) => ({ userId: `m${i}`, option: 'Sí' }))
+    const electorate10 = Array.from({ length: 10 }, (_, i) => `m${i}`)
+    // 5 de 10: todavía no alcanza (hace falta más de la mitad, o sea 6).
+    expect(resolvePoll(poll({}), fiveVotes, electorate10, TODAY)).toBeNull()
+    const sixVotes = [...fiveVotes, { userId: 'm5', option: 'Sí' }]
+    expect(resolvePoll(poll({}), sixVotes, electorate10, TODAY)).toEqual({ status: 'resolved', resolvedOption: 'Sí' })
+  })
+
+  it('lo mismo vale para "Rechazar": si junta la mayoría del padrón, tumba la consulta sin esperar a los demás', () => {
+    const votes = [
+      { userId: 'A', option: 'Rechazar' },
+      { userId: 'B', option: 'Rechazar' },
+      { userId: 'C', option: 'Rechazar' },
+      { userId: 'D', option: 'Rechazar' }
+      // E y F no votaron — no cambia el resultado, "Rechazar" ya ganó
+    ]
+    const result = resolvePoll(poll({}), votes, ['A', 'B', 'C', 'D', 'E', 'F'], TODAY)
+    expect(result).toEqual({ status: 'resolved', resolvedOption: 'Rechazar' })
+  })
+
+  it('quienes todavía no votaron no cuentan como "en contra": la consulta sigue pendiente hasta que alguna opción llegue a la mayoría real', () => {
+    // 3 de 6 a favor: por más que nadie más haya votado "en contra", no
+    // alcanza la mayoría del padrón (hacen falta 4) — sigue pendiente.
+    const votes = [
+      { userId: 'A', option: 'Sí' },
+      { userId: 'B', option: 'Sí' },
+      { userId: 'C', option: 'Sí' }
+    ]
+    const result = resolvePoll(poll({}), votes, ['A', 'B', 'C', 'D', 'E', 'F'], TODAY)
     expect(result).toBeNull()
   })
 })
@@ -266,5 +316,70 @@ describe('pollDeadlineAt — duración elegida al crear una consulta (12, 24 o 7
     const members = ['a', 'b']
     expect(resolvePoll(poll, votes, members, '2026-09-24', now + 71 * 3600000)).toBeNull()
     expect(resolvePoll(poll, votes, members, '2026-09-24', now + 72 * 3600000)).toEqual({ status: 'expired', resolvedOption: null })
+  })
+})
+
+describe('pollDeadlineMs — instante exacto en que vence (para la cuenta atrás)', () => {
+  it('con deadlineAt, el timestamp tal cual', () => {
+    expect(pollDeadlineMs({ deadlineAt: '2026-09-20T15:00:00.000Z' })).toBe(Date.parse('2026-09-20T15:00:00.000Z'))
+  })
+
+  it('con solo deadline (fecha), vence al empezar el día siguiente — igual que resolvePoll', () => {
+    const ms = pollDeadlineMs({ deadline: '2026-09-20' })
+    // Mismo cálculo hecho a mano, sin depender de la zona horaria de quien corre el test.
+    const expectedLocalMidnightNextDay = new Date('2026-09-20T00:00:00')
+    expectedLocalMidnightNextDay.setDate(expectedLocalMidnightNextDay.getDate() + 1)
+    expect(ms).toBe(expectedLocalMidnightNextDay.getTime())
+    // A las 23:59:59 del propio día del plazo, todavía no venció.
+    expect(ms).toBeGreaterThan(new Date('2026-09-20T23:59:59').getTime())
+  })
+
+  it('deadlineAt tiene prioridad sobre deadline si vienen los dos', () => {
+    const ms = pollDeadlineMs({ deadline: '2026-09-25', deadlineAt: '2026-09-20T15:00:00.000Z' })
+    expect(ms).toBe(Date.parse('2026-09-20T15:00:00.000Z'))
+  })
+
+  it('sin ninguno de los dos, null (sin plazo, sin cuenta atrás)', () => {
+    expect(pollDeadlineMs({})).toBeNull()
+  })
+})
+
+describe('formatCountdown — cuenta atrás legible', () => {
+  it('ya vencido (<=0) da null', () => {
+    expect(formatCountdown(0)).toBeNull()
+    expect(formatCountdown(-1000)).toBeNull()
+  })
+
+  it('muestra días+horas cuando faltan días', () => {
+    const twoDaysThreeHours = 2 * 86400000 + 3 * 3600000
+    expect(formatCountdown(twoDaysThreeHours)).toEqual({ unit: 'days', days: 2, hours: 3 })
+  })
+
+  it('muestra horas+minutos cuando falta menos de un día', () => {
+    const fiveHoursTwelveMin = 5 * 3600000 + 12 * 60000
+    expect(formatCountdown(fiveHoursTwelveMin)).toEqual({ unit: 'hours', hours: 5, minutes: 12 })
+  })
+
+  it('muestra minutos+segundos cuando falta menos de una hora', () => {
+    const eightMinThirty = 8 * 60000 + 30000
+    expect(formatCountdown(eightMinThirty)).toEqual({ unit: 'minutes', minutes: 8, seconds: 30 })
+  })
+
+  it('muestra solo segundos cuando falta menos de un minuto', () => {
+    expect(formatCountdown(45000)).toEqual({ unit: 'seconds', seconds: 45 })
+  })
+})
+
+describe('textos de la cuenta atrás (votaciones.countdown*)', () => {
+  const keys = ['countdownDays', 'countdownHours', 'countdownMinutes', 'countdownSeconds', 'countdownExpired']
+
+  it('existen en español e inglés con las mismas variables', () => {
+    for (const key of keys) {
+      const esVal = get(es, `votaciones.${key}`)
+      const enVal = get(en, `votaciones.${key}`)
+      expect(typeof esVal).toBe('string')
+      expect(typeof enVal).toBe('string')
+      expect(vars(esVal)).toBe(vars(enVal))
+    }
   })
 })

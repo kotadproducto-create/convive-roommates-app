@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import AppLayout from '../components/AppLayout'
@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { tallyVotes, pollDeadlineAt, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS } from '../lib/polls'
+import { tallyVotes, pollDeadlineAt, pollDeadlineMs, formatCountdown, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS } from '../lib/polls'
 import { canSharePoll, publicPollLink } from '../lib/publicPoll'
 import { formatMoney } from '../lib/pot'
 import { CloseIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, ShareIcon } from '../components/icons'
@@ -298,6 +298,12 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
                 </span>
               </>
             )}
+            {isPending && (poll.deadlineAt || poll.deadline) && (
+              <>
+                <span>·</span>
+                <PollCountdown poll={poll} t={t} />
+              </>
+            )}
           </div>
         </div>
         {canClose && (
@@ -373,6 +379,29 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
       )}
     </div>
   )
+}
+
+/** Cuenta atrás de una consulta con plazo (ver pollDeadlineMs/formatCountdown
+ * en lib/polls.js): se actualiza sola cada segundo. Al llegar a cero no hace
+ * nada por sí misma — el efecto oportunista de DataContext.jsx ya se encarga
+ * de vencerla (mismo mecanismo de siempre); esto solo la muestra. */
+function PollCountdown({ poll, t }) {
+  const targetMs = pollDeadlineMs(poll)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (targetMs == null) return undefined
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [targetMs])
+
+  if (targetMs == null) return null
+  const parts = formatCountdown(targetMs - now)
+  if (!parts) return <span className="font-semibold text-clay-500">{t('votaciones.countdownExpired')}</span>
+
+  const label = t(`votaciones.countdown${parts.unit[0].toUpperCase()}${parts.unit.slice(1)}`, parts)
+  const urgent = parts.unit === 'minutes' || parts.unit === 'seconds'
+  return <span className={urgent ? 'font-semibold text-clay-500' : 'font-semibold'}>{label}</span>
 }
 
 function JoinRequestCard({ request, approveJoinRequest, rejectJoinRequest, t }) {

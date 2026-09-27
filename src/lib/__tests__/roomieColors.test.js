@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hashSeed, getMemberColor, getOrbMotion, hexToRgba } from '../roomieColors'
+import { hashSeed, getMemberColor, createOrbWalker, stepOrbWalker, hexToRgba } from '../roomieColors'
 
 /** Diferencia angular mínima con signo entre dos ángulos, siempre en (-π, π]. */
 function angleDelta(a, b) {
@@ -11,74 +11,115 @@ function angleDelta(a, b) {
 
 const ids = Array.from({ length: 10 }, (_, i) => `member-${i}-${'x'.repeat(i)}`)
 
-describe('getOrbMotion — recorrido del punto de cada roomie en el círculo de Inicio', () => {
-  it('es determinista: mismo id/índice/total siempre da el mismo recorrido', () => {
-    const a = getOrbMotion('abc-123', 1, 3)
-    const b = getOrbMotion('abc-123', 1, 3)
+describe('createOrbWalker — "casa" (arranque) del punto de cada roomie en el círculo de Inicio', () => {
+  it('es determinista: mismo id/índice/total siempre da el mismo arranque', () => {
+    const { rand: randA, ...a } = createOrbWalker('abc-123', 1, 3)
+    const { rand: randB, ...b } = createOrbWalker('abc-123', 1, 3)
     expect(a).toEqual(b)
+    // Dos generadores propios, pero con la misma semilla: dan la misma secuencia.
+    expect([randA(), randA(), randA()]).toEqual([randB(), randB(), randB()])
   })
 
-  it('tamaño y posición inicial quedan dentro de los márgenes de siempre', () => {
+  it('tamaño y posición de casa quedan dentro de los márgenes esperados', () => {
     for (const id of ids) {
-      const m = getOrbMotion(id, 0, 1)
-      expect(m.size).toBeGreaterThanOrEqual(34)
-      expect(m.size).toBeLessThanOrEqual(60)
-      expect(m.left).toBeGreaterThanOrEqual(18)
-      expect(m.left).toBeLessThanOrEqual(82)
-      expect(m.top).toBeGreaterThanOrEqual(18)
-      expect(m.top).toBeLessThanOrEqual(82)
+      const w = createOrbWalker(id, 0, 1)
+      expect(w.size).toBeGreaterThanOrEqual(34)
+      expect(w.size).toBeLessThanOrEqual(60)
+      expect(w.left).toBeGreaterThanOrEqual(12 - 1e-9)
+      expect(w.left).toBeLessThanOrEqual(88 + 1e-9)
+      expect(w.top).toBeGreaterThanOrEqual(12 - 1e-9)
+      expect(w.top).toBeLessThanOrEqual(88 + 1e-9)
     }
   })
 
-  it('cada tramo del recorrido se queda dentro del radio máximo de siempre (26px)', () => {
+  it('arranca exactamente en su casa (x=0, y=0): el paseo parte de ahí, nunca de otro lado', () => {
     for (const id of ids) {
-      const m = getOrbMotion(id, 3, 7)
-      for (const [dx, dy] of [
-        [m.dx1, m.dy1],
-        [m.dx2, m.dy2],
-        [m.dx3, m.dy3]
-      ]) {
-        const radius = Math.hypot(dx, dy)
-        expect(radius).toBeLessThanOrEqual(26 + 1e-9)
-        expect(radius).toBeGreaterThanOrEqual(13 - 1e-9)
-      }
+      const w = createOrbWalker(id, 2, 5)
+      expect(w.x).toBe(0)
+      expect(w.y).toBe(0)
     }
   })
 
-  it('cada persona se mueve dentro de su propio sector (nunca invade el de otra)', () => {
+  it('la casa de cada persona cae dentro de su propio sector (nunca invade el de otra)', () => {
     for (const total of [2, 3, 4, 5]) {
       const sector = (2 * Math.PI) / total
       for (let index = 0; index < total; index++) {
         const center = index * sector
         for (const id of ids) {
-          const m = getOrbMotion(id, index, total)
-          for (const [dx, dy] of [
-            [m.dx1, m.dy1],
-            [m.dx2, m.dy2],
-            [m.dx3, m.dy3]
-          ]) {
-            const angle = Math.atan2(dy, dx)
-            expect(Math.abs(angleDelta(angle, center))).toBeLessThanOrEqual(sector * 0.45 + 1e-9)
-          }
+          const w = createOrbWalker(id, index, total)
+          const angle = Math.atan2(w.top - 50, w.left - 50)
+          expect(Math.abs(angleDelta(angle, center))).toBeLessThanOrEqual(sector * 0.4 + 1e-9)
         }
       }
     }
   })
 
-  it('con pocos miembros, dos personas nunca terminan apuntando al mismo lado', () => {
+  it('con pocos miembros, dos casas nunca terminan del mismo lado', () => {
     // Antes de repartir sectores, con solo 2 personas podía darse (por puro
-    // azar) que ambas se movieran "hacia el mismo lado" la mitad de las
-    // veces — ahora sus sectores (0° y 180°) quedan siempre separados.
+    // azar) que las dos cayeran "del mismo lado" — ahora sus sectores (0° y
+    // 180°) quedan siempre separados.
     for (const id0 of ids) {
       for (const id1 of ids) {
         if (id0 === id1) continue
-        const m0 = getOrbMotion(id0, 0, 2)
-        const m1 = getOrbMotion(id1, 1, 2)
-        const angle0 = Math.atan2(m0.dy1, m0.dx1)
-        const angle1 = Math.atan2(m1.dy1, m1.dx1)
+        const w0 = createOrbWalker(id0, 0, 2)
+        const w1 = createOrbWalker(id1, 1, 2)
+        const angle0 = Math.atan2(w0.top - 50, w0.left - 50)
+        const angle1 = Math.atan2(w1.top - 50, w1.left - 50)
         // Separadas por más de 18° (el colchón entre sectores de 180° cada uno).
         expect(Math.abs(angleDelta(angle0, angle1))).toBeGreaterThan((18 * Math.PI) / 180)
       }
+    }
+  })
+})
+
+describe('stepOrbWalker — paseo continuo cuadro a cuadro (sin saltos ni bucles)', () => {
+  it('es determinista: dos paseos idénticos (mismo id) dan exactamente la misma trayectoria', () => {
+    const stepsOf = (id) => {
+      let w = createOrbWalker(id, 1, 3)
+      const points = []
+      for (let i = 0; i < 200; i++) {
+        w = stepOrbWalker(w, 1 / 30)
+        points.push([w.x, w.y])
+      }
+      return points
+    }
+    expect(stepsOf('persona-x')).toEqual(stepsOf('persona-x'))
+  })
+
+  it('un paso nunca es un salto: el desplazamiento no supera lo que la velocidad permite en ese tiempo', () => {
+    for (const id of ids) {
+      let w = createOrbWalker(id, 0, 4)
+      for (let i = 0; i < 300; i++) {
+        const before = { x: w.x, y: w.y }
+        const dt = 1 / 30
+        w = stepOrbWalker(w, dt)
+        const moved = Math.hypot(w.x - before.x, w.y - before.y)
+        // Margen generoso: la velocidad máxima configurable es 9px/s.
+        expect(moved).toBeLessThanOrEqual(9 * dt + 1e-6)
+      }
+    }
+  })
+
+  it('recién en casa (sin empujón de vuelta activo), el rumbo solo gira lo que permite turnRate — nunca de golpe', () => {
+    for (const id of ids) {
+      const w = createOrbWalker(id, 0, 3) // x=0,y=0: todavía no dispara el empujón de "vuelta a casa"
+      const dt = 1 / 30
+      const next = stepOrbWalker(w, dt)
+      const turned = Math.abs(angleDelta(next.angle, w.angle))
+      expect(turned).toBeLessThanOrEqual(w.turnRate * dt + 1e-9)
+    }
+  })
+
+  it('deambula libre pero nunca se aleja de casa indefinidamente (vuelve sola)', () => {
+    for (const id of ids) {
+      let w = createOrbWalker(id, 0, 3)
+      let maxDist = 0
+      for (let i = 0; i < 3000; i++) {
+        w = stepOrbWalker(w, 1 / 30)
+        maxDist = Math.max(maxDist, Math.hypot(w.x, w.y))
+      }
+      // Nunca se aleja mucho más allá de su propio radio de paseo.
+      expect(maxDist).toBeLessThanOrEqual(w.wanderRadius * 1.5)
     }
   })
 })
