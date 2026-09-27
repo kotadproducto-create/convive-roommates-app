@@ -51,6 +51,19 @@ export default function PublicTurns() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [load])
 
+  // Además, mientras la pestaña queda abierta y a la vista, se refresca sola
+  // cada minuto — sin esto, un enlace dejado abierto (p. ej. una tablet en la
+  // entrada del piso) se queda mostrando turnos viejos indefinidamente, ya
+  // que nunca dispara "visibilitychange" si nadie cambia de pestaña. No hay
+  // cron en esta arquitectura (ver notas de DataContext.jsx): esto es sondeo
+  // simple del lado del cliente, no un socket en vivo.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') load()
+    }, 60000)
+    return () => clearInterval(id)
+  }, [load])
+
   const view = useMemo(() => (data ? buildPublicTurns(data, updatedAt || new Date()) : null), [data, updatedAt])
 
   if (phase === 'loading') {
