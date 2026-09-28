@@ -147,8 +147,30 @@ describe('buildPublicTurns — actividades', () => {
 
   it('no filtra datos que no hacen falta (solo nombres, turnos y el código de invitación)', () => {
     const view = buildPublicTurns(baseData(), NOW)
-    expect(Object.keys(view).sort()).toEqual(['activities', 'away', 'floorName', 'inviteCode', 'keeper', 'rotation'])
+    expect(Object.keys(view).sort()).toEqual(['activities', 'away', 'floorName', 'inviteCode', 'keeper', 'rotation', 'sharedSpaces'])
     expect(Object.keys(view.rotation[0]).sort()).toEqual(['away', 'id', 'isVirtual', 'name'])
+  })
+
+  it('espacios compartidos: uso vigente y lista de espera, en orden FIFO', () => {
+    const startsAt = new Date(NOW.getTime() - 3600000).toISOString()
+    const endsAt = new Date(NOW.getTime() + 3600000).toISOString()
+    const data = baseData({
+      sharedSpaceUses: [{ id: 'u1', spaceKey: 'washer', userId: 'a', startsAt, endsAt, releasedAt: null }],
+      sharedSpaceWaitlist: [
+        { spaceKey: 'washer', userId: 'c', createdAt: new Date(NOW.getTime() - 1800000).toISOString() },
+        { spaceKey: 'washer', userId: 'b', createdAt: new Date(NOW.getTime() - 3000000).toISOString() }
+      ]
+    })
+    const [washer] = buildPublicTurns(data, NOW).sharedSpaces
+    expect(washer.key).toBe('washer')
+    expect(washer.current.person.name).toBe('Ana')
+    expect(washer.waitlist.map((p) => p.name)).toEqual(['Beto', 'Carla'])
+  })
+
+  it('espacio libre: sin uso vigente ni lista de espera', () => {
+    const [washer] = buildPublicTurns(baseData(), NOW).sharedSpaces
+    expect(washer.current).toBeNull()
+    expect(washer.waitlist).toEqual([])
   })
 })
 

@@ -1,5 +1,6 @@
 import MarqueeText from '../components/MarqueeText'
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
 import { useAuth } from '../context/AuthContext'
@@ -8,6 +9,7 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { currentPeriodKey } from '../lib/activities'
 import { isPendingToBuy } from '../lib/shopping'
+import { formatEuros } from '../lib/pot'
 import {
   StoreIcon,
   AlertIcon,
@@ -69,12 +71,16 @@ export default function Shopping() {
     recordPurchaseSession
   } = useData()
   const { showToast } = useToast()
-  const { t, dateLocale } = useLanguage()
+  const { t, dateLocale, language } = useLanguage()
   // 'menu' | 'buy' (Hacer la compra) | 'edit' (Preparar lista) | 'status'
   const [mode, setMode] = useState('menu')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
+  // Pop-up de detalle de "# productos agotados" (ver OutOfStockBanner):
+  // se puede abrir desde el menú o desde la lista, por eso el estado vive
+  // acá arriba en vez de en cada pantalla por separado.
+  const [showOutOfStock, setShowOutOfStock] = useState(false)
 
   const memberById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members])
   const comprasActivity = activities.find((a) => a.fixedKey === 'compras')
@@ -102,7 +108,8 @@ export default function Shopping() {
   // una vez y listo (ver recordPurchaseSession, que la borra de la
   // lista en cuanto se compra). Por eso "agotado" es solo lo recurrente,
   // pero lo pendiente por comprar incluye también las puntuales.
-  const outCount = shoppingItems.filter((i) => i.recurring && i.stockLevel === 'out').length
+  const outOfStockItems = useMemo(() => shoppingItems.filter((i) => i.recurring && i.stockLevel === 'out'), [shoppingItems])
+  const outCount = outOfStockItems.length
   const pendingItems = useMemo(() => sortedItems.filter(isPendingToBuy), [sortedItems])
 
   const history = useMemo(
@@ -140,6 +147,7 @@ export default function Shopping() {
           outCount={outCount}
           totalCount={shoppingItems.length}
           onSelect={setMode}
+          onOpenOutOfStock={() => setShowOutOfStock(true)}
           t={t}
         />
       )}
@@ -183,7 +191,7 @@ export default function Shopping() {
 
           {outCount > 0 && (
             <Reveal>
-              <OutOfStockBanner outCount={outCount} t={t} />
+              <OutOfStockBanner outCount={outCount} onOpen={() => setShowOutOfStock(true)} t={t} />
             </Reveal>
           )}
 
@@ -246,23 +254,89 @@ export default function Shopping() {
           </div>
         </>
       )}
+
+      {showOutOfStock && (
+        <OutOfStockDialog
+          items={outOfStockItems}
+          onClose={() => setShowOutOfStock(false)}
+          onGoToShopping={() => {
+            setMode('edit')
+            setShowOutOfStock(false)
+          }}
+          t={t}
+          language={language}
+        />
+      )}
     </AppLayout>
   )
 }
 
 /** Aviso de agotados: mismo lenguaje visual "urgente" que ya usa el
  * pop-up de compras pendientes de Inicio (borde grueso + halo de color
- * + insignia con pulso) — para que nadie lo pase por alto. */
-function OutOfStockBanner({ outCount, t }) {
+ * + insignia con pulso) — para que nadie lo pase por alto. Tocarlo abre
+ * el detalle de qué falta (ver OutOfStockDialog). */
+function OutOfStockBanner({ outCount, onOpen, t }) {
   return (
-    <div className="card p-3.5 mb-4 flex items-center gap-3 border-[3px] border-clay-500 shadow-[0_0_0_4px_theme(colors.clay.100)] dark:shadow-[0_0_0_4px_theme(colors.clay.500/20%)]">
+    <button
+      type="button"
+      onClick={onOpen}
+      className="card p-3.5 mb-4 flex items-center gap-3 border-[3px] border-clay-500 shadow-[0_0_0_4px_theme(colors.clay.100)] dark:shadow-[0_0_0_4px_theme(colors.clay.500/20%)] w-full text-left hover:opacity-90"
+    >
       <div className="w-10 h-10 rounded-full bg-clay-500 flex items-center justify-center shrink-0 animate-pulse">
         <AlertIcon className="w-5 h-5 text-white" />
       </div>
-      <p className="text-sm sm:text-base font-extrabold text-clay-500">
+      <p className="text-sm sm:text-base font-extrabold text-clay-500 min-w-0">
         {t('shopping.outOfStockBanner', { count: outCount, plural: outCount > 1 ? 's' : '' })}
       </p>
-    </div>
+    </button>
+  )
+}
+
+/** Detalle de "# productos agotados": nombre + monto aproximado (solo si
+ * el producto ya lo tiene cargado) — vista rápida, sin nada más. "Ir a
+ * compras" lleva a la lista (Preparar lista) para poder gestionarlos.
+ * Mismo patrón de pop-up que el resto de la app (ver DisputeContributionDialog). */
+function OutOfStockDialog({ items, onClose, onGoToShopping, t, language }) {
+  return createPortal(
+    <div
+      className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center"
+      onClick={onClose}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative max-h-[90vh] overflow-y-auto"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+        <h3 className="font-display text-lg font-bold mb-3 pr-8">{t('shopping.outOfStockDialogTitle')}</h3>
+        <ul className="flex flex-col gap-1 mb-5">
+          {items.map((item) => (
+            <li key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white dark:bg-ink-700 text-sm">
+              <MarqueeText className="min-w-0">{item.name}</MarqueeText>
+              {item.estimatedPrice != null && (
+                <span className="text-ink-900/50 dark:text-cream-100/50 shrink-0">{formatEuros(item.estimatedPrice, language)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-2">
+          <button type="button" className="btn-secondary text-sm flex-1" onClick={onClose}>
+            {t('shopping.close')}
+          </button>
+          <button type="button" className="btn-primary text-sm flex-1" onClick={onGoToShopping}>
+            {t('shopping.goToShopping')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
 
@@ -277,7 +351,7 @@ function BackButton({ onBack, t }) {
 /** Pantalla de entrada: elegir la intención antes de mostrar nada más
  * (comprar / organizar la lista / chequear qué queda) — en vez de mezclar
  * las tres cosas en cada tarjeta como antes. */
-function MenuScreen({ pendingCount, outCount, totalCount, onSelect, t }) {
+function MenuScreen({ pendingCount, outCount, totalCount, onSelect, onOpenOutOfStock, t }) {
   return (
     <div>
       <h2 className="font-display text-lg font-bold mb-1">{t('shopping.title')}</h2>
@@ -285,7 +359,7 @@ function MenuScreen({ pendingCount, outCount, totalCount, onSelect, t }) {
 
       {outCount > 0 && (
         <Reveal>
-          <OutOfStockBanner outCount={outCount} t={t} />
+          <OutOfStockBanner outCount={outCount} onOpen={onOpenOutOfStock} t={t} />
         </Reveal>
       )}
 

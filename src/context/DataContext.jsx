@@ -17,7 +17,7 @@ import {
   callRpc
 } from '../lib/db'
 import { TASK_TYPES, getWeekKey, ensureWeekTasks, reassignPendingTasks, placeAdjacentInRotation, fixedTaskOverride } from '../lib/rotation'
-import { SHARED_SPACE_BY_KEY, currentSpaceUse } from '../lib/sharedSpaces'
+import { SHARED_SPACE_BY_KEY, currentSpaceUse, reminderAt, waitlistFor, REMINDER_MINUTES_BEFORE_END } from '../lib/sharedSpaces'
 import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark, floorKeeperIndex } from '../lib/activities'
 import { resolvePoll, pollDeadlineAt, ROTATION_POLL_HOURS } from '../lib/polls'
 import { removalDeadlineAt, isRemovalExpired } from '../lib/removal'
@@ -51,6 +51,7 @@ export function DataProvider({ children }) {
   const [potContributions, setPotContributions] = useState([])
   const [walletResets, setWalletResets] = useState([])
   const [sharedSpaceUses, setSharedSpaceUses] = useState([])
+  const [sharedSpaceWaitlist, setSharedSpaceWaitlist] = useState([])
   const [pendingJoinRequests, setPendingJoinRequests] = useState([])
   const [shoppingItems, setShoppingItems] = useState([])
   const [shoppingPurchases, setShoppingPurchases] = useState([])
@@ -141,6 +142,14 @@ export function DataProvider({ children }) {
       return
     }
     return subscribeTable('shared_space_uses', { floorId }, setSharedSpaceUses)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setSharedSpaceWaitlist([])
+      return
+    }
+    return subscribeTable('shared_space_waitlist', { floorId }, setSharedSpaceWaitlist)
   }, [floorId])
 
   useEffect(() => {
@@ -951,6 +960,97 @@ export function DataProvider({ children }) {
 
   const setMemberRole = useCallback((membershipId, role) => update('floor_memberships', membershipId, { role }), [])
 
+  // Espacios compartidos: aviso de "ya casi termina" (a quien lo está usando)
+  // y cierre + aviso al siguiente de la lista de espera cuando el tiempo se
+  // agota solo (nadie tocó "Ya terminé") — mismo patrón sin cron que
+  // pollClock/removalClock más arriba: se agenda un aviso para el primer
+  // vencimiento pendiente (recordatorio o fin de uso) entre todos los usos
+  // vigentes, y se re-evalúa entonces.
+  const [spaceClock, setSpaceClock] = useState(0)
+  useEffect(() => {
+    const now = Date.now()
+    const upcoming = []
+    for (const u of sharedSpaceUses) {
+      if (u.releasedAt) continue
+      const r = reminderAt(u)
+      if (r > now) upcoming.push(r)
+      const e = new Date(u.endsAt).getTime()
+      if (e > now) upcoming.push(e)
+    }
+    if (!upcoming.length) return undefined
+    const wait = Math.min(Math.min(...upcoming) - now + 1000, 2147483647)
+    const id = setTimeout(() => setSpaceClock((c) => c + 1), wait)
+    return () => clearTimeout(id)
+  }, [sharedSpaceUses, spaceClock])
+
+  // El primero de la lista de espera de un espacio pasa a ser el siguiente:
+  // se le avisa y se lo saca de la lista (FIFO). Se usa tanto al liberar a
+  // mano ("Ya terminé") como al vencer solo el tiempo, así que vive aparte.
+  const notifyNextInWaitlist = useCallback(
+    async (use) => {
+      if (!currentFloor) return
+      const space = SHARED_SPACE_BY_KEY[use.spaceKey]
+      if (!space) return
+      const next = waitlistFor(sharedSpaceWaitlist, use.spaceKey)[0]
+      if (!next) return
+      await remove('shared_space_waitlist', next.id)
+      setSharedSpaceWaitlist((list) => list.filter((w) => w.id !== next.id))
+      const name = space.notifyName.charAt(0).toUpperCase() + space.notifyName.slice(1)
+      await notifyUser(
+        currentFloor.id,
+        next.userId,
+        'shared_space_free',
+        `${name} ya está disponible. Tu turno para usarla llegó.`,
+        null,
+        `space-free:${use.id}`
+      )
+    },
+    [currentFloor, sharedSpaceWaitlist, notifyUser]
+  )
+
+  // Resolución oportunista: igual que las expiraciones de arriba, se revisa
+  // cada vez que alguien del piso tiene la app abierta. Un uso naturalmente
+  // vencido se marca `releasedAt` acá mismo (si no, este efecto lo volvería
+  // a procesar — y a avisar al siguiente de la lista — en cada disparo
+  // siguiente, ya que nada más lo libera).
+  useEffect(() => {
+    if (!currentFloor) return
+    let cancelled = false
+
+    async function run() {
+      const now = Date.now()
+      for (const use of sharedSpaceUses) {
+        if (cancelled) return
+        if (use.releasedAt) continue
+        const space = SHARED_SPACE_BY_KEY[use.spaceKey]
+        if (!space) continue
+        const endsMs = new Date(use.endsAt).getTime()
+        if (endsMs <= now) {
+          await update('shared_space_uses', use.id, { releasedAt: use.endsAt })
+          setSharedSpaceUses((list) => list.map((u) => (u.id === use.id ? { ...u, releasedAt: use.endsAt } : u)))
+          await notifyNextInWaitlist(use)
+          continue
+        }
+        if (reminderAt(use) <= now) {
+          await notifyUser(
+            currentFloor.id,
+            use.userId,
+            'shared_space_reminder',
+            `Tu tiempo de ${space.notifyName} está por terminar. Te quedan aproximadamente ${REMINDER_MINUTES_BEFORE_END} minutos.${space.reminderHint ? ` ${space.reminderHint}` : ''}`,
+            null,
+            `space-reminder:${use.id}`
+          )
+        }
+      }
+    }
+
+    run()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedSpaceUses, currentFloor?.id, spaceClock, notifyNextInWaitlist, notifyUser])
+
   const addIncident = useCallback(
     async (incident) => {
       if (!currentFloor || !user) return
@@ -1012,12 +1112,48 @@ export function DataProvider({ children }) {
     [currentFloor, user, sharedSpaceUses]
   )
 
-  // "Ya terminé": libera el espacio antes de que venza el tiempo.
-  const releaseSharedSpaceUse = useCallback(async (useId) => {
-    const releasedAt = new Date().toISOString()
-    await update('shared_space_uses', useId, { releasedAt })
-    setSharedSpaceUses((list) => list.map((u) => (u.id === useId ? { ...u, releasedAt } : u)))
-  }, [])
+  // "Ya terminé": libera el espacio antes de que venza el tiempo, y si hay
+  // alguien esperando le toca a él/ella (ver notifyNextInWaitlist).
+  const releaseSharedSpaceUse = useCallback(
+    async (useId) => {
+      const releasedAt = new Date().toISOString()
+      const use = sharedSpaceUses.find((u) => u.id === useId)
+      await update('shared_space_uses', useId, { releasedAt })
+      setSharedSpaceUses((list) => list.map((u) => (u.id === useId ? { ...u, releasedAt } : u)))
+      if (use) await notifyNextInWaitlist({ ...use, releasedAt })
+    },
+    [sharedSpaceUses, notifyNextInWaitlist]
+  )
+
+  // Anotarse en la lista de espera: solo mientras el espacio está en uso
+  // (si está libre no tiene sentido esperar), y evita que alguien se anote
+  // dos veces (unique en la tabla, pero se chequea antes para dar un
+  // mensaje claro en vez de un error crudo).
+  const joinSharedSpaceWaitlist = useCallback(
+    async (spaceKey) => {
+      const space = SHARED_SPACE_BY_KEY[spaceKey]
+      if (!currentFloor || !user || !space) return { ok: false, reason: 'invalid' }
+      if (!currentSpaceUse(sharedSpaceUses, spaceKey)) return { ok: false, reason: 'not_busy' }
+      if (sharedSpaceWaitlist.some((w) => w.spaceKey === spaceKey && w.userId === user.id)) {
+        return { ok: false, reason: 'already' }
+      }
+      const created = await create('shared_space_waitlist', { floorId: currentFloor.id, spaceKey, userId: user.id })
+      setSharedSpaceWaitlist((list) => [...list.filter((w) => w.id !== created.id), created])
+      return { ok: true }
+    },
+    [currentFloor, user, sharedSpaceUses, sharedSpaceWaitlist]
+  )
+
+  const leaveSharedSpaceWaitlist = useCallback(
+    async (spaceKey) => {
+      if (!user) return
+      const row = sharedSpaceWaitlist.find((w) => w.spaceKey === spaceKey && w.userId === user.id)
+      if (!row) return
+      await remove('shared_space_waitlist', row.id)
+      setSharedSpaceWaitlist((list) => list.filter((w) => w.id !== row.id))
+    },
+    [user, sharedSpaceWaitlist]
+  )
 
   const addPotContribution = useCallback(
     async (amount, onBehalfOfId = null) => {
@@ -2001,8 +2137,11 @@ export function DataProvider({ children }) {
     markNotificationRead,
     markAllNotificationsRead,
     sharedSpaceUses,
+    sharedSpaceWaitlist,
     startSharedSpaceUse,
     releaseSharedSpaceUse,
+    joinSharedSpaceWaitlist,
+    leaveSharedSpaceWaitlist,
     addPotContribution,
     addPotExpense,
     updatePotExpense,

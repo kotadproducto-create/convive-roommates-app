@@ -17,7 +17,10 @@ export const SHARED_SPACES = [
     notifyName: 'la lavadora',
     // Duración por defecto y opciones para "cuánto la voy a usar" (minutos).
     defaultMinutes: 120,
-    durations: [60, 120, 180]
+    durations: [60, 120, 180],
+    // Línea extra (opcional) al final del recordatorio de "ya casi termina"
+    // — específica de este espacio, no todos necesitan una.
+    reminderHint: 'Recuerda retirar tu ropa cuando termine.'
   }
 ]
 
@@ -48,4 +51,25 @@ export function minutesLeft(use, nowMs = Date.now()) {
 /** 95 → { hours: 1, minutes: 35 } — para mostrar "1 h 35 min" / "35 min". */
 export function splitMinutes(total) {
   return { hours: Math.floor(total / 60), minutes: total % 60 }
+}
+
+/** Cuántos minutos antes de que termine un uso se avisa a quien lo está
+ * usando que ya casi termina (ver notifySpaceReminder en DataContext.jsx). */
+export const REMINDER_MINUTES_BEFORE_END = 15
+
+/** Instante (ms) en que toca avisarle a quien usa el espacio que su
+ * tiempo está por terminar. */
+export function reminderAt(use) {
+  return new Date(use.endsAt).getTime() - REMINDER_MINUTES_BEFORE_END * 60000
+}
+
+/** Fila de la lista de espera de un espacio, ordenada por quién se anotó
+ * primero (FIFO) — el primero es a quien le toca avisar en cuanto se
+ * libere. `waitlist` son filas de `shared_space_waitlist` (floorId ya
+ * filtrado por quien llama, igual que con sharedSpaceUses). */
+export function waitlistFor(waitlist, spaceKey) {
+  return waitlist
+    .filter((w) => w.spaceKey === spaceKey)
+    .slice()
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
 }

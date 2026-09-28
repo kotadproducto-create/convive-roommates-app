@@ -134,6 +134,35 @@ export default function PublicTurns() {
         </ul>
       )}
 
+      {view.sharedSpaces.length > 0 && (
+        <>
+          <h2 className="font-display font-semibold mb-2">{t('sharedSpaces.title')}</h2>
+          <ul className="flex flex-col gap-2 mb-5">
+            {view.sharedSpaces.map((space) => (
+              <li key={space.key} className="rounded-xl border-2 border-ink-900/10 dark:border-cream-100/15 px-3 py-2.5">
+                <p className="text-sm font-semibold break-words">{t(`sharedSpaces.spaces.${space.key}`)}</p>
+                {space.current ? (
+                  <p className="text-xs text-gold-600 dark:text-gold-300 mt-1 break-words">
+                    {t('sharedSpaces.inUseBy', {
+                      name: space.current.person ? space.current.person.name : t('sharedSpaces.someone'),
+                      space: t(`sharedSpaces.spaceRef.${space.key}`)
+                    })}{' '}
+                    · {t('publicTurns.spaceUntil', { time: format(space.current.endsAt, 'HH:mm') })}
+                  </p>
+                ) : (
+                  <p className="text-xs text-sage-600 dark:text-sage-300 mt-1">{t('sharedSpaces.free')}</p>
+                )}
+                {space.waitlist.length > 0 && (
+                  <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 break-words">
+                    {t('sharedSpaces.waitlistTitle')}: {space.waitlist.map((p) => p.name).join(', ')}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       {view.rotation.length > 0 && (
         <>
           <h2 className="font-display font-semibold mb-2">{t('publicTurns.rotationTitle')}</h2>

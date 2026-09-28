@@ -1644,6 +1644,32 @@ begin
       )
       from activity_completions c
       where c.floor_id = v_floor and c.created_at > now() - interval '45 days'
+    ), '[]'::jsonb),
+    -- Espacios compartidos (hoy la lavadora, ver lib/sharedSpaces.js): el
+    -- propio PublicTurns.jsx decide con la hora del navegador si el uso
+    -- sigue vigente (misma función pura currentSpaceUse que usa la app),
+    -- así que acá alcanza con mandar lo de las últimas 24h sin filtrar más.
+    'sharedSpaceUses', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', u.id,
+          'spaceKey', u.space_key,
+          'userId', u.user_id,
+          'startsAt', u.starts_at,
+          'endsAt', u.ends_at,
+          'releasedAt', u.released_at
+        )
+      )
+      from shared_space_uses u
+      where u.floor_id = v_floor and u.released_at is null and u.ends_at > now() - interval '1 day'
+    ), '[]'::jsonb),
+    'sharedSpaceWaitlist', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('spaceKey', w.space_key, 'userId', w.user_id, 'createdAt', w.created_at)
+        order by w.created_at
+      )
+      from shared_space_waitlist w
+      where w.floor_id = v_floor
     ), '[]'::jsonb)
   );
 end;
@@ -1887,3 +1913,54 @@ grant execute on function dispute_pot_contribution(uuid, text) to authenticated;
 -- al que se refiere (para el botón "Reportar incidencia" dentro del
 -- propio aviso, ver NotificationItem.jsx).
 alter table notifications add column if not exists ref_id uuid;
+
+-- =========================================================
+-- Espacios compartidos: lista de espera + recordatorios
+--
+-- Cuando un espacio (hoy solo la lavadora) está en uso, cualquiera puede
+-- anotarse para que le avisen en cuanto quede libre — sin esto tenía que
+-- estar revisando a mano. Además, a quien lo está usando se le recuerda
+-- unos minutos antes de que se le acabe el tiempo (ver
+-- REMINDER_MINUTES_BEFORE_END en lib/sharedSpaces.js). Ninguna de las dos
+-- cosas depende de que alguien marque nada a mano: los dos avisos salen
+-- de sendos efectos oportunistas en DataContext.jsx (mismo criterio "sin
+-- cron" que el resto de vencimientos de la app).
+-- Es idempotente: se puede correr varias veces.
+-- =========================================================
+
+create table if not exists shared_space_waitlist (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  space_key text not null,
+  user_id uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (floor_id, space_key, user_id)
+);
+create index if not exists shared_space_waitlist_floor_idx on shared_space_waitlist (floor_id, space_key);
+-- Para que Realtime entregue los DELETE con el filtro por floor_id (mismo
+-- motivo que shopping_items — si no, un "me anoto"/"ya me avisaron" que
+-- borra la fila en otro dispositivo no desaparece ahí hasta recargar).
+alter table shared_space_waitlist replica identity full;
+
+alter table shared_space_waitlist enable row level security;
+create policy "select floor shared_space_waitlist" on shared_space_waitlist for select using (is_active_member(floor_id));
+create policy "insert own shared_space_waitlist" on shared_space_waitlist for insert with check (is_active_member(floor_id) and user_id = auth.uid());
+-- Cualquier miembro activo puede borrar una fila (no solo su dueño ni un
+-- admin): además de "salir yo de la lista", el efecto que avisa "ya te
+-- toca" y saca a esa persona de la lista corre en la sesión de QUIEN
+-- tenga la app abierta en ese momento, no necesariamente la suya.
+create policy "delete floor shared_space_waitlist" on shared_space_waitlist for delete using (is_active_member(floor_id));
+
+alter publication supabase_realtime add table shared_space_waitlist;
+
+-- El "Ya terminé" ya lo podía hacer quien lo usó o un admin (política de
+-- abajo, sin cambios ahí). Se agrega que CUALQUIER miembro activo pueda
+-- cerrar un uso cuyo `ends_at` ya pasó — es lo que hace el efecto que
+-- detecta que el tiempo se acabó solo (nadie tocó "Ya terminé") y avisa
+-- al siguiente de la lista de espera; como puede correr desde la sesión
+-- de cualquiera del piso, no solo la de quien lo usó, necesita permiso
+-- para dejarlo marcado como liberado y que no se vuelva a procesar.
+drop policy if exists "release own or admin shared_space_use" on shared_space_uses;
+create policy "release own or admin shared_space_use" on shared_space_uses
+  for update
+  using (user_id = auth.uid() or is_floor_admin(floor_id) or ends_at <= now());

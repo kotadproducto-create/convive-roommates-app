@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { currentSpaceUse, minutesLeft, splitMinutes, SHARED_SPACES } from '../sharedSpaces.js'
+import { currentSpaceUse, minutesLeft, splitMinutes, reminderAt, waitlistFor, SHARED_SPACES, REMINDER_MINUTES_BEFORE_END } from '../sharedSpaces.js'
 
 const NOW = Date.parse('2026-09-20T15:00:00Z')
 const use = (o) => ({
@@ -45,5 +45,26 @@ describe('SHARED_SPACES', () => {
   it('la lavadora está configurada con su duración por defecto entre las opciones', () => {
     const washer = SHARED_SPACES.find((s) => s.key === 'washer')
     expect(washer.durations).toContain(washer.defaultMinutes)
+  })
+})
+
+describe('reminderAt — aviso de "ya casi termina"', () => {
+  it('cae N minutos antes del fin del uso', () => {
+    const expected = Date.parse('2026-09-20T16:30:00Z') - REMINDER_MINUTES_BEFORE_END * 60000
+    expect(reminderAt(use({}))).toBe(expected)
+  })
+})
+
+describe('waitlistFor — lista de espera FIFO', () => {
+  const row = (o) => ({ spaceKey: 'washer', userId: 'X', createdAt: '2026-09-20T14:00:00Z', ...o })
+
+  it('ordena por quién se anotó primero', () => {
+    const list = [row({ userId: 'B', createdAt: '2026-09-20T14:10:00Z' }), row({ userId: 'A', createdAt: '2026-09-20T14:00:00Z' })]
+    expect(waitlistFor(list, 'washer').map((w) => w.userId)).toEqual(['A', 'B'])
+  })
+
+  it('filtra por espacio', () => {
+    const list = [row({ userId: 'A', spaceKey: 'washer' }), row({ userId: 'B', spaceKey: 'dryer' })]
+    expect(waitlistFor(list, 'washer').map((w) => w.userId)).toEqual(['A'])
   })
 })

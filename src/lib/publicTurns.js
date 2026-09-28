@@ -1,4 +1,5 @@
 import { assigneeFor, currentPeriodKey, floorKeeperFor, getWeekKeyOf, nextOccurrence } from './activities'
+import { SHARED_SPACES, currentSpaceUse, waitlistFor } from './sharedSpaces'
 
 /**
  * Link público de turnos (solo lectura): a partir de los datos crudos que
@@ -79,6 +80,22 @@ export function buildPublicTurns(data, now = new Date()) {
   const keeperNowId = floorKeeperFor(floor, order, weekKey)
   const keeperNextId = floorKeeperFor(floor, order, nextWeekKey)
 
+  // Espacios compartidos (hoy la lavadora, ver lib/sharedSpaces.js): mismas
+  // funciones puras que usa la app con sesión (SharedSpaces.jsx), a partir
+  // de los usos/lista de espera crudos que entrega get_public_turns.
+  const spaceUses = data.sharedSpaceUses || []
+  const spaceWaitlist = data.sharedSpaceWaitlist || []
+  const sharedSpaces = SHARED_SPACES.map((space) => {
+    const use = currentSpaceUse(spaceUses, space.key, now.getTime())
+    return {
+      key: space.key,
+      current: use ? { person: person(byId, use.userId), endsAt: new Date(use.endsAt) } : null,
+      waitlist: waitlistFor(spaceWaitlist, space.key)
+        .map((w) => person(byId, w.userId))
+        .filter(Boolean)
+    }
+  })
+
   return {
     floorName: floor.name || '',
     // Código de invitación del piso (get_public_turns lo incluye) — para el
@@ -87,6 +104,7 @@ export function buildPublicTurns(data, now = new Date()) {
     inviteCode: floor.inviteCode || null,
     keeper: { now: person(byId, keeperNowId), next: person(byId, keeperNextId) },
     activities,
+    sharedSpaces,
     rotation: (floor.rotationOrder || [])
       .filter((id) => byId[id])
       .map((id) => ({ id, name: byId[id].name, isVirtual: Boolean(byId[id].isVirtual), away: awayIds.has(id) })),

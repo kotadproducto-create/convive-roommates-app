@@ -440,6 +440,7 @@ export default {
     awayTag: 'Fuera',
     keeperNowTag: 'Esta semana',
     keeperNextTag: 'Siguiente',
+    spaceUntil: 'Hasta las {{time}}',
     updatedAt: 'Actualizado a las {{time}}',
     refresh: 'Actualizar',
     openApp: 'Abrir Convive',
@@ -477,7 +478,13 @@ export default {
     startedToast: 'Avisamos al piso: usarás {{space}} hasta las {{time}}',
     busyToast: 'Ya hay alguien usando {{space}}. Espera a que termine.',
     releasedToast: 'Listo: {{space}} quedó libre',
-    errorToast: 'No se pudo completar. Inténtalo de nuevo.'
+    errorToast: 'No se pudo completar. Inténtalo de nuevo.',
+    waitlistTitle: 'Lista de espera',
+    joinWaitlist: 'Añadirme a la lista de espera',
+    alreadyWaiting: 'Ya estás en la lista de espera',
+    leaveWaitlist: 'Salir de la lista',
+    joinedWaitlistToast: 'Listo, te avisaremos cuando se libere {{space}}',
+    leftWaitlistToast: 'Saliste de la lista de espera'
   },
   tutorial: {
     ariaLabel: 'Tutorial de la aplicación',
@@ -618,6 +625,9 @@ export default {
     title: 'Compras',
     whatToDo: '¿Qué necesitas hacer?',
     outOfStockBanner: '{{count}} producto{{plural}} agotado{{plural}}: hace falta reponer.',
+    outOfStockDialogTitle: 'Productos agotados',
+    goToShopping: 'Ir a compras',
+    close: 'Cerrar',
     buyMenuTitle: 'Hacer la compra',
     buyMenuSubtitlePending: '{{count}} producto{{plural}} por comprar',
     buyMenuSubtitleDone: 'Todo al día',

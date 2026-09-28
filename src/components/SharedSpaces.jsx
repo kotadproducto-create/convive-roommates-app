@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { SHARED_SPACES, currentSpaceUse, minutesLeft, splitMinutes } from '../lib/sharedSpaces'
+import { SHARED_SPACES, currentSpaceUse, minutesLeft, splitMinutes, waitlistFor } from '../lib/sharedSpaces'
 import { WasherIcon, SparkleIcon } from './icons'
 
 // Ícono de cada espacio, por clave — uno nuevo cae al genérico.
@@ -29,6 +29,18 @@ export function useSpaceUse(spaceKey) {
   // `left` se calcula con la hora de ESTE render (no con `now`, que solo
   // cambia cada 30 s y dejaría el conteo un minuto atrasado al empezar).
   return { current, user, left: current ? minutesLeft(current) : 0 }
+}
+
+/** Lista de espera de un espacio, ya resuelta a nombres (orden FIFO). */
+export function useSpaceWaitlist(spaceKey) {
+  const { sharedSpaceWaitlist, members } = useData()
+  return useMemo(
+    () =>
+      waitlistFor(sharedSpaceWaitlist, spaceKey)
+        .map((w) => members.find((m) => m.id === w.userId))
+        .filter(Boolean),
+    [sharedSpaceWaitlist, spaceKey, members]
+  )
 }
 
 /** "1 h 35 min" / "35 min" / "2 h" */
@@ -61,15 +73,17 @@ export default function SharedSpaces() {
 
 function SpaceCard({ space }) {
   const { user: me, membership } = useAuth()
-  const { startSharedSpaceUse, releaseSharedSpaceUse } = useData()
+  const { startSharedSpaceUse, releaseSharedSpaceUse, joinSharedSpaceWaitlist, leaveSharedSpaceWaitlist } = useData()
   const { showToast } = useToast()
   const { t } = useLanguage()
   const { current, user: userInUse, left } = useSpaceUse(space.key)
+  const waitlist = useSpaceWaitlist(space.key)
   const [minutes, setMinutes] = useState(space.defaultMinutes)
   const [busy, setBusy] = useState(false)
   const Icon = SPACE_ICONS[space.key] || SparkleIcon
   const isMine = current?.userId === me?.id
   const canRelease = current && (isMine || membership?.role === 'admin')
+  const isWaiting = waitlist.some((w) => w.id === me?.id)
 
   async function handleStart() {
     setBusy(true)
@@ -101,6 +115,32 @@ function SpaceCard({ space }) {
     }
   }
 
+  async function handleJoinWaitlist() {
+    setBusy(true)
+    try {
+      const result = await joinSharedSpaceWaitlist(space.key)
+      if (result?.ok) showToast(t('sharedSpaces.joinedWaitlistToast', { space: t(`sharedSpaces.spaceRef.${space.key}`) }), 'success')
+    } catch (err) {
+      console.error('joinSharedSpaceWaitlist', err)
+      showToast(t('sharedSpaces.errorToast'), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleLeaveWaitlist() {
+    setBusy(true)
+    try {
+      await leaveSharedSpaceWaitlist(space.key)
+      showToast(t('sharedSpaces.leftWaitlistToast'), 'default')
+    } catch (err) {
+      console.error('leaveSharedSpaceWaitlist', err)
+      showToast(t('sharedSpaces.errorToast'), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="card p-4 flex flex-col gap-3">
       <div className="flex items-center gap-3 min-w-0">
@@ -123,6 +163,11 @@ function SpaceCard({ space }) {
           <p className="text-xs text-ink-900/60 dark:text-cream-100/60">
             {t('sharedSpaces.untilTime', { time: format(new Date(current.endsAt), 'HH:mm'), left: formatLeft(left, t) })}
           </p>
+          {waitlist.length > 0 && (
+            <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 min-w-0 break-words">
+              {t('sharedSpaces.waitlistTitle')}: {waitlist.map((w) => w.name).join(', ')}
+            </p>
+          )}
         </div>
       ) : (
         <p className="text-xs font-semibold text-sage-500">{t('sharedSpaces.free')}</p>
@@ -141,14 +186,25 @@ function SpaceCard({ space }) {
             </select>
           </label>
         )}
-        <button
-          type="button"
-          className="btn-primary text-sm flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
-          disabled={busy || !!current}
-          onClick={handleStart}
-        >
-          {t('sharedSpaces.cta')}
-        </button>
+        {current && !isMine ? (
+          <button
+            type="button"
+            className="btn-secondary text-sm flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={busy}
+            onClick={isWaiting ? handleLeaveWaitlist : handleJoinWaitlist}
+          >
+            {isWaiting ? t('sharedSpaces.leaveWaitlist') : t('sharedSpaces.joinWaitlist')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn-primary text-sm flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={busy || !!current}
+            onClick={handleStart}
+          >
+            {t('sharedSpaces.cta')}
+          </button>
+        )}
         {canRelease && (
           <button type="button" className="btn-secondary text-sm" disabled={busy} onClick={handleRelease}>
             {isMine ? t('sharedSpaces.release') : t('sharedSpaces.releaseAdmin')}

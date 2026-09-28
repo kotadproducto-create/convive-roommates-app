@@ -439,6 +439,7 @@ export default {
     awayTag: 'Away',
     keeperNowTag: 'This week',
     keeperNextTag: 'Next',
+    spaceUntil: 'Until {{time}}',
     updatedAt: 'Updated at {{time}}',
     refresh: 'Refresh',
     openApp: 'Open Convive',
@@ -476,7 +477,13 @@ export default {
     startedToast: 'We told the flat: you will use {{space}} until {{time}}',
     busyToast: 'Someone is already using {{space}}. Wait until it is done.',
     releasedToast: 'Done: {{space}} is now free',
-    errorToast: 'Could not complete that. Please try again.'
+    errorToast: 'Could not complete that. Please try again.',
+    waitlistTitle: 'Waitlist',
+    joinWaitlist: 'Add me to the waitlist',
+    alreadyWaiting: "You're on the waitlist",
+    leaveWaitlist: 'Leave the waitlist',
+    joinedWaitlistToast: "Done, we'll let you know when {{space}} is free",
+    leftWaitlistToast: 'You left the waitlist'
   },
   tutorial: {
     ariaLabel: 'App tutorial',
@@ -617,6 +624,9 @@ export default {
     title: 'Shopping',
     whatToDo: 'What do you need to do?',
     outOfStockBanner: '{{count}} item{{plural}} out of stock: time to restock.',
+    outOfStockDialogTitle: 'Out-of-stock items',
+    goToShopping: 'Go to shopping',
+    close: 'Close',
     buyMenuTitle: 'Go shopping',
     buyMenuSubtitlePending: '{{count}} item{{plural}} to buy',
     buyMenuSubtitleDone: 'All caught up',

@@ -9,6 +9,8 @@ const ROUTE_BY_TYPE = {
   // Espacios compartidos ("Voy a usarla") viven en Actividades; 'lavadora'
   // es el tipo antiguo del mismo aviso.
   shared_space: '/actividades',
+  shared_space_reminder: '/actividades',
+  shared_space_free: '/actividades',
   lavadora: '/actividades',
   // Dinero y compras
   pote: '/pote',

@@ -167,6 +167,32 @@ begin
       )
       from activity_completions c
       where c.floor_id = v_floor and c.created_at > now() - interval '45 days'
+    ), '[]'::jsonb),
+    -- Espacios compartidos (hoy la lavadora, ver lib/sharedSpaces.js): el
+    -- propio PublicTurns.jsx decide con la hora del navegador si el uso
+    -- sigue vigente (misma función pura currentSpaceUse que usa la app),
+    -- así que acá alcanza con mandar lo de las últimas 24h sin filtrar más.
+    'sharedSpaceUses', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', u.id,
+          'spaceKey', u.space_key,
+          'userId', u.user_id,
+          'startsAt', u.starts_at,
+          'endsAt', u.ends_at,
+          'releasedAt', u.released_at
+        )
+      )
+      from shared_space_uses u
+      where u.floor_id = v_floor and u.released_at is null and u.ends_at > now() - interval '1 day'
+    ), '[]'::jsonb),
+    'sharedSpaceWaitlist', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('spaceKey', w.space_key, 'userId', w.user_id, 'createdAt', w.created_at)
+        order by w.created_at
+      )
+      from shared_space_waitlist w
+      where w.floor_id = v_floor
     ), '[]'::jsonb)
   );
 end;
