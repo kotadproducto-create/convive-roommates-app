@@ -13,6 +13,7 @@ import { LockIcon, MoonIcon, SunIcon, BellIcon, AlertIcon, MailIcon, InfoIcon, G
 import PageBanner, { SectionLabel } from '../components/PageBanner'
 import { cleanPinInput, isValidPin, pinChangeErrorKey } from '../lib/publicPoll'
 import { hasPollPin, setPollPin, changePollPin } from '../lib/publicPollApi'
+import { authErrorMessage } from '../lib/authErrors'
 
 const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/
 const APP_VERSION = '1.0.0 Beta'
@@ -224,7 +225,7 @@ function SecurityCard({ changePassword, logout, removeMember, membership, userId
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
-      setPasswordError(err.message)
+      setPasswordError(authErrorMessage(err, t))
     } finally {
       setChangingPassword(false)
     }
@@ -441,8 +442,9 @@ function DangerZoneCard({ user, membership, floor, members, removeMember, setMem
       await banAccount()
       await logout()
     } catch (err) {
-      showToast(t('ajustes.deleteAccountErrorToast', { error: err.message }), 'default')
-      setError(err.message)
+      const message = authErrorMessage(err, t)
+      showToast(t('ajustes.deleteAccountErrorToast', { error: message }), 'default')
+      setError(message)
       setDeleting(false)
     }
   }

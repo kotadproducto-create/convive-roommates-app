@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
+import { format } from 'date-fns'
 import {
   getAll,
   create,
@@ -525,6 +526,50 @@ export function DataProvider({ children }) {
               : outcome.status === 'closed'
                 ? `La consulta "${poll.question}" se cerró sin mayoría clara.`
                 : `La consulta "${poll.question}" expiró: no todos votaron a tiempo.`
+        const messageKey = isRotationOrder
+          ? approved
+            ? 'notifications.pollResolvedRotationApproved'
+            : outcome.status === 'resolved'
+              ? 'notifications.pollResolvedRotationRejected'
+              : outcome.status === 'closed'
+                ? 'notifications.pollResolvedRotationClosed'
+                : 'notifications.pollResolvedRotationExpired'
+          : isBalanceReset
+            ? 'notifications.pollResolvedBalanceReset'
+          : isHouseRule
+            ? approved
+              ? poll.payload?.action === 'delete'
+                ? 'notifications.pollResolvedHouseRuleApprovedDelete'
+                : poll.payload?.action === 'edit'
+                  ? 'notifications.pollResolvedHouseRuleApprovedEdit'
+                  : 'notifications.pollResolvedHouseRuleApprovedCreate'
+              : outcome.status === 'resolved'
+                ? 'notifications.pollResolvedHouseRuleRejected'
+                : outcome.status === 'closed'
+                  ? 'notifications.pollResolvedHouseRuleClosed'
+                  : 'notifications.pollResolvedHouseRuleExpired'
+          : isPotAdjustment
+            ? approved
+              ? 'notifications.pollResolvedPotApproved'
+              : outcome.status === 'resolved'
+                ? 'notifications.pollResolvedPotRejected'
+                : outcome.status === 'closed'
+                  ? 'notifications.pollResolvedPotClosed'
+                  : 'notifications.pollResolvedPotExpired'
+            : outcome.status === 'resolved'
+              ? 'notifications.pollResolvedCustomResolved'
+              : outcome.status === 'closed'
+                ? 'notifications.pollResolvedCustomClosed'
+                : 'notifications.pollResolvedCustomExpired'
+        const messageParams = isRotationOrder || isBalanceReset
+          ? null
+          : isHouseRule
+            ? { title: poll.payload?.title }
+            : isPotAdjustment
+              ? approved
+                ? { amount: poll.payload?.newAmount }
+                : null
+              : { question: poll.question, option: outcome.resolvedOption }
         await upsertIgnoreDuplicates(
           'notifications',
           [
@@ -541,7 +586,9 @@ export function DataProvider({ children }) {
                     ? 'poll_resolved_house_rule'
                     : 'poll_resolved',
               read: false,
-              message
+              message,
+              messageKey,
+              messageParams
             }
           ],
           ['id']
@@ -590,7 +637,10 @@ export function DataProvider({ children }) {
           'turno',
           `Esta semana te toca: ${activity.title}`,
           weekKey,
-          `turno:${currentFloor.id}:${weekKey}:${activity.id}`
+          `turno:${currentFloor.id}:${weekKey}:${activity.id}`,
+          null,
+          'notifications.turnoThisWeek',
+          { title: activity.title }
         )
       }
 
@@ -606,7 +656,9 @@ export function DataProvider({ children }) {
               type: 'pote',
               weekKey,
               read: false,
-              message: `El pote de compras está bajo (${currentFloor.potAmount}€). Sugerido: ${currentFloor.potPerPerson}€ por persona.`
+              message: `El pote de compras está bajo (${currentFloor.potAmount}€). Sugerido: ${currentFloor.potPerPerson}€ por persona.`,
+              messageKey: 'notifications.potLow',
+              messageParams: { amount: currentFloor.potAmount, perPerson: currentFloor.potPerPerson }
             }
           ],
           ['id']
@@ -774,11 +826,11 @@ export function DataProvider({ children }) {
   const virtualMemberIds = useMemo(() => virtualIdSet(members), [members])
 
   const notifyUser = useCallback(
-    async (targetFloorId, userId, type, message, weekKeyArg = null, dedupeKey = null, refId = null) => {
+    async (targetFloorId, userId, type, message, weekKeyArg = null, dedupeKey = null, refId = null, messageKey = null, messageParams = null) => {
       // Un perfil virtual no usa la app: nunca se le crea una notificación.
       if (userId && virtualMemberIds.has(userId)) return
       async function insertOne(forUserId) {
-        const row = { floorId: targetFloorId, userId: forUserId, type, weekKey: weekKeyArg, read: false, message, refId }
+        const row = { floorId: targetFloorId, userId: forUserId, type, weekKey: weekKeyArg, read: false, message, refId, messageKey, messageParams }
         if (dedupeKey) {
           const id = await deterministicUuid(`notif:${dedupeKey}:${forUserId ?? 'floor'}`)
           await upsertIgnoreDuplicates('notifications', [{ id, ...row }], ['id'])
@@ -811,6 +863,9 @@ export function DataProvider({ children }) {
   const notifyPotOnBehalf = useCallback(
     async (contribution, kind) => {
       if (!currentFloor || !user) return
+      const amount = Math.abs(Number(contribution.amount))
+      const date = new Date(contribution.createdAt).toISOString().slice(0, 10)
+      const params = { actor: user.name, verbKind: kind, amount, date, note: contribution.note || null }
       await notifyUser(
         currentFloor.id,
         contribution.userId,
@@ -818,7 +873,9 @@ export function DataProvider({ children }) {
         potOnBehalfMessage({ actorName: user.name, kind, amount: contribution.amount, dateISO: contribution.createdAt, note: contribution.note }),
         null,
         null,
-        contribution.id
+        contribution.id,
+        contribution.note ? 'notifications.potOnBehalfWithNote' : 'notifications.potOnBehalf',
+        params
       )
     },
     [currentFloor, user, notifyUser]
@@ -870,7 +927,17 @@ export function DataProvider({ children }) {
         fromUserId: user.id,
         toUserId
       })
-      await notifyUser(currentFloor.id, toUserId, 'swap', `${user.name} te propone intercambiar "${title}" contigo`)
+      await notifyUser(
+        currentFloor.id,
+        toUserId,
+        'swap',
+        `${user.name} te propone intercambiar "${title}" contigo`,
+        null,
+        null,
+        null,
+        'notifications.swapProposed',
+        { actor: user.name, title }
+      )
     },
     [currentFloor, user, notifyUser]
   )
@@ -889,15 +956,25 @@ export function DataProvider({ children }) {
           : activityCompletions.find((c) => c.id === request.targetId)
       if (!current || current.assignedUserId !== request.fromUserId) {
         await update('swap_requests', requestId, { status: 'declined', decidedAt: new Date().toISOString() })
-        return { ok: false, message: 'Ese turno ya no le corresponde a quien lo propuso.' }
+        return { ok: false, message: t('notifications.swapNotYours') }
       }
       await update(table, request.targetId, { assignedUserId: request.toUserId })
       await update('swap_requests', requestId, { status: 'accepted', decidedAt: new Date().toISOString() })
       const toName = members.find((m) => m.id === request.toUserId)?.name || 'Alguien'
-      await notifyUser(currentFloor.id, request.fromUserId, 'swap', `${toName} aceptó tu intercambio de turno`)
+      await notifyUser(
+        currentFloor.id,
+        request.fromUserId,
+        'swap',
+        `${toName} aceptó tu intercambio de turno`,
+        null,
+        null,
+        null,
+        'notifications.swapAccepted',
+        { actor: toName }
+      )
       return { ok: true }
     },
-    [swapRequests, currentFloor, tasks, activityCompletions, members, notifyUser]
+    [swapRequests, currentFloor, tasks, activityCompletions, members, notifyUser, t]
   )
 
   const declineSwap = useCallback(
@@ -906,7 +983,17 @@ export function DataProvider({ children }) {
       await update('swap_requests', requestId, { status: 'declined', decidedAt: new Date().toISOString() })
       if (request && currentFloor) {
         const fromName = members.find((m) => m.id === request.toUserId)?.name || 'Alguien'
-        await notifyUser(currentFloor.id, request.fromUserId, 'swap', `${fromName} no pudo aceptar tu intercambio de turno`)
+        await notifyUser(
+          currentFloor.id,
+          request.fromUserId,
+          'swap',
+          `${fromName} no pudo aceptar tu intercambio de turno`,
+          null,
+          null,
+          null,
+          'notifications.swapDeclined',
+          { actor: fromName }
+        )
       }
     },
     [swapRequests, currentFloor, members, notifyUser]
@@ -957,15 +1044,17 @@ export function DataProvider({ children }) {
       // la membresía de quien llama (auth.uid()) — si se cerrara primero,
       // este insert quedaría bloqueado justo para quien se está yendo.
       const message = opts?.message || `${leavingName} ha dejado el piso`
+      const messageKey = opts?.messageKey || 'notifications.memberLeft'
+      const messageParams = opts?.messageParams || { name: leavingName }
       if (opts?.dedupeKey) {
         const id = await deterministicUuid(opts.dedupeKey)
         await upsertIgnoreDuplicates(
           'notifications',
-          [{ id, floorId: currentFloor.id, userId: null, type: 'member_left', message }],
+          [{ id, floorId: currentFloor.id, userId: null, type: 'member_left', message, messageKey, messageParams }],
           ['id']
         )
       } else {
-        await create('notifications', { floorId: currentFloor.id, userId: null, type: 'member_left', message })
+        await create('notifications', { floorId: currentFloor.id, userId: null, type: 'member_left', message, messageKey, messageParams })
       }
       // Cerrar la membresía, no borrar el perfil: el usuario queda en
       // historial y podrá reactivarla más adelante con aprobación de un
@@ -1023,7 +1112,12 @@ export function DataProvider({ children }) {
         currentFloor.id,
         targetUserId,
         'removal_requested',
-        `Un administrador ha iniciado tu salida de ${currentFloor.name}. Debes confirmarla o rechazarla en tu Perfil dentro de las próximas 48 horas, o se hará efectiva automáticamente.`
+        `Un administrador ha iniciado tu salida de ${currentFloor.name}. Debes confirmarla o rechazarla en tu Perfil dentro de las próximas 48 horas, o se hará efectiva automáticamente.`,
+        null,
+        null,
+        null,
+        'notifications.removalRequested',
+        { floor: currentFloor.name }
       )
     },
     [currentFloor, user, notifyUser]
@@ -1037,7 +1131,12 @@ export function DataProvider({ children }) {
         currentFloor.id,
         targetUserId,
         'removal_cancelled',
-        `Se canceló el proceso de salida de ${targetName || 'tu cuenta'} del piso.`
+        `Se canceló el proceso de salida de ${targetName || 'tu cuenta'} del piso.`,
+        null,
+        null,
+        null,
+        targetName ? 'notifications.removalCancelledNamed' : 'notifications.removalCancelledSelf',
+        targetName ? { name: targetName } : null
       )
     },
     [currentFloor, notifyUser]
@@ -1059,7 +1158,12 @@ export function DataProvider({ children }) {
           currentFloor.id,
           requestedBy,
           'removal_rejected',
-          `${user.name} rechazó la solicitud de salida del piso. Sigue en ${currentFloor.name} sin cambios.`
+          `${user.name} rechazó la solicitud de salida del piso. Sigue en ${currentFloor.name} sin cambios.`,
+          null,
+          null,
+          null,
+          'notifications.removalRejected',
+          { name: user.name, floor: currentFloor.name }
         )
       }
     },
@@ -1095,6 +1199,8 @@ export function DataProvider({ children }) {
     for (const m of expired) {
       removeMember(m.membershipId, m.id, {
         message: `${m.name} no respondió a tiempo y su salida de ${currentFloor.name} se hizo efectiva automáticamente.`,
+        messageKey: 'notifications.removalAutoExpired',
+        messageParams: { name: m.name, floor: currentFloor.name },
         dedupeKey: `member-left-auto:${m.membershipId}`
       })
     }
@@ -1138,17 +1244,21 @@ export function DataProvider({ children }) {
       if (!next) return
       await remove('shared_space_waitlist', next.id)
       setSharedSpaceWaitlist((list) => list.filter((w) => w.id !== next.id))
-      const name = space.notifyName.charAt(0).toUpperCase() + space.notifyName.slice(1)
+      const spaceRef = t(`sharedSpaces.spaceRef.${space.key}`)
+      const name = spaceRef.charAt(0).toUpperCase() + spaceRef.slice(1)
       await notifyUser(
         currentFloor.id,
         next.userId,
         'shared_space_free',
         `${name} ya está disponible. Tu turno para usarla llegó.`,
         null,
-        `space-free:${use.id}`
+        `space-free:${use.id}`,
+        null,
+        'notifications.sharedSpaceFree',
+        { spaceKey: space.key }
       )
     },
-    [currentFloor, sharedSpaceWaitlist, notifyUser]
+    [currentFloor, sharedSpaceWaitlist, notifyUser, t]
   )
 
   // Resolución oportunista: igual que las expiraciones de arriba, se revisa
@@ -1175,13 +1285,17 @@ export function DataProvider({ children }) {
           continue
         }
         if (reminderAt(use) <= now) {
+          const hint = space.hasReminderHint ? ` ${t(`sharedSpaces.reminderHint.${space.key}`)}` : ''
           await notifyUser(
             currentFloor.id,
             use.userId,
             'shared_space_reminder',
-            `Tu tiempo de ${space.notifyName} está por terminar. Te quedan aproximadamente ${REMINDER_MINUTES_BEFORE_END} minutos.${space.reminderHint ? ` ${space.reminderHint}` : ''}`,
+            `Tu tiempo de ${t(`sharedSpaces.spaceRef.${space.key}`)} está por terminar. Te quedan aproximadamente ${REMINDER_MINUTES_BEFORE_END} minutos.${hint}`,
             null,
-            `space-reminder:${use.id}`
+            `space-reminder:${use.id}`,
+            null,
+            'notifications.sharedSpaceReminder',
+            { spaceKey: space.key, minutes: REMINDER_MINUTES_BEFORE_END, hasHint: space.hasReminderHint }
           )
         }
       }
@@ -1271,16 +1385,18 @@ export function DataProvider({ children }) {
         endsAt: endsAt.toISOString()
       })
       setSharedSpaceUses((list) => [...list.filter((u) => u.id !== created.id), created])
-      const until = endsAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+      const until = format(endsAt, 'HH:mm')
       await create('notifications', {
         floorId: currentFloor.id,
         userId: null,
         type: 'shared_space',
-        message: `${user.name} va a usar ${space.notifyName} hasta las ${until}. Espera a que termine antes de usarla.`
+        message: `${user.name} va a usar ${t(`sharedSpaces.spaceRef.${space.key}`)} hasta las ${until}. Espera a que termine antes de usarla.`,
+        messageKey: 'notifications.sharedSpaceStarted',
+        messageParams: { actor: user.name, spaceKey: space.key, time: until }
       })
       return { ok: true, use: created }
     },
-    [currentFloor, user, sharedSpaceUses]
+    [currentFloor, user, sharedSpaceUses, t]
   )
 
   // "Ya terminé": libera el espacio antes de que venza el tiempo, y si hay
@@ -1381,7 +1497,12 @@ export function DataProvider({ children }) {
           currentFloor.id,
           targetUserId,
           'marked_away',
-          `${user.name} te marcó como "Fuera del piso" hasta el ${untilDate}. Si ya estás de vuelta, corrígelo tocando tu estado en Convives.`
+          `${user.name} te marcó como "Fuera del piso" hasta el ${untilDate}. Si ya estás de vuelta, corrígelo tocando tu estado en Convives.`,
+          null,
+          null,
+          null,
+          'notifications.markedAway',
+          { actor: user.name, date: untilDate }
         )
       }
     },
@@ -1411,7 +1532,12 @@ export function DataProvider({ children }) {
           currentFloor.id,
           admin.id,
           'absence_requested',
-          `${user.name} solicitó estar fuera del piso del ${startDate} al ${endDate}.`
+          `${user.name} solicitó estar fuera del piso del ${startDate} al ${endDate}.`,
+          null,
+          null,
+          null,
+          'notifications.absenceRequested',
+          { actor: user.name, start: startDate, end: endDate }
         )
       }
     },
@@ -1441,7 +1567,11 @@ export function DataProvider({ children }) {
         'absence_decided',
         approve
           ? `Tu solicitud para estar fuera del piso fue aprobada.`
-          : `Tu solicitud para estar fuera del piso fue rechazada. Sigues en la rotación.`
+          : `Tu solicitud para estar fuera del piso fue rechazada. Sigues en la rotación.`,
+        null,
+        null,
+        null,
+        approve ? 'notifications.absenceApproved' : 'notifications.absenceRejected'
       )
     },
     [currentFloor, user, absenceRequests, members, notifyUser]
@@ -1522,7 +1652,12 @@ export function DataProvider({ children }) {
           currentFloor.id,
           contribution.recordedBy,
           'pot_dispute',
-          potDisputeMessage({ actorName: user.name, reason })
+          potDisputeMessage({ actorName: user.name, reason }),
+          null,
+          null,
+          null,
+          'notifications.potDispute',
+          { actor: user.name, reason }
         )
       }
     },
@@ -1573,7 +1708,9 @@ export function DataProvider({ children }) {
         floorId: currentFloor.id,
         userId: null,
         type: 'member_joined',
-        message: `${requesterName} se ha unido al piso`
+        message: `${requesterName} se ha unido al piso`,
+        messageKey: 'notifications.memberJoined',
+        messageParams: { name: requesterName }
       })
     },
     [currentFloor]
@@ -1641,7 +1778,9 @@ export function DataProvider({ children }) {
           floorId: currentFloor.id,
           userId: null,
           type: 'stock_out',
-          message: `¡Alerta! ${item.name} se ha agotado. Es necesario reponerlo.`
+          message: `¡Alerta! ${item.name} se ha agotado. Es necesario reponerlo.`,
+          messageKey: 'notifications.stockOut',
+          messageParams: { name: item.name }
         })
       }
     },
@@ -1936,11 +2075,20 @@ export function DataProvider({ children }) {
         payload: payload || null,
         deadlineAt: deadlineAt || null
       })
+      // Para las de sistema (no 'custom') no se traduce la pregunta armada en
+      // español (poll.question) — se anuncia solo el área ("una norma del
+      // piso", "el Pote"...), un enum de 3 valores que sí se puede traducir
+      // sin reconstruir toda la lógica de pollQuestionText acá. El detalle
+      // completo, ya traducido, se ve en Votaciones.
+      const isSystemKind = kind && kind !== 'custom'
+      const areaKey = kind === 'rotation_order' ? 'rotation' : kind === 'house_rule' ? 'houseRule' : isSystemKind ? 'pot' : null
       await create('notifications', {
         floorId: currentFloor.id,
         userId: null,
         type: 'poll_created',
-        message: `${user.name} propuso una consulta: "${question}"`
+        message: isSystemKind ? `${user.name} propuso un cambio.` : `${user.name} propuso una consulta: "${question}"`,
+        messageKey: isSystemKind ? 'notifications.pollCreatedSystem' : 'notifications.pollCreated',
+        messageParams: isSystemKind ? { actor: user.name, areaKey } : { actor: user.name, question }
       })
       return poll
     },

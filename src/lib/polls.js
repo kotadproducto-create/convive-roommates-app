@@ -7,6 +7,57 @@
  * abierta.
  */
 
+import { formatMoney } from './pot'
+
+/** 'Aprobar'/'Rechazar' son los valores que se guardan en la base (no
+ * cambian, ya hay votos guardados con ellos) — esto solo traduce cómo se
+ * VEN. Las opciones de una consulta 'custom' son texto libre de quien la
+ * creó y se muestran tal cual, nunca pasan por acá. */
+export function pollOptionLabel(option, t) {
+  if (option === 'Aprobar') return t('votaciones.approve')
+  if (option === 'Rechazar') return t('votaciones.reject')
+  return option
+}
+
+/**
+ * Texto de la pregunta de una consulta, listo para mostrar en el idioma
+ * de quien la ve. Las de kind 'custom' guardan la pregunta tal cual la
+ * escribió quien la creó (texto libre, no se traduce — como el nombre de
+ * una actividad). Las de sistema (rotation_order/house_rule/
+ * pot_adjustment/balance_reset) reconstruyen el texto a partir de
+ * `payload` en vez de usar `poll.question` (que quedó grabado en el
+ * idioma de quien la propuso): así cada quien la lee en el suyo.
+ * `language` es el código de useLanguage() ('es'|'en'), para formatMoney.
+ */
+export function pollQuestionText(poll, t, proposerName, language) {
+  const payload = poll.payload || {}
+  if (poll.kind === 'rotation_order') {
+    const { newOrder, mode, periodUnit, periodInterval } = payload
+    const parts = []
+    if (newOrder) parts.push(t('votaciones.rotationPartNewOrder'))
+    if (mode) parts.push(t('votaciones.rotationPartMode', { mode: mode === 'random' ? t('floorSettings.modeRandom') : t('floorSettings.modePeriod') }))
+    if (periodUnit) {
+      const n = Math.max(1, Number(periodInterval) || 1)
+      const unitCap = periodUnit.charAt(0).toUpperCase() + periodUnit.slice(1)
+      const unit = t(`floorSettings.unit${unitCap}${n === 1 ? 'Option' : 'Plural'}`)
+      parts.push(t('votaciones.rotationPartPeriod', { n, unit }))
+    }
+    return t('votaciones.rotationOrderQuestion', { name: proposerName, parts: parts.join(', ') })
+  }
+  if (poll.kind === 'house_rule') {
+    const key =
+      payload.action === 'delete' ? 'votaciones.houseRuleDeleteQuestion' : payload.action === 'edit' ? 'votaciones.houseRuleEditQuestion' : 'votaciones.houseRuleCreateQuestion'
+    return t(key, { title: payload.title })
+  }
+  if (poll.kind === 'pot_adjustment') {
+    return t('votaciones.potAdjustmentQuestion', { amount: formatMoney(payload.newAmount ?? 0, language) })
+  }
+  if (poll.kind === 'balance_reset') {
+    return t('votaciones.balanceResetQuestion', { amount: formatMoney(payload.newBalance ?? 0, language), name: proposerName })
+  }
+  return poll.question
+}
+
 /** Consultas de sistema donde una opción concreta actúa como veto: basta
  * un solo voto por ella para resolverla de inmediato. Hoy solo la
  * modificación manual del Pote (todos deben aprobar; un "Rechazar" la

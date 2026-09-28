@@ -44,7 +44,8 @@ export default {
     logout: 'Cerrar sesión',
     admin: 'Admin',
     member: 'Miembro',
-    exit: 'Salir'
+    exit: 'Salir',
+    floorCode: '{{floor}} · código {{code}}'
   },
   auth: {
     tagline: 'Organizar el piso, sin dramas',
@@ -59,6 +60,9 @@ export default {
       confirmEmail: 'Cuenta creada, pero hay que confirmar el email antes de entrar. Revisa tu correo.',
       invalidInvite: 'Código de invitación no válido.',
       codeSendFailed: 'No se pudo enviar el código. Inténtalo de nuevo en un momento.',
+      noSession: 'No hay sesión activa.',
+      wrongCurrentPassword: 'La contraseña actual no es correcta.',
+      deleteAccountFailed: 'No se pudo eliminar la cuenta. Inténtalo de nuevo en un momento.',
       unexpected: 'Ha ocurrido un error inesperado.'
     },
     login: {
@@ -461,6 +465,7 @@ export default {
     spaces: { washer: 'Lavadora' },
     spaceRef: { washer: 'la lavadora' },
     hints: { washer: 'Avisa al grupo cuando vayas a ponerla.' },
+    reminderHint: { washer: 'Recuerda retirar tu ropa cuando termine.' },
     cta: 'Voy a usarla',
     duration: 'Tiempo de uso',
     free: 'Libre ahora',
@@ -1103,6 +1108,10 @@ export default {
     unitWeekOption: 'semana',
     unitMonthOption: 'mes',
     unitYearOption: 'año',
+    unitDayPlural: 'días',
+    unitWeekPlural: 'semanas',
+    unitMonthPlural: 'meses',
+    unitYearPlural: 'años',
     shuffleButton: 'Barajar',
     proposeChangeButton: 'Proponer cambio',
     saveOrderButton: 'Guardar orden',
@@ -1329,7 +1338,17 @@ export default {
     cancelExit: 'Cancelar salida',
     accept: 'Aceptar',
     reject: 'Rechazar',
-    someone: 'Alguien'
+    approve: 'Aprobar',
+    someone: 'Alguien',
+    rotationOrderQuestion: '¿Apruebas el cambio de rotación propuesto por {{name}}? ({{parts}})',
+    rotationPartNewOrder: 'nuevo orden de personas',
+    rotationPartMode: 'modo {{mode}}',
+    rotationPartPeriod: 'cambio de turno cada {{n}} {{unit}}',
+    houseRuleCreateQuestion: 'Nueva norma: "{{title}}"',
+    houseRuleEditQuestion: 'Modificar norma: "{{title}}"',
+    houseRuleDeleteQuestion: 'Eliminar norma: "{{title}}"',
+    potAdjustmentQuestion: '¿Apruebas establecer el Pote en {{amount}}€?',
+    balanceResetQuestion: '¿Apruebas reiniciar tu saldo del Pote a {{amount}}€? Lo propone {{name}}. Solo cambia el saldo de quien apruebe.'
   },
   houseRules: {
     pageTitle: 'Normas del piso',
@@ -1381,5 +1400,63 @@ export default {
     confirmText: 'He leído las Normas del piso y entiendo que forman parte de los acuerdos de convivencia del piso.',
     acceptButton: 'He leído y acepto las normas',
     accepting: 'Guardando…'
+  },
+  // Cuerpo de las notificaciones (tabla notifications): cada fila nueva
+  // guarda message_key + message_params (ver notifyUser en DataContext.jsx)
+  // además de `message` (español fijo, solo para el push de OneSignal y
+  // como respaldo de filas viejas) — así NotificationItem.jsx la muestra
+  // en el idioma de quien la está viendo, no en el de quien la generó.
+  notifications: {
+    turnoThisWeek: 'Esta semana te toca: {{title}}',
+    potLow: 'El pote de compras está bajo ({{amount}}€). Sugerido: {{perPerson}}€ por persona.',
+    verbContribution: 'aporte',
+    verbExpense: 'gasto',
+    potOnBehalf: '{{actor}} ha registrado un {{verb}} de {{amount}}€ a tu nombre en el Pote ({{date}}).',
+    potOnBehalfWithNote: '{{actor}} ha registrado un {{verb}} de {{amount}}€ a tu nombre en el Pote ({{date}}) — Concepto: {{note}}.',
+    potDispute: '{{actor}} reportó una incidencia sobre un movimiento del Pote que registraste a su nombre: "{{reason}}"',
+    swapProposed: '{{actor}} te propone intercambiar "{{title}}" contigo',
+    swapNotYours: 'Ese turno ya no le corresponde a quien lo propuso.',
+    swapAccepted: '{{actor}} aceptó tu intercambio de turno',
+    swapDeclined: '{{actor}} no pudo aceptar tu intercambio de turno',
+    removalRequested: 'Un administrador ha iniciado tu salida de {{floor}}. Debes confirmarla o rechazarla en tu Perfil dentro de las próximas 48 horas, o se hará efectiva automáticamente.',
+    removalCancelledNamed: 'Se canceló el proceso de salida de {{name}} del piso.',
+    removalCancelledSelf: 'Se canceló el proceso de salida de tu cuenta del piso.',
+    removalRejected: '{{name}} rechazó la solicitud de salida del piso. Sigue en {{floor}} sin cambios.',
+    removalAutoExpired: '{{name}} no respondió a tiempo y su salida de {{floor}} se hizo efectiva automáticamente.',
+    memberLeft: '{{name}} ha dejado el piso',
+    memberJoined: '{{name}} se ha unido al piso',
+    sharedSpaceFree: '{{space}} ya está disponible. Tu turno para usarla llegó.',
+    sharedSpaceReminder: 'Tu tiempo de {{space}} está por terminar. Te quedan aproximadamente {{minutes}} minutos.',
+    sharedSpaceReminderHintSuffix: ' {{hint}}',
+    sharedSpaceStarted: '{{actor}} va a usar {{space}} hasta las {{time}}. Espera a que termine antes de usarla.',
+    markedAway: '{{actor}} te marcó como "Fuera del piso" hasta el {{date}}. Si ya estás de vuelta, corrígelo tocando tu estado en Convives.',
+    absenceRequested: '{{actor}} solicitó estar fuera del piso del {{start}} al {{end}}.',
+    absenceApproved: 'Tu solicitud para estar fuera del piso fue aprobada.',
+    absenceRejected: 'Tu solicitud para estar fuera del piso fue rechazada. Sigues en la rotación.',
+    stockOut: '¡Alerta! {{name}} se ha agotado. Es necesario reponerlo.',
+    pollCreated: '{{actor}} propuso una consulta: "{{question}}"',
+    pollCreatedSystem: '{{actor}} propuso un cambio: {{area}}',
+    areaRotation: 'el orden de rotación',
+    areaHouseRule: 'una norma del piso',
+    areaPot: 'el Pote',
+    rotationOrderUpdatedDirect: '{{name}} actualizó el orden de rotación del piso.',
+    pollResolvedRotationApproved: 'El piso aprobó el cambio de rotación — ya está activo.',
+    pollResolvedRotationRejected: 'El piso rechazó la propuesta de cambio de rotación. Sigue la rotación anterior.',
+    pollResolvedRotationClosed: 'La propuesta de cambio de rotación se cerró sin mayoría clara. Sigue la rotación anterior.',
+    pollResolvedRotationExpired: 'La propuesta de cambio de rotación venció sin que todos votaran. Sigue la rotación anterior.',
+    pollResolvedBalanceReset: 'La consulta de reinicio de saldo terminó. Solo cambió el saldo de quienes la aprobaron.',
+    pollResolvedHouseRuleApprovedCreate: 'Se aprobó la norma: "{{title}}"',
+    pollResolvedHouseRuleApprovedEdit: 'Se aprobó la modificación de la norma: "{{title}}"',
+    pollResolvedHouseRuleApprovedDelete: 'Se aprobó eliminar la norma: "{{title}}"',
+    pollResolvedHouseRuleRejected: 'Se rechazó la propuesta de norma: "{{title}}"',
+    pollResolvedHouseRuleClosed: 'La propuesta de norma "{{title}}" se cerró sin mayoría clara.',
+    pollResolvedHouseRuleExpired: 'La propuesta de norma "{{title}}" venció sin que todos votaran.',
+    pollResolvedPotApproved: 'Todos aprobaron la modificación del Pote: ahora es de {{amount}}€.',
+    pollResolvedPotRejected: 'Se rechazó la solicitud de modificación del Pote. El importe no cambió.',
+    pollResolvedPotClosed: 'Se canceló la solicitud de modificación del Pote. El importe no cambió.',
+    pollResolvedPotExpired: 'La solicitud de modificación del Pote venció sin que todos la aprobaran. El importe no cambió.',
+    pollResolvedCustomResolved: 'Se resolvió la consulta "{{question}}": ganó "{{option}}"',
+    pollResolvedCustomClosed: 'La consulta "{{question}}" se cerró sin mayoría clara.',
+    pollResolvedCustomExpired: 'La consulta "{{question}}" expiró: no todos votaron a tiempo.'
   }
 }

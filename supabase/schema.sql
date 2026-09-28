@@ -2098,3 +2098,64 @@ create policy "insert own house_rule_acceptances" on house_rule_acceptances for 
 alter publication supabase_realtime add table house_rules;
 alter publication supabase_realtime add table house_rule_history;
 alter publication supabase_realtime add table house_rule_acceptances;
+
+-- =========================================================
+-- Notificaciones traducibles: message_key + message_params
+--
+-- `message` (texto fijo en español) se mantiene tal cual para no romper
+-- filas viejas ni el push de OneSignal (notify_push_on_notification lee
+-- esa columna). Las notificaciones nuevas ADEMÁS guardan una clave de
+-- i18n (message_key, ver src/lib/i18n/es.js y en.js bajo "notifications")
+-- y sus parámetros (message_params) — así NotificationItem.jsx puede
+-- mostrar el texto en el idioma de quien la está viendo, no en el de
+-- quien la generó. Si message_key es null (filas viejas, o casos donde
+-- no aplica) se sigue mostrando `message` tal cual.
+-- =========================================================
+alter table notifications add column if not exists message_key text;
+alter table notifications add column if not exists message_params jsonb;
+
+-- Los dos RPC que arman este aviso directamente en SQL (fuera del cliente)
+-- también quedan traducibles.
+create or replace function set_rotation_order_direct(p_floor_id uuid, p_new_order uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_current_ids uuid[];
+  v_new_sorted uuid[];
+  v_admin_name text;
+begin
+  if not is_floor_admin(p_floor_id) then
+    raise exception 'not_admin';
+  end if;
+
+  select array_agg(user_id order by user_id) into v_current_ids
+  from floor_memberships
+  where floor_id = p_floor_id and status = 'active';
+
+  select array_agg(x order by x) into v_new_sorted from unnest(p_new_order) as x;
+
+  if v_current_ids is null or v_new_sorted is distinct from v_current_ids then
+    raise exception 'invalid_order';
+  end if;
+
+  select name into v_admin_name from profiles where id = auth.uid();
+  v_admin_name := coalesce(v_admin_name, 'Un admin');
+
+  update floors
+    set rotation_order = p_new_order, rotation_epoch = current_date, rotation_offset = 0
+    where id = p_floor_id;
+
+  insert into notifications (floor_id, user_id, type, message, message_key, message_params)
+  values (
+    p_floor_id,
+    null,
+    'rotation_order_updated',
+    v_admin_name || ' actualizó el orden de rotación del piso.',
+    'notifications.rotationOrderUpdatedDirect',
+    jsonb_build_object('name', v_admin_name)
+  );
+end;
+$$;

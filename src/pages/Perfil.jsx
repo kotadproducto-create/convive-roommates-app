@@ -12,6 +12,7 @@ import { getMemberColor } from '../lib/roomieColors'
 import { computeWallets } from '../lib/wallets'
 import { formatMoney } from '../lib/pot'
 import { removalDeadlineAt } from '../lib/removal'
+import { authErrorMessage } from '../lib/authErrors'
 import { CameraIcon, AlertIcon, MailIcon, PersonIcon } from '../components/icons'
 import PageBanner, { SectionLabel } from '../components/PageBanner'
 import { format, formatDistanceToNowStrict } from 'date-fns'
@@ -448,7 +449,7 @@ function AccountCard({ user, email, membership, floor, updateEmail, showToast, t
       showToast(t('perfil.emailUpdateRequestedToast'), 'success')
       setNewEmail('')
     } catch (err) {
-      showToast(t('perfil.emailUpdateErrorToast', { error: err.message }), 'default')
+      showToast(t('perfil.emailUpdateErrorToast', { error: authErrorMessage(err, t) }), 'default')
     } finally {
       setUpdatingEmail(false)
     }

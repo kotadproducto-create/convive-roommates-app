@@ -12,15 +12,14 @@
 export const SHARED_SPACES = [
   {
     key: 'washer',
-    // Cómo se nombra en el aviso que se manda al piso (mensaje guardado en
-    // notifications, siempre en español como el resto de avisos de sistema).
-    notifyName: 'la lavadora',
     // Duración por defecto y opciones para "cuánto la voy a usar" (minutos).
     defaultMinutes: 120,
     durations: [60, 120, 180],
-    // Línea extra (opcional) al final del recordatorio de "ya casi termina"
-    // — específica de este espacio, no todos necesitan una.
-    reminderHint: 'Recuerda retirar tu ropa cuando termine.'
+    // Si tiene una línea extra (opcional) para el recordatorio de "ya casi
+    // termina" — se busca en i18n `sharedSpaces.reminderHint.<key>` (ver
+    // notifySpaceReminder en DataContext.jsx); no todos los espacios
+    // necesitan una.
+    hasReminderHint: true
   }
 ]
 

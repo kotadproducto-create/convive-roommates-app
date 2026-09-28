@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { tallyVotes, pollDeadlineAt, pollDeadlineMs, formatCountdown, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS } from '../lib/polls'
+import { tallyVotes, pollDeadlineAt, pollDeadlineMs, formatCountdown, pollQuestionText, pollOptionLabel, POLL_DURATION_OPTIONS, DEFAULT_POLL_HOURS } from '../lib/polls'
 import { canSharePoll, publicPollLink } from '../lib/publicPoll'
 import { formatMoney } from '../lib/pot'
 import { CloseIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, ShareIcon } from '../components/icons'
@@ -245,6 +245,8 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
   // reinicia SU saldo al instante, así que un voto aprobado ya no se cambia.
   const isBalanceReset = poll.kind === 'balance_reset'
   const approvalLocked = isBalanceReset && myVote === 'Aprobar'
+  const proposerName = members.find((m) => m.id === poll.createdBy)?.name || t('votaciones.someone')
+  const questionText = pollQuestionText(poll, t, proposerName, language)
 
   const { showToast } = useToast()
 
@@ -280,7 +282,7 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
         <div className="min-w-0">
           <p className="font-semibold text-sm flex items-center gap-1.5 flex-wrap">
             <span>{STATUS_EMOJI[poll.status]}</span>
-            <span className="min-w-0">{poll.question}</span>
+            <span className="min-w-0">{questionText}</span>
           </p>
           <div className="flex items-center gap-2 text-xs text-ink-900/50 dark:text-cream-100/50 mt-0.5 flex-wrap">
             <span>{t(`votaciones.${STATUS_KEY[poll.status]}`)}</span>
@@ -335,7 +337,7 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
                   : 'border-ink-900/15 dark:border-cream-100/20 text-ink-900/70 dark:text-cream-100/70 hover:bg-cream-100 dark:hover:bg-ink-700'
               } ${!isPending || approvalLocked ? 'opacity-70 cursor-default' : ''}`}
             >
-              {option} · {count}
+              {pollOptionLabel(option, t)} · {count}
             </button>
           )
         })}
@@ -366,13 +368,13 @@ function PollCard({ poll, votes, members, activeMemberIds, user, isAdmin, castVo
           {poll.status === 'resolved' && isBalanceReset ? (
             <p className="text-xs font-semibold text-sage-500">{t('votaciones.resetDone')}</p>
           ) : poll.status === 'resolved' ? (
-            <p className="text-xs font-semibold text-sage-500">{t('votaciones.winnerLabel', { option: poll.resolvedOption })}</p>
+            <p className="text-xs font-semibold text-sage-500">{t('votaciones.winnerLabel', { option: pollOptionLabel(poll.resolvedOption, t) })}</p>
           ) : (
             <p className="text-xs font-semibold text-ink-900/50 dark:text-cream-100/50">{t('votaciones.noWinner')}</p>
           )}
           <p className="text-xs text-ink-900/50 dark:text-cream-100/50">
             {votes.length > 0
-              ? votes.map((v) => `${members.find((m) => m.id === v.userId)?.name || '?'}: ${v.option}`).join(' · ')
+              ? votes.map((v) => `${members.find((m) => m.id === v.userId)?.name || '?'}: ${pollOptionLabel(v.option, t)}`).join(' · ')
               : t('votaciones.noVotesYet')}
           </p>
         </div>

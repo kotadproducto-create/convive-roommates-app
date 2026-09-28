@@ -36,7 +36,7 @@ export default function Topbar({ title, subheader }) {
           <MarqueeText as="h1" className="font-display text-base min-[360px]:text-lg min-[380px]:text-xl landscape-sm:text-base font-bold tracking-tight">{title}</MarqueeText>
           {floor && (
             <MarqueeText as="p" className="text-xs text-ink-900/50 dark:text-cream-100/50 landscape-sm:hidden">
-              {floor.name} · código {floor.inviteCode}
+              {t('topbar.floorCode', { floor: floor.name, code: floor.inviteCode })}
             </MarqueeText>
           )}
         </div>
@@ -165,7 +165,7 @@ export default function Topbar({ title, subheader }) {
         </div>
 
         <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-ink-900/10 dark:border-cream-100/15">
-          <Link to="/perfil" className="flex items-center gap-2 hover:opacity-80" title="Ir a Perfil">
+          <Link to="/perfil" className="flex items-center gap-2 hover:opacity-80" title={t('topbar.myProfile')}>
             <Avatar url={user?.avatarUrl} name={user?.name} size="w-8 h-8" />
             <div className="leading-tight">
               <p className="text-sm font-semibold">{user?.name}</p>

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 import { AuthShell } from './Login'
 import { getPendingInvite, clearPendingInvite } from '../lib/invite'
+import { authErrorMessage } from '../lib/authErrors'
 
 /**
  * Pantalla que ve cualquier usuario autenticado sin piso activo: mientras
@@ -73,7 +74,7 @@ function JoinForm({ requestJoinFloor, logout, t }) {
       await requestJoinFloor(inviteCode)
       clearPendingInvite()
     } catch (err) {
-      setError(err.message)
+      setError(authErrorMessage(err, t))
     } finally {
       setSubmitting(false)
     }

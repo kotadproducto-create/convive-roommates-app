@@ -5,7 +5,50 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
 import { notificationRoute } from '../lib/notifications'
+import { formatMoney } from '../lib/pot'
 import DisputeContributionDialog from './DisputeContributionDialog'
+
+// Claves cuyos parámetros incluyen importes en euros: se formatean en el
+// idioma de quien ve la notificación (coma o punto decimal), nunca en el
+// de quien la generó — a diferencia de `message` (español fijo, ver
+// notifyUser en DataContext.jsx), que solo es respaldo/push.
+const MONEY_PARAMS_BY_KEY = {
+  'notifications.potLow': ['amount', 'perPerson'],
+  'notifications.potOnBehalf': ['amount'],
+  'notifications.potOnBehalfWithNote': ['amount'],
+  'notifications.pollResolvedPotApproved': ['amount']
+}
+
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+/**
+ * Texto final de una notificación, en el idioma de quien la ve. Si trae
+ * `messageKey` (notificaciones nuevas, ver notifyUser/removeMember en
+ * DataContext.jsx) se arma con `t()`; algunos parámetros son claves de
+ * dominio (spaceKey, verbKind, areaKey) que hay que resolver a su propia
+ * traducción antes de interpolar. Si no trae `messageKey` (filas viejas)
+ * se muestra `message` tal cual quedó grabado.
+ */
+function notificationText(n, t, language) {
+  if (!n.messageKey) return n.message
+  const params = { ...(n.messageParams || {}) }
+
+  if (params.spaceKey) params.space = t(`sharedSpaces.spaceRef.${params.spaceKey}`)
+  if (params.verbKind) params.verb = t(`notifications.verb${capitalize(params.verbKind)}`)
+  if (params.areaKey) params.area = t(`notifications.area${capitalize(params.areaKey)}`)
+  for (const field of MONEY_PARAMS_BY_KEY[n.messageKey] || []) {
+    if (params[field] != null) params[field] = formatMoney(params[field], language)
+  }
+
+  if (n.messageKey === 'notifications.sharedSpaceReminder') {
+    const hint = params.hasHint ? t('notifications.sharedSpaceReminderHintSuffix', { hint: t(`sharedSpaces.reminderHint.${params.spaceKey}`) }) : ''
+    return t(n.messageKey, params) + hint
+  }
+
+  return t(n.messageKey, params)
+}
 
 /**
  * Una notificación (Topbar e Inicio). Si su tipo tiene un apartado propio
@@ -24,7 +67,7 @@ export default function NotificationItem({ notification: n, className = '', onNa
   const navigate = useNavigate()
   const { user } = useAuth()
   const { markNotificationRead, potContributions, disputePotContribution } = useData()
-  const { t, dateLocale } = useLanguage()
+  const { t, dateLocale, language } = useLanguage()
   const route = notificationRoute(n.type)
   const [disputing, setDisputing] = useState(false)
 
@@ -33,7 +76,7 @@ export default function NotificationItem({ notification: n, className = '', onNa
 
   const content = (
     <>
-      <p className={n.read ? '' : 'font-semibold'}>{n.message}</p>
+      <p className={n.read ? '' : 'font-semibold'}>{notificationText(n, t, language)}</p>
       <p className="text-xs text-ink-900/40 dark:text-cream-100/40 mt-0.5">
         {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: dateLocale })}
       </p>

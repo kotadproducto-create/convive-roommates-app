@@ -15,6 +15,9 @@ export const AUTH_ERROR_CODES = [
   'confirmEmail',
   'invalidInvite',
   'codeSendFailed',
+  'noSession',
+  'wrongCurrentPassword',
+  'deleteAccountFailed',
   'unexpected'
 ]
 

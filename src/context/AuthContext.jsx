@@ -276,12 +276,12 @@ export function AuthProvider({ children }) {
   // aplicar la nueva, para que cambiar la contraseña exija de verdad
   // conocer la actual y no solo tener una sesión abierta sin vigilar.
   async function changePassword(currentPassword, newPassword) {
-    if (!session?.user?.email) throw new Error('No hay sesión activa.')
+    if (!session?.user?.email) throw authError('noSession', 'No hay sesión activa.')
     const { error: verifyError } = await supabase.auth.signInWithPassword({
       email: session.user.email,
       password: currentPassword
     })
-    if (verifyError) throw new Error('La contraseña actual no es correcta.')
+    if (verifyError) throw authError('wrongCurrentPassword', 'La contraseña actual no es correcta.')
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     if (error) throw traduceErrorAuth(error)
   }
@@ -303,12 +303,12 @@ export function AuthProvider({ children }) {
   // función, una contraseña incorrecta dejaría esos pasos ya
   // aplicados sin poder deshacerlos.
   async function verifyPassword(currentPassword) {
-    if (!session?.user?.email) throw new Error('No hay sesión activa.')
+    if (!session?.user?.email) throw authError('noSession', 'No hay sesión activa.')
     const { error } = await supabase.auth.signInWithPassword({
       email: session.user.email,
       password: currentPassword
     })
-    if (error) throw new Error('La contraseña actual no es correcta.')
+    if (error) throw authError('wrongCurrentPassword', 'La contraseña actual no es correcta.')
   }
 
   // Banea la cuenta desde la Edge Function 'delete-account' (necesita
@@ -318,7 +318,7 @@ export function AuthProvider({ children }) {
   // Quien llama a esto debe cerrar sesión (logout()) apenas termine.
   async function banAccount() {
     const { error } = await supabase.functions.invoke('delete-account')
-    if (error) throw new Error('No se pudo eliminar la cuenta. Inténtalo de nuevo en un momento.')
+    if (error) throw authError('deleteAccountFailed', 'No se pudo eliminar la cuenta. Inténtalo de nuevo en un momento.')
   }
 
   // Envía el código de recuperación de contraseña. Usa nuestra propia
