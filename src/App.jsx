@@ -27,13 +27,23 @@ import Privacidad from './pages/Privacidad'
 import FloorSettings from './pages/FloorSettings'
 import RotationOrderNotice from './pages/RotationOrderNotice'
 import Votaciones from './pages/Votaciones'
+import Normas from './pages/Normas'
 import PublicPoll from './pages/PublicPoll'
 import PublicTurns from './pages/PublicTurns'
+import HouseRulesGate from './components/HouseRulesGate'
 
 function AuthedData({ children }) {
   // DataProvider depende del piso del usuario autenticado, así que vive
   // dentro de ProtectedRoute pero fuera de cada página individual.
-  return <DataProvider>{children}</DataProvider>
+  // HouseRulesGate se apoya en useData(), por eso va DENTRO del
+  // DataProvider — bloquea el resto de la app (sea cual sea la ruta
+  // pedida) solo para alguien que nunca aceptó ninguna versión de las
+  // normas y el piso ya tiene alguna aprobada (ver lib/houseRules.js).
+  return (
+    <DataProvider>
+      <HouseRulesGate>{children}</HouseRulesGate>
+    </DataProvider>
+  )
 }
 
 export default function App() {
@@ -142,6 +152,16 @@ export default function App() {
                 <ProtectedRoute>
                   <AuthedData>
                     <Votaciones />
+                  </AuthedData>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/normas"
+              element={
+                <ProtectedRoute>
+                  <AuthedData>
+                    <Normas />
                   </AuthedData>
                 </ProtectedRoute>
               }

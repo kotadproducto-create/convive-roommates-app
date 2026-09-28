@@ -22,6 +22,7 @@ import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, 
 import { resolvePoll, pollDeadlineAt, ROTATION_POLL_HOURS } from '../lib/polls'
 import { removalDeadlineAt, isRemovalExpired } from '../lib/removal'
 import { isIncidentActive, incidentExpiryMs, incidentFinishedAtMs } from '../lib/incidents'
+import { latestAcceptedVersion, needsToAcceptRules, isNewToRules } from '../lib/houseRules'
 import { realMembers, virtualIdSet } from '../lib/virtualMembers'
 import { formatMoney, potOnBehalfMessage, potDisputeMessage } from '../lib/pot'
 import { useAuth } from './AuthContext'
@@ -66,6 +67,9 @@ export function DataProvider({ children }) {
   const [activityMarks, setActivityMarks] = useState([])
   const [polls, setPolls] = useState([])
   const [pollVotes, setPollVotes] = useState([])
+  const [houseRules, setHouseRules] = useState([])
+  const [houseRuleHistory, setHouseRuleHistory] = useState([])
+  const [houseRuleAcceptances, setHouseRuleAcceptances] = useState([])
 
   const weekKey = getWeekKey()
 
@@ -258,6 +262,30 @@ export function DataProvider({ children }) {
     return subscribeTable('poll_votes', { floorId }, setPollVotes)
   }, [floorId])
 
+  useEffect(() => {
+    if (!floorId) {
+      setHouseRules([])
+      return
+    }
+    return subscribeTable('house_rules', { floorId }, setHouseRules)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setHouseRuleHistory([])
+      return
+    }
+    return subscribeTable('house_rule_history', { floorId }, setHouseRuleHistory)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setHouseRuleAcceptances([])
+      return
+    }
+    return subscribeTable('house_rule_acceptances', { floorId }, setHouseRuleAcceptances)
+  }, [floorId])
+
   // IDs de quienes están "Fuera del piso" ahora mismo (pot_active en
   // false: "Estoy fuera" de Convives, o una ausencia aprobada que apagó ese
   // mismo indicador) — se excluyen de la rotación de actividades
@@ -348,6 +376,7 @@ export function DataProvider({ children }) {
         const isRotationOrder = poll.kind === 'rotation_order'
         const isPotAdjustment = poll.kind === 'pot_adjustment'
         const isBalanceReset = poll.kind === 'balance_reset'
+        const isHouseRule = poll.kind === 'house_rule'
         const approved = outcome.status === 'resolved' && outcome.resolvedOption === 'Aprobar'
         if (isRotationOrder && approved && poll.payload) {
           const { newOrder, mode, periodUnit, periodInterval } = poll.payload
@@ -395,6 +424,66 @@ export function DataProvider({ children }) {
           }
         }
 
+        // 'house_rule' (proponer una norma nueva, una modificación o una
+        // eliminación — ver proposeHouseRule): solo se toca `house_rules`
+        // si se aprobó. `payload` siempre trae título/descripción/categoría
+        // "de destino" (los valores nuevos al crear o editar; los mismos
+        // valores vigentes como constancia al eliminar), así esta rama no
+        // necesita leer el estado actual de `house_rules` para nada.
+        if (isHouseRule && approved && poll.payload) {
+          const { action, ruleId, category, title, description } = poll.payload
+          const proposerName = members.find((m) => m.id === poll.createdBy)?.name || 'Alguien'
+          if (action === 'create') {
+            const created = await create('house_rules', {
+              floorId: currentFloor.id,
+              category,
+              title,
+              description,
+              proposedBy: poll.createdBy,
+              proposedByName: proposerName,
+              approvedByPoll: poll.id
+            })
+            await create('house_rule_history', {
+              floorId: currentFloor.id,
+              ruleId: created.id,
+              action: 'created',
+              title,
+              description,
+              category,
+              changedBy: poll.createdBy,
+              changedByName: proposerName,
+              pollId: poll.id
+            })
+          } else if (action === 'edit' && ruleId) {
+            await update('house_rules', ruleId, { title, description, category, updatedAt: new Date().toISOString() })
+            await create('house_rule_history', {
+              floorId: currentFloor.id,
+              ruleId,
+              action: 'edited',
+              title,
+              description,
+              category,
+              changedBy: poll.createdBy,
+              changedByName: proposerName,
+              pollId: poll.id
+            })
+          } else if (action === 'delete' && ruleId) {
+            await update('house_rules', ruleId, { status: 'deleted', updatedAt: new Date().toISOString() })
+            await create('house_rule_history', {
+              floorId: currentFloor.id,
+              ruleId,
+              action: 'deleted',
+              title,
+              description,
+              category,
+              changedBy: poll.createdBy,
+              changedByName: proposerName,
+              pollId: poll.id
+            })
+          }
+          await update('floors', currentFloor.id, { rulesVersion: (currentFloor.rulesVersion || 0) + 1 })
+        }
+
         await update('polls', poll.id, {
           status: outcome.status,
           resolvedOption: outcome.resolvedOption,
@@ -411,6 +500,18 @@ export function DataProvider({ children }) {
                 : 'La propuesta de cambio de rotación venció sin que todos votaran. Sigue la rotación anterior.'
           : isBalanceReset
             ? 'La consulta de reinicio de saldo terminó. Solo cambió el saldo de quienes la aprobaron.'
+          : isHouseRule
+            ? approved
+              ? poll.payload?.action === 'delete'
+                ? `Se aprobó eliminar la norma: "${poll.payload?.title}"`
+                : poll.payload?.action === 'edit'
+                  ? `Se aprobó la modificación de la norma: "${poll.payload?.title}"`
+                  : `Se aprobó la norma: "${poll.payload?.title}"`
+              : outcome.status === 'resolved'
+                ? `Se rechazó la propuesta de norma: "${poll.payload?.title}"`
+                : outcome.status === 'closed'
+                  ? `La propuesta de norma "${poll.payload?.title}" se cerró sin mayoría clara.`
+                  : `La propuesta de norma "${poll.payload?.title}" venció sin que todos votaran.`
           : isPotAdjustment
             ? approved
               ? `Todos aprobaron la modificación del Pote: ahora es de ${formatMoney(poll.payload?.newAmount)}€.`
@@ -432,7 +533,13 @@ export function DataProvider({ children }) {
               floorId: currentFloor.id,
               userId: null,
               // El tipo dice a qué pantalla lleva la notificación (ver lib/notifications.js).
-              type: isPotAdjustment || isBalanceReset ? 'poll_resolved_pote' : isRotationOrder ? 'poll_resolved_rotation' : 'poll_resolved',
+              type: isPotAdjustment || isBalanceReset
+                ? 'poll_resolved_pote'
+                : isRotationOrder
+                  ? 'poll_resolved_rotation'
+                  : isHouseRule
+                    ? 'poll_resolved_house_rule'
+                    : 'poll_resolved',
               read: false,
               message
             }
@@ -1876,6 +1983,68 @@ export function DataProvider({ children }) {
     [createPoll, user]
   )
 
+  // Propone crear, modificar o eliminar una norma del piso (ver Normas.jsx
+  // y lib/houseRules.js): no toca house_rules todavía, crea una consulta
+  // de aprobación (kind:'house_rule') con la misma opción binaria
+  // Aprobar/Rechazar y las mismas duraciones (12/24/72h) que cualquier
+  // consulta normal — solo si el piso la aprueba se aplica de verdad (ver
+  // el efecto de arriba que invoca resolvePoll). `action` es
+  // 'create'|'edit'|'delete'; `ruleId` hace falta para 'edit'/'delete'.
+  // `title`/`description`/`category` siempre van en el payload — para
+  // 'delete' son los valores vigentes de la norma, así la rama de
+  // resolución no necesita releer house_rules para dejar constancia en el
+  // historial. Cualquier compañero puede proponer, no solo un admin.
+  const proposeHouseRule = useCallback(
+    ({ action, ruleId, category, title, description, durationHours }) => {
+      const question =
+        action === 'create'
+          ? `Nueva norma: "${title}"`
+          : action === 'edit'
+            ? `Modificar norma: "${title}"`
+            : `Eliminar norma: "${title}"`
+      return createPoll({
+        question,
+        options: ['Aprobar', 'Rechazar'],
+        resolutionMode: 'majority',
+        kind: 'house_rule',
+        payload: { action, ruleId: ruleId || null, category, title, description },
+        deadlineAt: pollDeadlineAt(durationHours)
+      })
+    },
+    [createPoll]
+  )
+
+  // Deja constancia de que esta persona leyó y acepta la versión VIGENTE
+  // de las normas (floors.rulesVersion) — ver needsToAcceptRules en
+  // lib/houseRules.js, que es lo que decide si hace falta mostrarle el
+  // gate (recién llegado, bloqueante) o solo un aviso (ya las conocía,
+  // cambiaron). No se pisa la fila anterior: queda una por versión.
+  const acceptHouseRules = useCallback(async () => {
+    if (!currentFloor || !user) return
+    await create('house_rule_acceptances', {
+      floorId: currentFloor.id,
+      userId: user.id,
+      rulesVersion: currentFloor.rulesVersion || 0
+    })
+  }, [currentFloor, user])
+
+  const activeHouseRules = useMemo(
+    () => houseRules.filter((r) => r.status === 'active').sort((a, b) => a.title.localeCompare(b.title)),
+    [houseRules]
+  )
+
+  const needsHouseRuleAcceptance = useMemo(
+    () => needsToAcceptRules(houseRuleAcceptances, user?.id, currentFloor?.rulesVersion),
+    [houseRuleAcceptances, user?.id, currentFloor?.rulesVersion]
+  )
+
+  const isNewToHouseRules = useMemo(() => isNewToRules(houseRuleAcceptances, user?.id), [houseRuleAcceptances, user?.id])
+
+  const myLatestRuleAcceptanceVersion = useMemo(
+    () => latestAcceptedVersion(houseRuleAcceptances, user?.id),
+    [houseRuleAcceptances, user?.id]
+  )
+
   // Un admin reordena a las PERSONAS directamente, sin votación previa (ver
   // supabase/rotation_direct.sql): se aplica al instante y el piso recibe una
   // notificación con una previsualización y "Estoy de acuerdo" como acción
@@ -2178,6 +2347,14 @@ export function DataProvider({ children }) {
     createPoll,
     castVote,
     closePoll,
+    houseRules: activeHouseRules,
+    houseRuleHistory,
+    houseRuleAcceptances,
+    proposeHouseRule,
+    acceptHouseRules,
+    needsHouseRuleAcceptance,
+    isNewToHouseRules,
+    myLatestRuleAcceptanceVersion,
     proposeRotationChange,
     updateRotationOrderDirect,
     setCurrentTurn,

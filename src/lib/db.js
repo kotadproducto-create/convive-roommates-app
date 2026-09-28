@@ -43,7 +43,8 @@ function toCamelRows(rows) {
 // Columna de orden por defecto para getAll(); solo hay que listarla aquí
 // cuando una tabla no tiene "created_at" (floor_memberships usa joined_at).
 const ORDER_COLUMN_BY_TABLE = {
-  floor_memberships: 'joined_at'
+  floor_memberships: 'joined_at',
+  house_rule_acceptances: 'accepted_at'
 }
 
 export async function getAll(table, filters = {}) {

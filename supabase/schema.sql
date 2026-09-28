@@ -2003,3 +2003,98 @@ create policy "select floor incident_comments" on incident_comments for select u
 create policy "insert own incident_comments" on incident_comments for insert with check (is_active_member(floor_id) and user_id = auth.uid());
 
 alter publication supabase_realtime add table incident_comments;
+
+-- =========================================================
+-- Normas del piso
+--
+-- Las normas NO se editan directo: se proponen (crear/modificar/eliminar)
+-- como una consulta más de Votaciones (kind 'house_rule', payload con la
+-- acción y el texto propuesto) y solo se aplican cuando esa consulta se
+-- aprueba — mismo mecanismo que ya usan 'rotation_order' y
+-- 'pot_adjustment' (ver la rama de resolución de consultas en
+-- DataContext.jsx). `house_rules` es el estado VIGENTE de cada norma
+-- (una fila por norma, se actualiza in place al aprobarse una edición);
+-- `house_rule_history` es el registro de cada cambio aprobado, para poder
+-- consultar cuándo y por qué decisión cambió una norma.
+--
+-- `floors.rules_version` es un contador simple que sube 1 cada vez que se
+-- aprueba un cambio — no se versiona norma por norma para "quién aceptó
+-- qué": alcanza con saber si cada persona aceptó la última versión del
+-- conjunto completo (ver house_rule_acceptances más abajo y
+-- needsToAcceptRules en lib/houseRules.js).
+-- Es idempotente: se puede correr varias veces.
+-- =========================================================
+
+alter table floors add column if not exists rules_version integer not null default 0;
+
+-- Se agrega 'house_rule' a los kind de consulta ya permitidos (el check
+-- original, sin nombre explícito, quedó como polls_kind_check).
+alter table polls drop constraint if exists polls_kind_check;
+alter table polls add constraint polls_kind_check
+  check (kind in ('custom', 'rotation_order', 'pot_adjustment', 'balance_reset', 'house_rule'));
+
+create table if not exists house_rules (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  category text not null check (category in (
+    'limpieza', 'espacios_comunes', 'compras', 'pote', 'basura', 'convivencia', 'estado_piso', 'ausencias'
+  )),
+  title text not null,
+  description text not null,
+  status text not null default 'active' check (status in ('active', 'deleted')),
+  proposed_by uuid references profiles(id) on delete set null,
+  proposed_by_name text not null,
+  approved_by_poll uuid references polls(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists house_rules_floor_idx on house_rules (floor_id, category);
+
+create table if not exists house_rule_history (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  rule_id uuid references house_rules(id) on delete set null,
+  action text not null check (action in ('created', 'edited', 'deleted')),
+  title text not null,
+  description text,
+  category text,
+  changed_by uuid references profiles(id) on delete set null,
+  changed_by_name text not null,
+  poll_id uuid references polls(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists house_rule_history_rule_idx on house_rule_history (rule_id, created_at);
+
+-- Quién aceptó qué versión de las normas, y cuándo — una fila por
+-- persona y versión (no se pisan: así queda el historial completo de
+-- cada aceptación, no solo la última).
+create table if not exists house_rule_acceptances (
+  id uuid primary key default gen_random_uuid(),
+  floor_id uuid not null references floors(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  rules_version integer not null,
+  accepted_at timestamptz not null default now(),
+  unique (floor_id, user_id, rules_version)
+);
+create index if not exists house_rule_acceptances_user_idx on house_rule_acceptances (floor_id, user_id);
+
+alter table house_rules enable row level security;
+create policy "select floor house_rules" on house_rules for select using (is_active_member(floor_id));
+-- Igual que polls: la fila la escribe quien resuelve la consulta de
+-- forma oportunista (puede ser cualquier sesión abierta del piso, no
+-- solo quien la propuso), así que la política es floor-wide, no acotada
+-- al autor.
+create policy "insert floor house_rules" on house_rules for insert with check (is_active_member(floor_id));
+create policy "update floor house_rules" on house_rules for update using (is_active_member(floor_id));
+
+alter table house_rule_history enable row level security;
+create policy "select floor house_rule_history" on house_rule_history for select using (is_active_member(floor_id));
+create policy "insert floor house_rule_history" on house_rule_history for insert with check (is_active_member(floor_id));
+
+alter table house_rule_acceptances enable row level security;
+create policy "select floor house_rule_acceptances" on house_rule_acceptances for select using (is_active_member(floor_id));
+create policy "insert own house_rule_acceptances" on house_rule_acceptances for insert with check (is_active_member(floor_id) and user_id = auth.uid());
+
+alter publication supabase_realtime add table house_rules;
+alter publication supabase_realtime add table house_rule_history;
+alter publication supabase_realtime add table house_rule_acceptances;

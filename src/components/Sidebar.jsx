@@ -17,7 +17,8 @@ import {
   MoreIcon,
   CloseIcon,
   PersonIcon,
-  VoteIcon
+  VoteIcon,
+  ScrollIcon
 } from './icons'
 
 // `labelKey` en vez de texto fijo — se traduce con t() en el propio
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { to: '/incidencias', labelKey: 'nav.muro', Icon: PinIcon },
   { to: '/convives', labelKey: 'nav.convives', Icon: UsersIcon },
   { to: '/votaciones', labelKey: 'nav.votaciones', Icon: VoteIcon },
+  { to: '/normas', labelKey: 'nav.normas', Icon: ScrollIcon },
   { to: '/recompensas', labelKey: 'nav.recompensas', Icon: CoinIcon },
   { to: '/pote', labelKey: 'nav.pote', Icon: JarIcon },
   { to: '/piso', labelKey: 'nav.piso', Icon: HomeIcon },

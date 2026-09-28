@@ -63,6 +63,10 @@ describe('buildPublicTurns — encargado/a del piso', () => {
     const expectedNow = floorKeeperFor({ rotationMode: 'random' }, order, WEEK)
     expect(view.keeper.now.id).toBe(expectedNow)
     expect(view.keeper.next.id).toBe(order[(order.indexOf(expectedNow) + 1) % 3])
+    // NOW cae en la semana ISO 2026-W39 (lunes 21 sep) — la próxima empieza el lunes 28 sep.
+    expect(view.keeper.nextChangeDate.getUTCFullYear()).toBe(2026)
+    expect(view.keeper.nextChangeDate.getUTCMonth()).toBe(8)
+    expect(view.keeper.nextChangeDate.getUTCDate()).toBe(28)
   })
 
   it('quien está fuera se salta en la rotación', () => {

@@ -21,6 +21,19 @@ export function isPublicTurnsToken(token) {
 
 const person = (byId, id) => (id && byId[id] ? { id, name: byId[id].name } : null)
 
+// Mismo cálculo que getMondayOfWeek en lib/rotation.js — repetido acá (una
+// línea) para no crear una dependencia cruzada entre módulos (este archivo
+// es puro y rotation.js arrastra el cliente de Supabase).
+function mondayOfWeekKey(weekKey) {
+  const [year, week] = weekKey.split('-W').map(Number)
+  const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7))
+  const dow = simple.getUTCDay()
+  const monday = new Date(simple)
+  if (dow <= 4) monday.setUTCDate(simple.getUTCDate() - dow + 1)
+  else monday.setUTCDate(simple.getUTCDate() + 8 - dow)
+  return monday
+}
+
 /**
  * @param {object} data    respuesta de get_public_turns (ok: true)
  * @param {Date}   [now]
@@ -102,7 +115,7 @@ export function buildPublicTurns(data, now = new Date()) {
     // botón "Unirme a este piso" (ver PublicTurns.jsx); null si por lo que
     // sea no vino (enlaces viejos antes de este campo, o datos de prueba).
     inviteCode: floor.inviteCode || null,
-    keeper: { now: person(byId, keeperNowId), next: person(byId, keeperNextId) },
+    keeper: { now: person(byId, keeperNowId), next: person(byId, keeperNextId), nextChangeDate: mondayOfWeekKey(nextWeekKey) },
     activities,
     sharedSpaces,
     rotation: (floor.rotationOrder || [])

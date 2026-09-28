@@ -379,6 +379,17 @@ export function VoteIcon(props) {
   )
 }
 
+/** Documento con líneas — "Normas del piso" (acuerdos de convivencia). */
+export function ScrollIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 3.5h7l3 3v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-12a1 1 0 0 1 1-1Z" />
+      <path d="M12 3.5v3h3" />
+      <path d="M6.8 10h6.4M6.8 12.6h6.4M6.8 15.2h4" />
+    </IconBase>
+  )
+}
+
 export const TASK_ICONS = {
   cart: CartIcon,
   trash: TrashIcon,

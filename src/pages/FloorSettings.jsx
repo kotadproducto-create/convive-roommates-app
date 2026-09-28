@@ -16,6 +16,7 @@ import { resetMemberPin } from '../lib/publicPollApi'
 import { inviteLink } from '../lib/invite'
 import { floorKeeperFor } from '../lib/activities'
 import { removalDeadlineAt } from '../lib/removal'
+import { formatCountdown } from '../lib/polls'
 import PublicTurnsLinkCard from '../components/PublicTurnsLinkCard'
 import { TASK_LABEL, getMondayOfWeek } from '../lib/rotation'
 import { ShareIcon, ChevronUpIcon, ChevronDownIcon, CoinIcon, SunIcon, ChatIcon, EditIcon, CloseIcon } from '../components/icons'
@@ -30,6 +31,27 @@ function isValidHttpUrl(value) {
   } catch {
     return false
   }
+}
+
+/** Cuánto le queda a la persona para confirmar o rechazar su salida (ver
+ * "Salida pendiente" en Roommates) — se actualiza sola cada segundo,
+ * mismo patrón que PollCountdown (Votaciones.jsx) e IncidentCountdown
+ * (IncidentCard.jsx): formatCountdown es genérico, no es solo de
+ * consultas. Al llegar a cero no hace nada por sí misma — el efecto
+ * oportunista de DataContext.jsx ya se encarga de resolverla sola. */
+function RemovalCountdown({ deadline, t }) {
+  const targetMs = deadline.getTime()
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const parts = formatCountdown(targetMs - now)
+  if (!parts) return null
+  const label = t(`floorSettings.removalCountdown${parts.unit[0].toUpperCase()}${parts.unit.slice(1)}`, parts)
+  return <span>{label}</span>
 }
 
 export default function FloorSettings() {
@@ -430,6 +452,8 @@ export default function FloorSettings() {
                             {t('floorSettings.exitPendingDeadline', {
                               date: format(new Date(removalDeadlineAt(m.removalRequestedAt)), 'd MMM, HH:mm', { locale: dateLocale })
                             })}
+                            {' · '}
+                            <RemovalCountdown deadline={new Date(removalDeadlineAt(m.removalRequestedAt))} t={t} />
                           </>
                         )}
                       </span>

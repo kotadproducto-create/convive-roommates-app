@@ -103,7 +103,14 @@ export default function PublicTurns() {
         <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-200 mb-1">{t('publicTurns.keeperTitle')}</p>
         <p className="font-display text-2xl font-bold break-words">{view.keeper.now ? view.keeper.now.name : t('publicTurns.nobody')}</p>
         {view.keeper.next && (
-          <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 break-words">{t('publicTurns.keeperNext', { name: view.keeper.next.name })}</p>
+          <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 break-words">
+            {t('publicTurns.keeperNext', { name: view.keeper.next.name })}{' '}
+            {view.keeper.nextChangeDate && (
+              <span className="text-ink-900/40 dark:text-cream-100/40">
+                ({format(view.keeper.nextChangeDate, 'd MMM', { locale: dateLocale })})
+              </span>
+            )}
+          </p>
         )}
       </section>
 

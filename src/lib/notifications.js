@@ -39,6 +39,7 @@ const ROUTE_BY_TYPE = {
   // Resultado de una consulta de un apartado concreto
   poll_resolved_pote: '/pote',
   poll_resolved_rotation: '/piso',
+  poll_resolved_house_rule: '/normas',
   // Un admin reordenó a las personas directamente (sin votación previa, ver
   // updateRotationOrderDirect): previsualización + "Estoy de acuerdo".
   rotation_order_updated: '/orden-actualizado'
