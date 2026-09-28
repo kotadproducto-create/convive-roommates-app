@@ -6,6 +6,7 @@ import { CoinIcon } from '../components/icons'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
+import ExpandableSection from '../components/ExpandableSection'
 
 export default function Rewards() {
   const { user } = useAuth()
@@ -79,22 +80,23 @@ export default function Rewards() {
           )}
         </Reveal>
 
-        <Reveal as="section" delay={160} className="card p-5 md:col-span-2">
-          <h2 className="font-display font-semibold mb-3">{t('rewards.historyTitle')}</h2>
-          {redemptions.length === 0 ? (
-            <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('rewards.noRedemptionsYet')}</p>
-          ) : (
-            <ul className="flex flex-col gap-1 text-sm">
-              {redemptions.map((r) => (
-                <li key={r.id} className="flex justify-between py-1.5 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
-                  <span>{t('rewards.someoneRedeemed', { name: r.userName, reward: r.rewardLabel })}</span>
-                  <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40">
-                    <CoinIcon className="w-3 h-3" />{r.cost}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+        <Reveal delay={160} className="md:col-span-2">
+          <ExpandableSection title={t('rewards.historyTitle')} description={t('rewards.historyDescription')}>
+            {redemptions.length === 0 ? (
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('rewards.noRedemptionsYet')}</p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm">
+                {redemptions.map((r) => (
+                  <li key={r.id} className="flex justify-between py-1.5 border-b last:border-0 border-ink-900/10 dark:border-cream-100/15">
+                    <span>{t('rewards.someoneRedeemed', { name: r.userName, reward: r.rewardLabel })}</span>
+                    <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40">
+                      <CoinIcon className="w-3 h-3" />{r.cost}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ExpandableSection>
         </Reveal>
       </div>
     </AppLayout>

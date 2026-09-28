@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import Avatar from '../components/Avatar'
+import MarqueeText from '../components/MarqueeText'
 import Reveal from '../components/Reveal'
+import ExpandableSection from '../components/ExpandableSection'
 import RecoveryCodeDialog from '../components/RecoveryCodeDialog'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -345,21 +347,37 @@ export default function FloorSettings() {
           </div>
           <ul className="flex flex-col gap-2">
             {members.map((m) => (
-              <li key={m.id} className="flex flex-col gap-1 px-1 py-1.5 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Avatar url={m.avatarUrl} name={m.name} size="w-8 h-8" textSize="text-xs" />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                        <span className="font-medium min-w-0">{m.name}</span>
-                        {m.isVirtual ? (
-                          <VirtualTag />
-                        ) : (
-                          <span className="flex items-center gap-1 text-ink-900/40 dark:text-cream-100/40 shrink-0">
-                            · <CoinIcon className="w-3.5 h-3.5" />{m.points || 0}
-                          </span>
-                        )}
+                <li key={m.id} className="flex flex-col gap-1">
+                  <ExpandableSection
+                    as="div"
+                    className="rounded-xl -mx-1 px-1 hover:bg-cream-100 dark:hover:bg-ink-700/50 transition-colors"
+                    chevronSize="w-4 h-4"
+                    bodyClassName="pt-2 pl-10"
+                    header={
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar url={m.avatarUrl} name={m.name} size="w-8 h-8" textSize="text-xs" />
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <MarqueeText as="span" className="text-sm font-medium min-w-0">
+                            {m.name}
+                          </MarqueeText>
+                          {m.isVirtual ? (
+                            <VirtualTag className="shrink-0" />
+                          ) : (
+                            <span className="text-[10px] uppercase font-bold text-violet-500 bg-violet-50 dark:bg-violet-700/25 px-1.5 py-0.5 rounded-md shrink-0">
+                              {m.role === 'admin' ? t('floorSettings.roleAdmin') : t('floorSettings.roleMember')}
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    }
+                  >
+                    <div className="flex flex-col gap-2 text-sm">
+                      {!m.isVirtual && (
+                        <p className="flex items-center gap-1 text-ink-900/60 dark:text-cream-100/60">
+                          <CoinIcon className="w-3.5 h-3.5" />
+                          {m.points || 0}
+                        </p>
+                      )}
                       {/* Para poder distinguir cuentas duplicadas de la misma persona:
                           la que se unió hace menos tiempo suele ser la que sobra. */}
                       {m.joinedAt && (
@@ -367,66 +385,65 @@ export default function FloorSettings() {
                           {t('floorSettings.memberSince', { date: format(new Date(m.joinedAt), 'd MMM yyyy', { locale: dateLocale }) })}
                         </p>
                       )}
+                      {isAdmin && m.isVirtual && (
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          <button onClick={() => setVirtualDialog({ mode: 'edit', member: m })} className="text-xs font-semibold text-violet-500 hover:underline">
+                            {t('floorSettings.virtual.edit')}
+                          </button>
+                          <button onClick={() => setVirtualDialog({ mode: 'link', member: m })} className="text-xs font-semibold text-gold-500 hover:underline">
+                            {t('floorSettings.virtual.link')}
+                          </button>
+                          <button onClick={() => setVirtualDialog({ mode: 'remove', member: m })} className="text-xs font-semibold text-clay-500 hover:underline">
+                            {t('floorSettings.virtual.remove')}
+                          </button>
+                        </div>
+                      )}
+                      {isAdmin && m.id !== user.id && !m.isVirtual && !m.removalRequestedBy && (
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          <button onClick={() => setRecoveryFor(m)} className="text-xs font-semibold text-gold-500 hover:underline">
+                            {t('floorSettings.recovery.button')}
+                          </button>
+                          <button onClick={() => setPinResetFor(m)} className="text-xs font-semibold text-gold-500 hover:underline">
+                            {t('floorSettings.resetPin')}
+                          </button>
+                          {m.role !== 'admin' && (
+                            <button onClick={() => makeAdmin(m)} className="text-xs font-semibold text-violet-500 hover:underline">
+                              {t('floorSettings.makeAdmin')}
+                            </button>
+                          )}
+                          <button onClick={() => handleRemove(m)} className="text-xs font-semibold text-clay-500 hover:underline">
+                            {t('floorSettings.remove')}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  {isAdmin && m.isVirtual && (
-                    <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
-                      <button onClick={() => setVirtualDialog({ mode: 'edit', member: m })} className="text-xs font-semibold text-violet-500 hover:underline">
-                        {t('floorSettings.virtual.edit')}
-                      </button>
-                      <button onClick={() => setVirtualDialog({ mode: 'link', member: m })} className="text-xs font-semibold text-gold-500 hover:underline">
-                        {t('floorSettings.virtual.link')}
-                      </button>
-                      <button onClick={() => setVirtualDialog({ mode: 'remove', member: m })} className="text-xs font-semibold text-clay-500 hover:underline">
-                        {t('floorSettings.virtual.remove')}
-                      </button>
-                    </div>
-                  )}
-                  {isAdmin && m.id !== user.id && !m.isVirtual && !m.removalRequestedBy && (
-                    <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
-                      <button onClick={() => setRecoveryFor(m)} className="text-xs font-semibold text-gold-500 hover:underline">
-                        {t('floorSettings.recovery.button')}
-                      </button>
-                      <button onClick={() => setPinResetFor(m)} className="text-xs font-semibold text-gold-500 hover:underline">
-                        {t('floorSettings.resetPin')}
-                      </button>
-                      {m.role !== 'admin' && (
-                        <button onClick={() => makeAdmin(m)} className="text-xs font-semibold text-violet-500 hover:underline">
-                          {t('floorSettings.makeAdmin')}
+                  </ExpandableSection>
+                  {m.removalRequestedBy && (
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 bg-clay-500/10 text-clay-500 text-xs font-medium px-2 py-1.5 rounded-lg">
+                      <span className="min-w-0">
+                        {t('floorSettings.exitPendingLabel', {
+                          who: m.id === user.id ? t('floorSettings.exitPendingSelf') : t('floorSettings.exitPendingOther')
+                        })}
+                        {m.removalRequestedAt && (
+                          <>
+                            {' · '}
+                            {t('floorSettings.exitPendingDeadline', {
+                              date: format(new Date(removalDeadlineAt(m.removalRequestedAt)), 'd MMM, HH:mm', { locale: dateLocale })
+                            })}
+                          </>
+                        )}
+                      </span>
+                      {isAdmin && (
+                        <button
+                          onClick={() => cancelRemoval(m.membershipId, m.id, m.name)}
+                          className="font-semibold hover:underline shrink-0"
+                        >
+                          {t('floorSettings.cancel')}
                         </button>
                       )}
-                      <button onClick={() => handleRemove(m)} className="text-xs font-semibold text-clay-500 hover:underline">
-                        {t('floorSettings.remove')}
-                      </button>
                     </div>
                   )}
-                </div>
-                {m.removalRequestedBy && (
-                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 bg-clay-500/10 text-clay-500 text-xs font-medium px-2 py-1.5 rounded-lg">
-                    <span className="min-w-0">
-                      {t('floorSettings.exitPendingLabel', {
-                        who: m.id === user.id ? t('floorSettings.exitPendingSelf') : t('floorSettings.exitPendingOther')
-                      })}
-                      {m.removalRequestedAt && (
-                        <>
-                          {' · '}
-                          {t('floorSettings.exitPendingDeadline', {
-                            date: format(new Date(removalDeadlineAt(m.removalRequestedAt)), 'd MMM, HH:mm', { locale: dateLocale })
-                          })}
-                        </>
-                      )}
-                    </span>
-                    {isAdmin && (
-                      <button
-                        onClick={() => cancelRemoval(m.membershipId, m.id, m.name)}
-                        className="font-semibold hover:underline shrink-0"
-                      >
-                        {t('floorSettings.cancel')}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </li>
+                </li>
             ))}
           </ul>
         </Reveal>

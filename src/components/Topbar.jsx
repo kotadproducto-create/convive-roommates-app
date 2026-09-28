@@ -4,10 +4,11 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useLanguage } from '../context/LanguageContext'
-import { BellIcon, GearIcon, PersonIcon, CloseIcon, CoinIcon } from './icons'
+import { BellIcon, GearIcon, PersonIcon, CloseIcon, CoinIcon, ChevronDownIcon } from './icons'
 import { useDisplayedPoints, usePointsPulse } from '../context/PointsFxContext'
 import Avatar from './Avatar'
 import NotificationItem from './NotificationItem'
+import Collapsible from './Collapsible'
 
 export default function Topbar({ title, subheader }) {
   const { user, floor, membership, logout } = useAuth()
@@ -21,8 +22,8 @@ export default function Topbar({ title, subheader }) {
   usePointsPulse(pointsRef)
 
   const unread = notifications.filter((n) => !n.read)
-  const hasRead = notifications.length > unread.length
-  const visibleNotifications = showAll ? notifications : unread
+  const read = notifications.filter((n) => n.read)
+  const hasRead = read.length > 0
 
   return (
     <header className="sticky top-0 bg-white/90 dark:bg-ink-900/90 backdrop-blur z-20 border-b border-ink-900/10 dark:border-cream-100/15">
@@ -73,7 +74,7 @@ export default function Topbar({ title, subheader }) {
             <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto card p-2 z-30">
               <div className="flex items-center justify-between px-2 py-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">
-                  {showAll ? t('topbar.all') : t('topbar.recent')}
+                  {t('topbar.recent')}
                 </p>
                 {unread.length > 0 && (
                   <button
@@ -85,12 +86,10 @@ export default function Topbar({ title, subheader }) {
                 )}
               </div>
 
-              {visibleNotifications.length === 0 && (
-                <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">
-                  {showAll ? t('topbar.noNotificationsYet') : t('topbar.noNewNotifications')}
-                </p>
+              {unread.length === 0 && (
+                <p className="text-sm text-center py-6 text-ink-900/50 dark:text-cream-100/50">{t('topbar.noNewNotifications')}</p>
               )}
-              {visibleNotifications.map((n) => (
+              {unread.map((n) => (
                 <NotificationItem
                   key={n.id}
                   notification={n}
@@ -100,13 +99,31 @@ export default function Topbar({ title, subheader }) {
               ))}
 
               {hasRead && (
-                <button
-                  type="button"
-                  onClick={() => setShowAll((s) => !s)}
-                  className="w-full text-center text-xs font-semibold text-violet-500 hover:underline pt-2 mt-1 border-t border-ink-900/10 dark:border-cream-100/15"
-                >
-                  {showAll ? t('topbar.hidePrevious') : t('topbar.showPrevious')}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowAll((s) => !s)}
+                    aria-expanded={showAll}
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-ink-900/50 dark:text-cream-100/50 pt-2 mt-1 border-t border-ink-900/10 dark:border-cream-100/15"
+                  >
+                    {t('topbar.previous')}
+                    <ChevronDownIcon
+                      className={`w-3.5 h-3.5 transition-transform duration-300 motion-reduce:transition-none ${showAll ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  <Collapsible expanded={showAll}>
+                    <div className="pt-1">
+                      {read.map((n) => (
+                        <NotificationItem
+                          key={n.id}
+                          notification={n}
+                          onNavigate={() => setOpen(false)}
+                          className="px-3 py-2 rounded-lg hover:bg-cream-100 dark:hover:bg-ink-700 text-sm"
+                        />
+                      ))}
+                    </div>
+                  </Collapsible>
+                </>
               )}
             </div>
           )}

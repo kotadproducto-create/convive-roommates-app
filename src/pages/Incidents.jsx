@@ -8,6 +8,7 @@ import { PinIcon } from '../components/icons'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import Reveal from '../components/Reveal'
+import ExpandableSection from '../components/ExpandableSection'
 
 export default function Incidents() {
   const { user, membership } = useAuth()
@@ -112,28 +113,33 @@ export default function Incidents() {
         </form>
       )}
 
-      {incidents.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-16">
-          <div className="w-12 h-12 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-500 dark:text-violet-200 flex items-center justify-center">
-            <PinIcon className="w-6 h-6" />
+      <ExpandableSection
+        title={t('incidents.boardTitle')}
+        description={t('incidents.boardDescription', { count: incidents.length, plural: incidents.length === 1 ? '' : 's' })}
+      >
+        {incidents.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-16">
+            <div className="w-12 h-12 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-500 dark:text-violet-200 flex items-center justify-center">
+              <PinIcon className="w-6 h-6" />
+            </div>
+            <p className="text-sm text-center text-ink-900/50 dark:text-cream-100/50 max-w-xs">{t('incidents.emptyBody')}</p>
           </div>
-          <p className="text-sm text-center text-ink-900/50 dark:text-cream-100/50 max-w-xs">{t('incidents.emptyBody')}</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {incidents.map((incident, i) => (
-            <Reveal key={incident.id} delay={i * 60}>
-              <IncidentCard
-                incident={incident}
-                canDelete={incident.userId === user.id || membership?.role === 'admin'}
-                onDelete={removeIncident}
-                t={t}
-                dateLocale={dateLocale}
-              />
-            </Reveal>
-          ))}
-        </div>
-      )}
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {incidents.map((incident, i) => (
+              <Reveal key={incident.id} delay={i * 60}>
+                <IncidentCard
+                  incident={incident}
+                  canDelete={incident.userId === user.id || membership?.role === 'admin'}
+                  onDelete={removeIncident}
+                  t={t}
+                  dateLocale={dateLocale}
+                />
+              </Reveal>
+            ))}
+          </div>
+        )}
+      </ExpandableSection>
     </AppLayout>
   )
 }

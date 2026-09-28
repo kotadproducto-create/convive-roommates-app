@@ -9,10 +9,10 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { JarIcon, EditIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, CloseIcon } from '../components/icons'
+import { JarIcon, EditIcon, TrashIcon, CloseIcon } from '../components/icons'
 import { potAmountColorClass, potAmountBubbleMessage, isPotAdjustment, formatMoney, formatEuros } from '../lib/pot'
 import { computeWallets, averageMonthlyExpense } from '../lib/wallets'
-import { createPortal } from 'react-dom'
+import ExpandableSection from '../components/ExpandableSection'
 import { format } from 'date-fns'
 
 export default function Wallet() {
@@ -51,10 +51,6 @@ export default function Wallet() {
   // Acción de aporte/gasto pendiente de confirmar en el pop-up — no se
   // toca el pote hasta que la persona confirma ahí (ver ConfirmPotDialog).
   const [pendingAction, setPendingAction] = useState(null)
-  // Historial de movimientos: oculto por defecto para no ocupar espacio;
-  // se despliega/oculta sin perder ni afectar ningún movimiento (los datos
-  // ya están cargados, esto solo alterna si se muestran).
-  const [showHistory, setShowHistory] = useState(false)
   // Modificación manual del importe: pop-up de 2 pasos (cantidad →
   // confirmación) que solo ENVÍA una solicitud a todo el piso, nunca
   // cambia el Pote directo (ver PotAdjustDialog / requestPotAdjustment).
@@ -70,10 +66,6 @@ export default function Wallet() {
   // compañero a mi nombre (ver disputePotContribution) — abre el mismo
   // pop-up que la notificación (DisputeContributionDialog).
   const [disputeTarget, setDisputeTarget] = useState(null)
-  // Detalle económico de una persona ("Saldo por persona" → tocar su
-  // fila): histórico aportado, saldo y gasto promedio mensual, ver
-  // MemberWalletDialog más abajo.
-  const [detailMember, setDetailMember] = useState(null)
 
   // Wallet de cada persona: suma lo que aporta y resta su parte de cada
   // gasto (Pote o Compras), repartido en partes iguales — ver lib/wallets.js.
@@ -258,34 +250,44 @@ export default function Wallet() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
         <Reveal delay={80}>
-          <section className="card p-5">
-            <h2 className="font-display font-semibold mb-1">{t('wallet.balancePerPersonTitle')}</h2>
-            <p className="text-sm text-ink-900/60 dark:text-cream-100/60 mb-4">{t('wallet.balanceLegend')}</p>
-            <ul className="flex flex-col gap-2">
+          <ExpandableSection title={t('wallet.balancePerPersonTitle')} description={t('wallet.balanceLegend')}>
+            <ul className="flex flex-col gap-3">
               {members.map((m) => {
                 const w = wallets[m.id] || { contributed: 0, expenseShare: 0, balance: 0 }
                 const positive = w.balance >= 0.01
                 const negative = w.balance <= -0.01
+                const avgMonthly = averageMonthlyExpense(w.expenseShare, m.joinedAt)
                 return (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      onClick={() => setDetailMember(m)}
-                      className="w-full flex items-center justify-between gap-2 px-2 py-2 rounded-xl bg-cream-100 dark:bg-ink-700 hover:bg-cream-200 dark:hover:bg-ink-700/70 text-left"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center text-xs font-bold shrink-0">
-                          {m.name[0].toUpperCase()}
-                        </div>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <MarqueeText as="p" className="text-sm font-medium min-w-0">{m.name}{m.id === user.id ? t('wallet.you') : ''}</MarqueeText>
-                          {m.isVirtual && <VirtualTag className="shrink-0" />}
-                        </div>
+                  <li key={m.id} className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center text-xs font-bold shrink-0">
+                        {m.name[0].toUpperCase()}
                       </div>
-                      <span className={`text-sm font-bold shrink-0 ${positive ? 'text-sage-500' : negative ? 'text-clay-500' : 'text-ink-900/50 dark:text-cream-100/50'}`}>
-                        {w.balance > 0 ? '+' : ''}{formatEuros(w.balance, language)}
-                      </span>
-                    </button>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <MarqueeText as="p" className="text-sm font-semibold min-w-0">
+                          {m.name}
+                          {m.id === user.id ? t('wallet.you') : ''}
+                        </MarqueeText>
+                        {m.isVirtual && <VirtualTag className="shrink-0" />}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5 pl-10">
+                      <div className="flex items-center justify-between gap-2 bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+                        <span className="text-xs text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailContributed')}</span>
+                        <span className="text-sm font-bold shrink-0">{formatEuros(w.contributed, language)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+                        <span className="text-xs text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailBalance')}</span>
+                        <span className={`text-sm font-bold shrink-0 ${positive ? 'text-sage-500' : negative ? 'text-clay-500' : ''}`}>
+                          {w.balance > 0 ? '+' : ''}
+                          {formatEuros(w.balance, language)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 bg-cream-100 dark:bg-ink-700 rounded-xl px-3 py-2">
+                        <span className="text-xs text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailAvgMonthly')}</span>
+                        <span className="text-sm font-bold shrink-0">{formatEuros(avgMonthly, language)}</span>
+                      </div>
+                    </div>
                   </li>
                 )
               })}
@@ -294,57 +296,44 @@ export default function Wallet() {
             <button
               type="button"
               onClick={() => setShowResetDialog(true)}
-              className="mt-3 text-xs font-semibold text-ink-900/40 dark:text-cream-100/40 hover:text-violet-500 hover:underline"
+              className="mt-4 text-xs font-semibold text-ink-900/40 dark:text-cream-100/40 hover:text-violet-500 hover:underline"
             >
               {t('wallet.resetButton')}
             </button>
-          </section>
+          </ExpandableSection>
         </Reveal>
 
         <Reveal delay={140}>
-          <section className="card p-5">
-            <button
-              type="button"
-              onClick={() => setShowHistory((s) => !s)}
-              className="w-full flex items-center justify-between gap-2 text-left"
-            >
-              <h2 className="font-display font-semibold">{t('wallet.historyTitle')}</h2>
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-violet-500 shrink-0">
-                {showHistory ? t('wallet.hideHistory') : t('wallet.showHistory')}
-                {showHistory ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-              </span>
-            </button>
-
-            {showHistory &&
-              (history.length === 0 ? (
-                <p className="text-sm text-ink-900/50 dark:text-cream-100/50 mt-3">{t('wallet.noHistoryYet')}</p>
-              ) : (
-                <ul className="flex flex-col gap-2 max-h-96 overflow-y-auto mt-3">
-                  {history.map((item) =>
-                    item.type === 'reset' ? (
-                      <ResetHistoryRow key={item.id} reset={item.r} name={memberById[item.r.userId]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} language={language} />
-                    ) : item.type === 'proposal' ? (
-                      <ResetProposalRow key={item.id} poll={item.p} name={memberById[item.p.createdBy]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} language={language} />
-                    ) : (
-                      <HistoryRow
-                        key={item.id}
-                        contribution={item.c}
-                        authorName={memberById[item.c.userId]?.name || t('wallet.someone')}
-                        recordedByName={item.c.recordedBy && item.c.recordedBy !== item.c.userId ? memberById[item.c.recordedBy]?.name || t('wallet.someone') : null}
-                        canManage={!isPotAdjustment(item.c) && (item.c.userId === user.id || item.c.recordedBy === user.id) && Number(item.c.amount) < 0 && Date.now() - new Date(item.c.createdAt).getTime() < 24 * 60 * 60 * 1000}
-                        canDispute={item.c.userId === user.id && !!item.c.recordedBy && item.c.recordedBy !== item.c.userId}
-                        onUpdate={updatePotExpense}
-                        onDelete={deletePotExpense}
-                        onDispute={() => setDisputeTarget(item.c)}
-                        t={t}
-                        dateLocale={dateLocale}
-                        language={language}
-                      />
-                    )
-                  )}
-                </ul>
-              ))}
-          </section>
+          <ExpandableSection title={t('wallet.historyTitle')} description={t('wallet.historyDescription')}>
+            {history.length === 0 ? (
+              <p className="text-sm text-ink-900/50 dark:text-cream-100/50">{t('wallet.noHistoryYet')}</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {history.map((item) =>
+                  item.type === 'reset' ? (
+                    <ResetHistoryRow key={item.id} reset={item.r} name={memberById[item.r.userId]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} language={language} />
+                  ) : item.type === 'proposal' ? (
+                    <ResetProposalRow key={item.id} poll={item.p} name={memberById[item.p.createdBy]?.name || t('wallet.someone')} t={t} dateLocale={dateLocale} language={language} />
+                  ) : (
+                    <HistoryRow
+                      key={item.id}
+                      contribution={item.c}
+                      authorName={memberById[item.c.userId]?.name || t('wallet.someone')}
+                      recordedByName={item.c.recordedBy && item.c.recordedBy !== item.c.userId ? memberById[item.c.recordedBy]?.name || t('wallet.someone') : null}
+                      canManage={!isPotAdjustment(item.c) && (item.c.userId === user.id || item.c.recordedBy === user.id) && Number(item.c.amount) < 0 && Date.now() - new Date(item.c.createdAt).getTime() < 24 * 60 * 60 * 1000}
+                      canDispute={item.c.userId === user.id && !!item.c.recordedBy && item.c.recordedBy !== item.c.userId}
+                      onUpdate={updatePotExpense}
+                      onDelete={deletePotExpense}
+                      onDispute={() => setDisputeTarget(item.c)}
+                      t={t}
+                      dateLocale={dateLocale}
+                      language={language}
+                    />
+                  )
+                )}
+              </ul>
+            )}
+          </ExpandableSection>
         </Reveal>
       </div>
 
@@ -361,16 +350,6 @@ export default function Wallet() {
             showToast(t('wallet.disputeSuccessToast'), 'success')
             setDisputeTarget(null)
           }}
-        />
-      )}
-
-      {detailMember && (
-        <MemberWalletDialog
-          member={detailMember}
-          wallet={wallets[detailMember.id] || { contributed: 0, expenseShare: 0, balance: 0 }}
-          onClose={() => setDetailMember(null)}
-          t={t}
-          language={language}
         />
       )}
 
@@ -632,64 +611,6 @@ function ConfirmPotDialog({ action, onCancel, onConfirm, t, language }) {
         </div>
       </div>
     </div>
-  )
-}
-
-/** Detalle económico de una persona ("Saldo por persona" → tocar su
- * fila): histórico aportado, saldo actual y gasto promedio por mes (ver
- * averageMonthlyExpense en lib/wallets.js). Se dibuja en document.body
- * (createPortal) porque se abre desde dentro de un <Reveal>, que deja un
- * transform aplicado incluso en reposo y encerraría un `fixed` normal. */
-function MemberWalletDialog({ member, wallet, onClose, t, language }) {
-  const positive = wallet.balance >= 0.01
-  const negative = wallet.balance <= -0.01
-  const avgMonthly = averageMonthlyExpense(wallet.expenseShare, member.joinedAt)
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center"
-      onClick={onClose}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative max-h-[90vh] overflow-y-auto"
-      >
-        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
-        >
-          <CloseIcon className="w-4 h-4" />
-        </button>
-
-        <div className="flex items-center gap-3 mb-4 pr-8 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-violet-100 dark:bg-violet-700/25 text-violet-600 dark:text-violet-200 flex items-center justify-center text-sm font-bold shrink-0">
-            {member.name[0].toUpperCase()}
-          </div>
-          <MarqueeText as="h3" className="font-display text-lg font-bold min-w-0">{member.name}</MarqueeText>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2 bg-white dark:bg-ink-700 rounded-xl px-3 py-2.5">
-            <span className="text-sm text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailContributed')}</span>
-            <span className="text-sm font-bold shrink-0">{formatEuros(wallet.contributed, language)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2 bg-white dark:bg-ink-700 rounded-xl px-3 py-2.5">
-            <span className="text-sm text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailBalance')}</span>
-            <span className={`text-sm font-bold shrink-0 ${positive ? 'text-sage-500' : negative ? 'text-clay-500' : ''}`}>
-              {wallet.balance > 0 ? '+' : ''}{formatEuros(wallet.balance, language)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-2 bg-white dark:bg-ink-700 rounded-xl px-3 py-2.5">
-            <span className="text-sm text-ink-900/70 dark:text-cream-100/70">{t('wallet.memberDetailAvgMonthly')}</span>
-            <span className="text-sm font-bold shrink-0">{formatEuros(avgMonthly, language)}</span>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
   )
 }
 
