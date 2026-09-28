@@ -6,7 +6,7 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { usePointsFx } from '../context/PointsFxContext'
 import { activeRoutineMarks, occurrencePoints, canUserMark } from '../lib/activities'
-import { getMemberColor } from '../lib/roomieColors'
+import { getMemberColor, getContrastTextColor } from '../lib/roomieColors'
 
 /** Pop-up de confirmación (mismo patrón fijo que ConfirmPotDialog).
  * `accentColor` (opcional): color de quien confirma la acción — para que
@@ -50,7 +50,7 @@ export function ConfirmDialog({ title, body, confirmLabel, onCancel, onConfirm, 
           <button
             type="button"
             className="btn-primary text-sm flex-1"
-            style={accentColor ? { backgroundColor: accentColor } : undefined}
+            style={accentColor ? { backgroundColor: accentColor, color: getContrastTextColor(accentColor) } : undefined}
             onClick={handleConfirmClick}
             disabled={submitting}
           >

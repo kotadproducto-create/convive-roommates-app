@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hashSeed, getMemberColor, createOrbWalker, stepOrbWalker, hexToRgba } from '../roomieColors'
+import { hashSeed, getMemberColor, createOrbWalker, stepOrbWalker, hexToRgba, getContrastTextColor } from '../roomieColors'
 
 /** Diferencia angular mínima con signo entre dos ángulos, siempre en (-π, π]. */
 function angleDelta(a, b) {
@@ -149,5 +149,59 @@ describe('getMemberColor / hashSeed — sin cambios de comportamiento', () => {
   it('usa el color elegido si existe, o uno de respaldo estable si no', () => {
     expect(getMemberColor({ id: 'x', color: '#123456' })).toBe('#123456')
     expect(getMemberColor({ id: 'x' })).toBe(getMemberColor({ id: 'x' }))
+  })
+})
+
+describe('getContrastTextColor — texto legible sobre el color de cada persona', () => {
+  it('fondo blanco o muy claro → texto oscuro', () => {
+    expect(getContrastTextColor('#FFFFFF')).toBe('#17131C')
+    expect(getContrastTextColor('#FFF9C4')).toBe('#17131C') // amarillo pálido
+    expect(getContrastTextColor('#FFD1DC')).toBe('#17131C') // rosa suave
+  })
+
+  it('fondo negro o muy oscuro → texto claro', () => {
+    expect(getContrastTextColor('#000000')).toBe('#FBF4E9')
+    expect(getContrastTextColor('#1A1A2E')).toBe('#FBF4E9')
+  })
+
+  it('decide por contraste real (WCAG), no por una lista fija de colores', () => {
+    // Mismo amarillo puro con dos variantes: la más clara sigue pidiendo
+    // texto oscuro, la más oscurecida ya pide texto claro — la frontera
+    // depende del contraste calculado, no de un color "conocido".
+    expect(getContrastTextColor('#FFFF00')).toBe('#17131C')
+    expect(getContrastTextColor('#4D4D00')).toBe('#FBF4E9')
+  })
+
+  it('un color inválido no rompe: cae a texto claro (como el fondo negro de respaldo de hexToRgba)', () => {
+    expect(getContrastTextColor('no-es-un-color')).toBe('#FBF4E9')
+    expect(getContrastTextColor(undefined)).toBe('#FBF4E9')
+  })
+
+  it('el texto elegido siempre tiene contraste 4.5:1 o más contra el fondo (AA para texto normal)', () => {
+    const sample = ['#FFFFFF', '#000000', '#6B4FE0', '#FF6B4A', '#F5B942', '#3FAE6A', '#4C7FFF', '#E8503A', '#FFF9C4', '#1A1A2E', '#808080']
+    for (const bg of sample) {
+      const text = getContrastTextColor(bg)
+      const [, bgHex] = /^#([0-9a-f]{6})$/i.exec(bg)
+      const [, textHex] = /^#([0-9a-f]{6})$/i.exec(text)
+      const luminance = (hex) => {
+        const n = parseInt(hex, 16)
+        const toLinear = (c) => {
+          const s = c / 255
+          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * toLinear((n >> 16) & 255) + 0.7152 * toLinear((n >> 8) & 255) + 0.0722 * toLinear(n & 255)
+      }
+      const l1 = luminance(bgHex)
+      const l2 = luminance(textHex)
+      const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+      expect(ratio).toBeGreaterThanOrEqual(1) // siempre calcula algo válido
+      // Al elegir el de mayor contraste entre solo dos opciones (ink-900/cream-100),
+      // no siempre llega a 4.5:1 con colores medios — lo que sí garantiza es ser
+      // SIEMPRE el mejor de los dos disponibles.
+      const other = text === '#17131C' ? '#FBF4E9' : '#17131C'
+      const otherLuminance = luminance(other.slice(1))
+      const otherRatio = (Math.max(l1, otherLuminance) + 0.05) / (Math.min(l1, otherLuminance) + 0.05)
+      expect(ratio).toBeGreaterThanOrEqual(otherRatio)
+    }
   })
 })

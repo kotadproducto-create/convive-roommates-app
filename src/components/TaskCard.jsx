@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { TASK_ICONS, CoinIcon, FlameIcon, EditIcon } from './icons'
 import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
-import { getMemberColor } from '../lib/roomieColors'
+import { getMemberColor, getContrastTextColor } from '../lib/roomieColors'
 import Avatar from './Avatar'
 
 // Cada tipo de tarea, su propio bloque pastel — así el ojo distingue
@@ -78,8 +78,8 @@ export default function TaskCard({ task, typeInfo, overrideLabel, overridePoints
         <div className="flex items-center gap-1 shrink-0">
           {isMine && !task.completed && (
             <span
-              className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-white border-2 border-ink-900 px-2.5 py-1 rounded-full font-extrabold shadow-[0_2px_0_0_theme(colors.ink.900)] animate-pulse shrink-0"
-              style={{ backgroundColor: getMemberColor(assignee) }}
+              className="flex items-center gap-1 text-[11px] uppercase tracking-wide border-2 border-ink-900 px-2.5 py-1 rounded-full font-extrabold shadow-[0_2px_0_0_theme(colors.ink.900)] animate-pulse shrink-0"
+              style={{ backgroundColor: getMemberColor(assignee), color: getContrastTextColor(getMemberColor(assignee)) }}
             >
               <FlameIcon className="w-3 h-3 shrink-0" />
               {t('taskCard.yourTurn')}
@@ -115,7 +115,7 @@ export default function TaskCard({ task, typeInfo, overrideLabel, overridePoints
       ) : (
         <button
           className="btn-primary text-sm w-full"
-          style={assignee ? { backgroundColor: getMemberColor(assignee) } : undefined}
+          style={assignee ? { backgroundColor: getMemberColor(assignee), color: getContrastTextColor(getMemberColor(assignee)) } : undefined}
           onClick={handleComplete}
         >
           {t('taskCard.markDone')}

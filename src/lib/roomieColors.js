@@ -48,6 +48,51 @@ export function hexToRgba(hex, alpha = 1) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+// Los mismos tonos de texto que ya usa el resto de la app para "oscuro"
+// (ink-900) y "claro" (cream-100) — ver tailwind.config.js. No son negro y
+// blanco puros para que el texto encaje con el resto del diseño.
+const TEXT_DARK = '#17131C'
+const TEXT_LIGHT = '#FBF4E9'
+
+/** Luminancia relativa (WCAG 2.x) de un color "#rrggbb". Base de todo
+ * cálculo de contraste real entre dos colores. */
+function relativeLuminance(hex) {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex || '')
+  if (!match) return 0
+  const n = parseInt(match[1], 16)
+  const toLinear = (c) => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+  }
+  const r = toLinear((n >> 16) & 255)
+  const g = toLinear((n >> 8) & 255)
+  const b = toLinear(n & 255)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/** Ratio de contraste WCAG entre dos luminancias (1 = igual, 21 = máximo). */
+function contrastRatio(l1, l2) {
+  const lighter = Math.max(l1, l2)
+  const darker = Math.min(l1, l2)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/**
+ * Color de texto/ícono legible sobre `hex` usado como fondo (el color de
+ * perfil de cada compañero, ver getMemberColor): en vez de una lista fija
+ * de "colores claros", compara el contraste real (WCAG) del fondo contra
+ * el oscuro y el claro de la app y devuelve el que más contraste da. Así
+ * un compañero con un color muy claro (amarillo pálido, rosa suave...)
+ * obtiene texto oscuro en sus botones, y uno con un color oscuro sigue
+ * obteniendo texto claro, sin tocar el color que eligió.
+ */
+export function getContrastTextColor(hex) {
+  const bgLuminance = relativeLuminance(hex)
+  const contrastWithDark = contrastRatio(bgLuminance, relativeLuminance(TEXT_DARK))
+  const contrastWithLight = contrastRatio(bgLuminance, relativeLuminance(TEXT_LIGHT))
+  return contrastWithDark >= contrastWithLight ? TEXT_DARK : TEXT_LIGHT
+}
+
 // PRNG chiquito (mulberry32) para derivar varios números "al azar" a
 // partir de una sola semilla entera — así el recorrido de cada punto
 // es distinto por persona pero siempre igual entre cargas.

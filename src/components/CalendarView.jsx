@@ -17,7 +17,7 @@ import {
 } from 'date-fns'
 import { currentPeriodKey, isDueOnDate, assigneeFor, getWeekKeyOf } from '../lib/activities'
 import { isPotAdjustment, formatMoney } from '../lib/pot'
-import { getMemberColor } from '../lib/roomieColors'
+import { getMemberColor, getContrastTextColor } from '../lib/roomieColors'
 import { JarIcon, CartIcon, StoreIcon, WasherIcon, SparkleIcon } from './icons'
 import { useLanguage } from '../context/LanguageContext'
 import { TASK_TONE_CLASSES } from './TaskCard'
@@ -577,9 +577,11 @@ function DayDetail({
         items.map((item, i) => {
           const Icon = item.icon
           const memberColor = item.pending ? getMemberColor(item.assignee) : null
-          const toneClass = item.pending ? 'text-white' : item.toneClass
+          const toneClass = item.pending ? '' : item.toneClass
           const badgeBorderClass = item.pending ? '' : 'border-ink-900/70 dark:border-cream-100/30'
-          const badgeStyle = memberColor ? { backgroundColor: memberColor, borderColor: memberColor } : undefined
+          const badgeStyle = memberColor
+            ? { backgroundColor: memberColor, borderColor: memberColor, color: getContrastTextColor(memberColor) }
+            : undefined
           const isShopping = item.activity?.fixedKey === 'compras'
           return (
             <div
@@ -635,7 +637,11 @@ function DayDetail({
                 <button
                   type="button"
                   onClick={() => handleToggle(item)}
-                  style={!item.completion.completed && item.assignee ? { backgroundColor: getMemberColor(item.assignee) } : undefined}
+                  style={
+                    !item.completion.completed && item.assignee
+                      ? { backgroundColor: getMemberColor(item.assignee), color: getContrastTextColor(getMemberColor(item.assignee)) }
+                      : undefined
+                  }
                   className={item.completion.completed ? 'btn-secondary text-sm shrink-0' : 'btn-primary text-sm shrink-0'}
                 >
                   {item.completion.completed ? t('calendar.undo') : t('calendar.markDone')}

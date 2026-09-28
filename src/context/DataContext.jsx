@@ -21,6 +21,7 @@ import { SHARED_SPACE_BY_KEY, currentSpaceUse, reminderAt, waitlistFor, REMINDER
 import { ensureActivityPeriods, assigneeFor, currentPeriodKey, occurrenceSlots, occurrencePoints, activeRoutineMarks, canUserMark, floorKeeperIndex } from '../lib/activities'
 import { resolvePoll, pollDeadlineAt, ROTATION_POLL_HOURS } from '../lib/polls'
 import { removalDeadlineAt, isRemovalExpired } from '../lib/removal'
+import { isIncidentActive, incidentExpiryMs, incidentFinishedAtMs } from '../lib/incidents'
 import { realMembers, virtualIdSet } from '../lib/virtualMembers'
 import { formatMoney, potOnBehalfMessage, potDisputeMessage } from '../lib/pot'
 import { useAuth } from './AuthContext'
@@ -46,6 +47,7 @@ export function DataProvider({ children }) {
   const [members, setMembers] = useState([])
   const [tasks, setTasks] = useState([])
   const [incidents, setIncidents] = useState([])
+  const [incidentComments, setIncidentComments] = useState([])
   const [notifications, setNotifications] = useState([])
   const [redemptions, setRedemptions] = useState([])
   const [potContributions, setPotContributions] = useState([])
@@ -102,6 +104,14 @@ export function DataProvider({ children }) {
       return
     }
     return subscribeTable('incidents', { floorId }, setIncidents)
+  }, [floorId])
+
+  useEffect(() => {
+    if (!floorId) {
+      setIncidentComments([])
+      return
+    }
+    return subscribeTable('incident_comments', { floorId }, setIncidentComments)
   }, [floorId])
 
   useEffect(() => {
@@ -527,12 +537,38 @@ export function DataProvider({ children }) {
 
   const floorTasks = useMemo(() => tasks.filter((t) => t.weekKey === weekKey), [tasks, weekKey])
 
-  const floorIncidents = useMemo(() => {
+  // El muro de incidencias no tiene cron: una incidencia con plazo pasa
+  // sola al historial cuando alguien con la app abierta llega a ese
+  // instante — mismo patrón que pollClock/removalClock/spaceClock más
+  // arriba (se agenda un aviso para el primer vencimiento pendiente).
+  const [incidentClock, setIncidentClock] = useState(0)
+  useEffect(() => {
+    const now = Date.now()
+    const upcoming = incidents
+      .filter((i) => !i.resolvedAt)
+      .map(incidentExpiryMs)
+      .filter((ms) => ms != null && ms > now)
+    if (!upcoming.length) return undefined
+    const wait = Math.min(Math.min(...upcoming) - now + 1000, 2147483647)
+    const id = setTimeout(() => setIncidentClock((c) => c + 1), wait)
+    return () => clearTimeout(id)
+  }, [incidents, incidentClock])
+
+  const activeIncidents = useMemo(() => {
     const now = Date.now()
     return incidents
-      .filter((i) => !i.expiresAt || new Date(i.expiresAt).getTime() > now)
+      .filter((i) => isIncidentActive(i, now))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }, [incidents])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incidents, incidentClock])
+
+  const incidentHistory = useMemo(() => {
+    const now = Date.now()
+    return incidents
+      .filter((i) => !isIncidentActive(i, now))
+      .sort((a, b) => incidentFinishedAtMs(b) - incidentFinishedAtMs(a))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incidents, incidentClock])
 
   const myNotifications = useMemo(
     () =>
@@ -1068,6 +1104,34 @@ export function DataProvider({ children }) {
   )
 
   const removeIncident = useCallback((incidentId) => remove('incidents', incidentId), [])
+
+  // "Incidencia solucionada": pasa al historial al instante, sin esperar a
+  // que venza el plazo (si tenía uno). Igual que "Eliminar", cualquiera
+  // puede hacerlo a nivel de base (política floor-wide) — el botón en la
+  // pantalla ya lo restringe a quien la creó o a un admin.
+  const resolveIncident = useCallback(async (incidentId) => {
+    const resolvedAt = new Date().toISOString()
+    await update('incidents', incidentId, { resolvedAt })
+    setIncidents((list) => list.map((i) => (i.id === incidentId ? { ...i, resolvedAt } : i)))
+  }, [])
+
+  // Hilo de comentarios de una incidencia (ver IncidentDetailDialog):
+  // cualquier miembro del piso puede sumar uno, activa o ya en el
+  // historial. Sin editar/borrar por ahora — no se pidió.
+  const addIncidentComment = useCallback(
+    async (incidentId, body) => {
+      if (!currentFloor || !user || !body.trim()) return
+      const created = await create('incident_comments', {
+        floorId: currentFloor.id,
+        incidentId,
+        userId: user.id,
+        authorName: user.name,
+        body: body.trim()
+      })
+      setIncidentComments((list) => [...list.filter((c) => c.id !== created.id), created])
+    },
+    [currentFloor, user]
+  )
 
   const markNotificationRead = useCallback((notificationId) => update('notifications', notificationId, { read: true }), [])
 
@@ -2049,7 +2113,9 @@ export function DataProvider({ children }) {
     members,
     weekKey,
     tasks: floorTasks,
-    incidents: floorIncidents,
+    incidents: activeIncidents,
+    incidentHistory,
+    incidentComments,
     notifications: myNotifications,
     unreadCount,
     leaderboard,
@@ -2134,6 +2200,8 @@ export function DataProvider({ children }) {
     adjustMemberPoints,
     addIncident,
     removeIncident,
+    resolveIncident,
+    addIncidentComment,
     markNotificationRead,
     markAllNotificationsRead,
     sharedSpaceUses,

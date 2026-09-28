@@ -1964,3 +1964,42 @@ drop policy if exists "release own or admin shared_space_use" on shared_space_us
 create policy "release own or admin shared_space_use" on shared_space_uses
   for update
   using (user_id = auth.uid() or is_floor_admin(floor_id) or ends_at <= now());
+
+-- =========================================================
+-- Muro de incidencias: historial + duración + comentarios
+--
+-- Una incidencia deja de estar activa (pasa al historial) cuando se marca
+-- como solucionada o cuando vence el plazo que eligió quien la creó (12h,
+-- 24h, 1 semana, u otra fecha/hora exacta) — `expires_at` ya existía, lo
+-- nuevo es `resolved_at`. Igual que el resto de vencimientos de la app, no
+-- hay cron: el efecto oportunista de DataContext.jsx (incidentClock) lo
+-- revisa cuando alguien del piso tiene la app abierta; no hace falta que
+-- este ALTER lo cierre nada él mismo, `isIncidentActive` ya lo calcula al
+-- vuelo con la hora actual.
+-- Es idempotente: se puede correr varias veces.
+-- =========================================================
+
+alter table incidents add column if not exists resolved_at timestamptz;
+
+-- No existía política de UPDATE para incidents — hace falta para poder
+-- marcar "solucionada". Floor-wide como el resto de políticas de esta
+-- tabla (select/insert/delete ya son así); quién puede tocar el botón se
+-- restringe en la pantalla (autor o admin), no en la base.
+create policy "update floor incidents" on incidents for update using (is_active_member(floor_id));
+
+create table if not exists incident_comments (
+  id uuid primary key default gen_random_uuid(),
+  incident_id uuid not null references incidents(id) on delete cascade,
+  floor_id uuid not null references floors(id) on delete cascade,
+  user_id uuid references profiles(id) on delete set null,
+  author_name text not null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists incident_comments_incident_idx on incident_comments (incident_id, created_at);
+
+alter table incident_comments enable row level security;
+create policy "select floor incident_comments" on incident_comments for select using (is_active_member(floor_id));
+create policy "insert own incident_comments" on incident_comments for insert with check (is_active_member(floor_id) and user_id = auth.uid());
+
+alter publication supabase_realtime add table incident_comments;

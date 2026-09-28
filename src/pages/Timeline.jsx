@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { getMondayOfWeek, computeWeekStreak } from '../lib/rotation'
 import { currentPeriodKey, dueActivitiesOnDate, floorKeeperFor, getWeekKeyOf } from '../lib/activities'
-import { getMemberColor, hexToRgba } from '../lib/roomieColors'
+import { getMemberColor, hexToRgba, getContrastTextColor } from '../lib/roomieColors'
 import { StampIcon, JarIcon, SparkleIcon, CartIcon, CoinIcon, SunIcon, MoonIcon, FlameIcon, UsersIcon, BellIcon } from '../components/icons'
 import { potAmountColorClass, formatMoney, formatEuros } from '../lib/pot'
 import { isPendingToBuy } from '../lib/shopping'
@@ -74,10 +74,14 @@ export default function Timeline() {
     const nowId = floorKeeperFor(floor, order, weekKey)
     const nextWeekDate = new Date()
     nextWeekDate.setDate(nextWeekDate.getDate() + 7)
-    const nextId = floorKeeperFor(floor, order, getWeekKeyOf(nextWeekDate))
+    const nextWeekKey = getWeekKeyOf(nextWeekDate)
+    const nextId = floorKeeperFor(floor, order, nextWeekKey)
     return {
       now: members.find((m) => m.id === nowId) || null,
-      next: members.find((m) => m.id === nextId) || null
+      next: members.find((m) => m.id === nextId) || null,
+      // Fecha en la que asume el próximo encargado: el lunes de esa semana
+      // (no "hoy + 7 días" tal cual, que podría caer en mitad de semana).
+      nextChangeDate: getMondayOfWeek(nextWeekKey)
     }
   }, [floor, members, awayUserIds, weekKey])
 
@@ -165,7 +169,12 @@ export default function Timeline() {
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-200 mb-1">{t('publicTurns.keeperTitle')}</p>
           <p className="font-display text-2xl font-bold break-words">{floorKeeper.now ? floorKeeper.now.name : t('publicTurns.nobody')}</p>
           {floorKeeper.next && (
-            <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 break-words">{t('publicTurns.keeperNext', { name: floorKeeper.next.name })}</p>
+            <p className="text-xs text-ink-900/60 dark:text-cream-100/60 mt-1 break-words">
+              {t('publicTurns.keeperNext', { name: floorKeeper.next.name })}{' '}
+              <span className="text-ink-900/40 dark:text-cream-100/40">
+                ({format(floorKeeper.nextChangeDate, 'd MMM', { locale: dateLocale })})
+              </span>
+            </p>
           )}
         </div>
         <span aria-hidden="true" className="shrink-0 text-2xl leading-none text-violet-500/50">›</span>
@@ -226,6 +235,7 @@ export default function Timeline() {
                             assignee
                               ? {
                                   backgroundColor: getMemberColor(assignee),
+                                  color: getContrastTextColor(getMemberColor(assignee)),
                                   boxShadow:
                                     isMinePending && !item.completion?.completed
                                       ? `0 3px 0 0 #17131C, 0 0 0 2px ${hexToRgba(getMemberColor(assignee), 0.4)}`
@@ -235,7 +245,7 @@ export default function Timeline() {
                           }
                           className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold border-2 transition-colors ${
                             assignee
-                              ? `border-ink-900 text-white ${isFuture && !item.completion?.completed ? 'opacity-50' : ''}`
+                              ? `border-ink-900 ${isFuture && !item.completion?.completed ? 'opacity-50' : ''}`
                               : `bg-cream-100 dark:bg-ink-700 border-dashed text-ink-900/40 dark:text-cream-100/40 ${
                                   isFuture
                                     ? 'border-ink-900/10 dark:border-cream-100/10 opacity-50'
