@@ -390,6 +390,17 @@ export function ScrollIcon(props) {
   )
 }
 
+/** Imagen (marco con sol y montaña) — "Elegir de la galería". */
+export function ImageIcon(props) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="4" width="14" height="12" rx="2" />
+      <circle cx="7.5" cy="8.5" r="1.3" />
+      <path d="m3.5 14.5 4-3.7 3 2.6 2.2-2 3.8 3.6" />
+    </IconBase>
+  )
+}
+
 export const TASK_ICONS = {
   cart: CartIcon,
   trash: TrashIcon,

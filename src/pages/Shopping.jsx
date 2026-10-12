@@ -1,5 +1,5 @@
 import MarqueeText from '../components/MarqueeText'
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import AppLayout from '../components/AppLayout'
 import Reveal from '../components/Reveal'
@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext'
 import { useLanguage } from '../context/LanguageContext'
 import { currentPeriodKey } from '../lib/activities'
 import { isPendingToBuy } from '../lib/shopping'
+import { useStockMoveAnimation } from '../lib/useStockMoveAnimation'
 import { formatEuros } from '../lib/pot'
 import {
   StoreIcon,
@@ -18,6 +19,7 @@ import {
   CloseIcon,
   LinkIcon,
   CameraIcon,
+  ImageIcon,
   PlusIcon,
   MinusIcon,
   CartIcon
@@ -117,6 +119,20 @@ export default function Shopping() {
     [shoppingPurchases]
   )
 
+  // Animación de traslado al cambiar el stock de un producto (ver
+  // useStockMoveAnimation): la lista se reordena sola, esto solo la anima.
+  // `announce` es el aviso para lectores de pantalla.
+  const gridRef = useRef(null)
+  const [announce, setAnnounce] = useState('')
+  const handleMoved = useCallback(
+    (ids) => {
+      const item = shoppingItems.find((i) => i.id === ids[0])
+      if (item) setAnnounce(t('shopping.movedAnnounce', { name: item.name, status: t(STOCK_META[item.stockLevel].labelKey) }))
+    },
+    [shoppingItems, t]
+  )
+  useStockMoveAnimation({ containerRef: gridRef, items: sortedItems, active: mode === 'edit', onMoved: handleMoved })
+
   async function handleFormSubmit(values) {
     if (editing) {
       await updateShoppingItem(editing.id, values)
@@ -207,20 +223,25 @@ export default function Shopping() {
             />
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+          <p className="sr-only" role="status" aria-live="polite">
+            {announce}
+          </p>
+          <div ref={gridRef} className="relative grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
             {sortedItems.map((item, i) => (
-              <Reveal key={item.id} delay={i * 40}>
-                <ShoppingCard
-                  item={item}
-                  onEdit={() => {
-                    setEditing(item)
-                    setShowForm(false)
-                  }}
-                  onDelete={() => removeShoppingItem(item.id)}
-                  onSetStock={(level) => setItemStock(item.id, level)}
-                  t={t}
-                />
-              </Reveal>
+              <div key={item.id} data-flip-id={item.id} className="min-w-0 rounded-xl2">
+                <Reveal delay={i * 40}>
+                  <ShoppingCard
+                    item={item}
+                    onEdit={() => {
+                      setEditing(item)
+                      setShowForm(false)
+                    }}
+                    onDelete={() => removeShoppingItem(item.id)}
+                    onSetStock={(level) => setItemStock(item.id, level)}
+                    t={t}
+                  />
+                </Reveal>
+              </div>
             ))}
             {sortedItems.length === 0 && (
               <p className="text-sm text-ink-900/50 dark:text-cream-100/50 col-span-full">{t('shopping.emptyList')}</p>
@@ -434,6 +455,11 @@ function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, virtualM
   const [paidById, setPaidById] = useState(defaultPayerId)
   const [receiptFile, setReceiptFile] = useState(null)
   const [receiptPreview, setReceiptPreview] = useState(null)
+  // En móvil/tablet "Montar ticket" ofrece dos caminos (cámara o galería); en
+  // un ordenador no hay cámara que abrir, así que va directo al selector de
+  // archivos. `capture` solo tiene efecto en dispositivos táctiles.
+  const [showReceiptOptions, setShowReceiptOptions] = useState(false)
+  const canUseCamera = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
   const [submitting, setSubmitting] = useState(false)
 
   const allItems = [...items, ...adHocItems]
@@ -476,8 +502,12 @@ function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, virtualM
     setAddingNew(false)
   }
 
+  // Tanto la cámara como la galería (o el selector de archivos en la web)
+  // terminan aquí: a partir de elegir la imagen el flujo es el mismo.
   function handleReceiptChange(e) {
     const file = e.target.files?.[0]
+    e.target.value = '' // permite volver a elegir el mismo archivo
+    setShowReceiptOptions(false)
     if (!file) return
     setReceiptFile(file)
     const reader = new FileReader()
@@ -621,10 +651,36 @@ function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, virtualM
               className="w-full max-h-40 object-cover rounded-xl border-2 border-ink-900/70 dark:border-cream-100/30 mb-2"
             />
           )}
-          <label className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
-            <CameraIcon className="w-4 h-4" /> {receiptPreview ? t('shopping.changePhoto') : t('shopping.attachReceipt')}
-            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReceiptChange} />
-          </label>
+          {canUseCamera ? (
+            <>
+              <button
+                type="button"
+                className="btn-secondary text-sm inline-flex items-center gap-1.5"
+                aria-expanded={showReceiptOptions}
+                onClick={() => setShowReceiptOptions((o) => !o)}
+              >
+                <CameraIcon className="w-4 h-4" /> {receiptPreview ? t('shopping.changePhoto') : t('shopping.attachReceipt')}
+              </button>
+              {showReceiptOptions && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <label className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
+                    <CameraIcon className="w-4 h-4" /> {t('shopping.receiptTakePhoto')}
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReceiptChange} />
+                  </label>
+                  <label className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4" /> {t('shopping.receiptFromGallery')}
+                    {/* Sin `capture` (abre la galería) y solo formatos web: en iPhone esto hace que las fotos HEIC lleguen ya convertidas a JPEG. */}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleReceiptChange} />
+                  </label>
+                </div>
+              )}
+            </>
+          ) : (
+            <label className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
+              <ImageIcon className="w-4 h-4" /> {receiptPreview ? t('shopping.changePhoto') : t('shopping.attachReceipt')}
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleReceiptChange} />
+            </label>
+          )}
         </div>
       </div>
 
@@ -905,6 +961,20 @@ function ExpandRow({ label, open, onToggle, children }) {
 
 function ShoppingCard({ item, onEdit, onDelete, onSetStock, t }) {
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  // Reacción inmediata al tocar un estado: el chip se marca al instante,
+  // sin esperar a que la base de datos confirme y la lista se reordene
+  // (solo visual — el estado real sigue siendo item.stockLevel).
+  const [pendingLevel, setPendingLevel] = useState(null)
+  useEffect(() => {
+    if (pendingLevel === null) return undefined
+    if (item.stockLevel === pendingLevel) {
+      setPendingLevel(null)
+      return undefined
+    }
+    const id = setTimeout(() => setPendingLevel(null), 4000)
+    return () => clearTimeout(id)
+  }, [pendingLevel, item.stockLevel])
+  const shownLevel = pendingLevel ?? item.stockLevel
 
   return (
     <div className={`card p-4 flex flex-col gap-3 relative ${item.stockLevel === 'out' ? 'border-clay-500/50' : ''}`}>
@@ -982,12 +1052,15 @@ function ShoppingCard({ item, onEdit, onDelete, onSetStock, t }) {
             <button
               key={level}
               type="button"
-              onClick={() => onSetStock(level)}
-              className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full transition-transform active:scale-95 ${
-                item.stockLevel === level ? m.chip : 'text-ink-900/40 dark:text-cream-100/40 hover:bg-cream-200 dark:hover:bg-ink-700'
+              onClick={() => {
+                if (level !== item.stockLevel) setPendingLevel(level)
+                onSetStock(level)
+              }}
+              className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full transition-[transform,background-color,color] active:scale-95 ${
+                shownLevel === level ? m.chip : 'text-ink-900/40 dark:text-cream-100/40 hover:bg-cream-200 dark:hover:bg-ink-700'
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${item.stockLevel === level ? m.dot : 'bg-ink-900/20 dark:bg-cream-100/20'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${shownLevel === level ? m.dot : 'bg-ink-900/20 dark:bg-cream-100/20'}`} />
               {t(m.labelKey)}
             </button>
           ))}

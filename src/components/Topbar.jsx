@@ -1,5 +1,5 @@
 import MarqueeText from './MarqueeText'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -10,13 +10,58 @@ import Avatar from './Avatar'
 import NotificationItem from './NotificationItem'
 import Collapsible from './Collapsible'
 
+/**
+ * Panel desplegable (notificaciones / configuración). Se mantiene montado
+ * unos instantes tras cerrarse para poder mostrar una salida suave; mientras
+ * se cierra no recibe clics (ver .menu-out en index.css).
+ */
+function DropdownPanel({ open, className, children, onClick }) {
+  const [mounted, setMounted] = useState(open)
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      return undefined
+    }
+    const id = setTimeout(() => setMounted(false), 160)
+    return () => clearTimeout(id)
+  }, [open])
+  if (!mounted) return null
+  return (
+    <div className={`${className} ${open ? 'menu-in' : 'menu-out'}`} onClick={onClick}>
+      {children}
+    </div>
+  )
+}
+
 export default function Topbar({ title, subheader }) {
   const { user, floor, membership, logout } = useAuth()
   const { notifications, unreadCount, markAllNotificationsRead } = useData()
   const { t } = useLanguage()
-  const [open, setOpen] = useState(false)
+  // Solo uno de los dos desplegables puede estar abierto: 'notifications' | 'settings' | null.
+  const [openMenu, setOpenMenu] = useState(null)
   const [showAll, setShowAll] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const open = openMenu === 'notifications'
+  const settingsOpen = openMenu === 'settings'
+  const toggleMenu = (name) => setOpenMenu((m) => (m === name ? null : name))
+
+  // Cerrar al tocar fuera. Cada contenedor (botón + panel) marca el toque
+  // como "propio" vía la propagación de React, que también atraviesa los
+  // portales — p. ej. el pop-up de "Reportar incidencia" que abre
+  // NotificationItem fuera del DOM del desplegable: tocarlo no debe
+  // cerrarlo. Un toque en cualquier otra parte (zona vacía, otro botón, el
+  // otro icono) cierra el desplegable abierto.
+  const touchedMenuRef = useRef(null)
+  useEffect(() => {
+    if (!openMenu) return undefined
+    touchedMenuRef.current = null // el toque que lo abrió ya pasó
+    function onPointerDown() {
+      const inside = touchedMenuRef.current === openMenu
+      touchedMenuRef.current = null
+      if (!inside) setOpenMenu(null)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [openMenu])
   const points = useDisplayedPoints()
   const pointsRef = useRef(null)
   usePointsPulse(pointsRef)
@@ -56,10 +101,11 @@ export default function Topbar({ title, subheader }) {
           </span>
           <span className="text-sm font-extrabold tabular-nums leading-none">{points}</span>
         </Link>
-        <div className="relative">
+        <div className="relative" onPointerDown={() => (touchedMenuRef.current = 'notifications')}>
           <button
-            onClick={() => setOpen((o) => !o)}
+            onClick={() => toggleMenu('notifications')}
             aria-label={t('topbar.notifications')}
+            aria-expanded={open}
             className="relative w-9 h-9 min-[360px]:w-10 min-[360px]:h-10 landscape-sm:w-8 landscape-sm:h-8 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
           >
             <BellIcon className="w-5 h-5" />
@@ -70,8 +116,7 @@ export default function Topbar({ title, subheader }) {
             )}
           </button>
 
-          {open && (
-            <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto card p-2 z-30">
+          <DropdownPanel open={open} className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto card p-2 z-30">
               <div className="flex items-center justify-between px-2 py-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-900/50 dark:text-cream-100/50">
                   {t('topbar.recent')}
@@ -93,7 +138,7 @@ export default function Topbar({ title, subheader }) {
                 <NotificationItem
                   key={n.id}
                   notification={n}
-                  onNavigate={() => setOpen(false)}
+                  onNavigate={() => setOpenMenu(null)}
                   className="px-3 py-2 rounded-lg hover:bg-cream-100 dark:hover:bg-ink-700 text-sm"
                 />
               ))}
@@ -117,7 +162,7 @@ export default function Topbar({ title, subheader }) {
                         <NotificationItem
                           key={n.id}
                           notification={n}
-                          onNavigate={() => setOpen(false)}
+                          onNavigate={() => setOpenMenu(null)}
                           className="px-3 py-2 rounded-lg hover:bg-cream-100 dark:hover:bg-ink-700 text-sm"
                         />
                       ))}
@@ -125,21 +170,28 @@ export default function Topbar({ title, subheader }) {
                   </Collapsible>
                 </>
               )}
-            </div>
-          )}
+          </DropdownPanel>
         </div>
 
-        <div className="relative">
+        <div className="relative" onPointerDown={() => (touchedMenuRef.current = 'settings')}>
           <button
-            onClick={() => setSettingsOpen((o) => !o)}
+            onClick={() => toggleMenu('settings')}
             aria-label={t('topbar.settingsAria')}
+            aria-expanded={settingsOpen}
             className="w-9 h-9 min-[360px]:w-10 min-[360px]:h-10 landscape-sm:w-8 landscape-sm:h-8 rounded-xl flex items-center justify-center text-ink-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-ink-700"
           >
             <GearIcon className="w-5 h-5" />
           </button>
 
-          {settingsOpen && (
-            <div className="absolute right-0 mt-2 w-56 card p-1.5 z-30" onClick={() => setSettingsOpen(false)}>
+          {/* Se cierra al elegir una opción (enlace o botón), no al tocar el
+              relleno o el separador del panel. */}
+          <DropdownPanel
+            open={settingsOpen}
+            className="absolute right-0 mt-2 w-56 card p-1.5 z-30"
+            onClick={(e) => {
+              if (e.target.closest('a, button')) setOpenMenu(null)
+            }}
+          >
               <Link to="/perfil" className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-cream-200 dark:hover:bg-ink-700">
                 <PersonIcon className="w-4 h-4 shrink-0" />
                 {t('topbar.myProfile')}
@@ -160,8 +212,7 @@ export default function Topbar({ title, subheader }) {
                 <CloseIcon className="w-4 h-4 shrink-0" />
                 {t('topbar.logout')}
               </button>
-            </div>
-          )}
+          </DropdownPanel>
         </div>
 
         <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-ink-900/10 dark:border-cream-100/15">

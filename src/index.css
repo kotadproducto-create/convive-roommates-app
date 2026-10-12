@@ -122,6 +122,23 @@ body {
   transform: translateY(0);
 }
 
+/* Desplegables de la barra superior (campanita / engranaje, ver Topbar.jsx):
+   entran y salen con un fundido corto desde su esquina. */
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes menu-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-6px) scale(0.97); }
+}
+.menu-in { animation: menu-in 0.16s ease-out; transform-origin: top right; }
+.menu-out { animation: menu-out 0.14s ease-in forwards; transform-origin: top right; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .menu-in { animation: none; }
+  .menu-out { display: none; }
+}
+
 /* Pop-up de notificación: entra con un pequeño rebote */
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(-14px) scale(0.94); }
