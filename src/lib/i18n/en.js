@@ -671,6 +671,7 @@ export default {
     receiptPhoto: 'Receipt photo (optional)',
     changePhoto: 'Change photo',
     attachReceipt: 'Attach receipt',
+    receiptSourceTitle: 'Attach receipt',
     receiptTakePhoto: 'Take a photo',
     receiptFromGallery: 'Choose from gallery',
     saving: 'Saving…',

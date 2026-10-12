@@ -672,6 +672,7 @@ export default {
     receiptPhoto: 'Foto del ticket (opcional)',
     changePhoto: 'Cambiar foto',
     attachReceipt: 'Montar ticket',
+    receiptSourceTitle: 'Montar ticket',
     receiptTakePhoto: 'Hacer una foto',
     receiptFromGallery: 'Elegir de la galería',
     saving: 'Guardando…',

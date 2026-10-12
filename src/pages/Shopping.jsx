@@ -662,17 +662,7 @@ function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, virtualM
                 <CameraIcon className="w-4 h-4" /> {receiptPreview ? t('shopping.changePhoto') : t('shopping.attachReceipt')}
               </button>
               {showReceiptOptions && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <label className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
-                    <CameraIcon className="w-4 h-4" /> {t('shopping.receiptTakePhoto')}
-                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReceiptChange} />
-                  </label>
-                  <label className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4" /> {t('shopping.receiptFromGallery')}
-                    {/* Sin `capture` (abre la galería) y solo formatos web: en iPhone esto hace que las fotos HEIC lleguen ya convertidas a JPEG. */}
-                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleReceiptChange} />
-                  </label>
-                </div>
+                <ReceiptSourceDialog onClose={() => setShowReceiptOptions(false)} onChange={handleReceiptChange} t={t} />
               )}
             </>
           ) : (
@@ -688,6 +678,55 @@ function BuyScreen({ items, catalogItems, onAddItem, onConfirm, onBack, virtualM
         {submitting ? t('shopping.saving') : t('shopping.confirmPurchase')}
       </button>
     </div>
+  )
+}
+
+/** Pop-up de "Montar ticket" en móvil/tablet: elegir entre hacer una foto
+ * ahora o traer una que ya está en la galería. Ambas opciones llaman al
+ * mismo `onChange` (handleReceiptChange), que cierra el pop-up. Mismo
+ * patrón de pop-up que OutOfStockDialog. */
+function ReceiptSourceDialog({ onClose, onChange, t }) {
+  const optionClass =
+    'w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-white dark:bg-ink-700 border-2 border-ink-900/15 dark:border-cream-100/20 text-sm font-semibold cursor-pointer transition-transform active:scale-[0.98] hover:bg-cream-50 dark:hover:bg-ink-700/80'
+  return createPortal(
+    <div
+      className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm flex items-end sm:items-center sm:justify-center"
+      onClick={onClose}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm sm:rounded-2xl bg-cream-100 dark:bg-ink-800 border-t-[2.5px] sm:border-2 border-ink-900 dark:border-cream-100/40 rounded-t-2xl p-5 pb-8 sm:pb-5 relative max-h-[90vh] overflow-y-auto"
+      >
+        <div className="w-9 h-1.5 rounded-full bg-ink-900/15 dark:bg-cream-100/15 mx-auto mb-4 sm:hidden" />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t('shopping.close')}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-cream-200 dark:hover:bg-ink-700"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+        <h3 className="font-display text-lg font-bold mb-4 pr-8">{t('shopping.receiptSourceTitle')}</h3>
+        <div className="flex flex-col gap-2.5 mb-4">
+          <label className={optionClass}>
+            <CameraIcon className="w-5 h-5 shrink-0 text-violet-500" />
+            <span className="min-w-0">{t('shopping.receiptTakePhoto')}</span>
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onChange} />
+          </label>
+          <label className={optionClass}>
+            <ImageIcon className="w-5 h-5 shrink-0 text-violet-500" />
+            <span className="min-w-0">{t('shopping.receiptFromGallery')}</span>
+            {/* Sin `capture` (abre la galería) y solo formatos web: en iPhone esto hace que las fotos HEIC lleguen ya convertidas a JPEG. */}
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onChange} />
+          </label>
+        </div>
+        <button type="button" className="btn-secondary text-sm w-full" onClick={onClose}>
+          {t('shopping.close')}
+        </button>
+      </div>
+    </div>,
+    document.body
   )
 }
 
